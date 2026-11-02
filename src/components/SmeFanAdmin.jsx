@@ -40,7 +40,8 @@ import {
   Camera,
   X,
   Server,
-  HardDrive
+  HardDrive,
+  RefreshCw
 } from 'lucide-react';
 import ImageCropperModal from './ImageCropperModal';
 import MemberSpreadsheet from './MemberSpreadsheet';
@@ -99,7 +100,9 @@ export default function SmeFanAdmin({
   const [cropperAspect, setCropperAspect] = useState(16 / 9);
 
   // Member management state
-  const [activeMemberClub, setActiveMemberClub] = useState(eventConfig.clubs[0] || "สงสพัท");
+  const clubsList = eventConfig?.clubs && eventConfig.clubs.length > 0 ? eventConfig.clubs : ["สงสพัท", "โรตารี่"];
+  const membersList = eventConfig?.members || [];
+  const [activeMemberClub, setActiveMemberClub] = useState(clubsList[0] || "สงสพัท");
   const [newClubName, setNewClubName] = useState("");
 
   // New Admin User Form (Owner only)
@@ -832,9 +835,9 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
                     <Database className="w-4 h-4" />
                   </div>
                 </div>
-                <div className="text-2xl font-extrabold text-slate-900">{eventConfig.clubs.length} สนาม</div>
+                <div className="text-2xl font-extrabold text-slate-900">{(eventConfig?.clubs || []).length} สนาม</div>
                 <div className="text-xs text-slate-500">
-                  สมาชิกทั้งหมด {eventConfig.members.length} คน
+                  สมาชิกทั้งหมด {(eventConfig?.members || []).length} คน
                 </div>
               </div>
             </div>
@@ -876,7 +879,7 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
                 </h3>
 
                 <div className="space-y-3">
-                  {eventConfig.clubs.map(club => {
+                  {(eventConfig?.clubs || []).map(club => {
                     const count = registrations.filter(r => r.club === club).length;
                     const pct = totalRegistrations > 0 ? Math.round((count / totalRegistrations) * 100) : 0;
                     return (

@@ -29,6 +29,68 @@ import {
 const CONFIG_STORAGE_KEY = 'sme_fan_config_v3';
 const REGISTRATIONS_STORAGE_KEY = 'sme_fan_registrations_v3';
 const USER_STORAGE_KEY = 'sme_fan_admin_user_v3';
+const ACTIVE_TAB_STORAGE_KEY = 'sme_fan_active_tab_v3';
+
+// URL Hash to Tab identifier mapping
+export const hashToTab = (hashStr) => {
+  if (!hashStr) return null;
+  const h = hashStr.replace(/^#\/?/, '').trim().toLowerCase();
+  if (['portal', 'sme_portal', 'owner'].includes(h)) return 'sme_portal';
+  if (['checkin', 'sme_checkin', 'event'].includes(h)) return 'sme_checkin';
+  if (['admin', 'sme_admin', 'settings'].includes(h)) return 'sme_admin';
+  if (['judge', 'contest_judge', 'vote', 'contest'].includes(h)) return 'contest_judge';
+  if (['viewer', 'form_viewer'].includes(h)) return 'form_viewer';
+  if (['builder'].includes(h)) return 'builder';
+  if (['theme'].includes(h)) return 'theme';
+  if (['preview'].includes(h)) return 'preview';
+  if (['register', 'form', 'sme_register'].includes(h)) return 'sme_register';
+  return null;
+};
+
+// Tab identifier to URL Hash mapping
+export const tabToHash = (tab) => {
+  switch (tab) {
+    case 'sme_portal': return 'portal';
+    case 'sme_checkin': return 'checkin';
+    case 'sme_admin': return 'admin';
+    case 'contest_judge': return 'judge';
+    case 'form_viewer': return 'viewer';
+    case 'builder': return 'builder';
+    case 'theme': return 'theme';
+    case 'preview': return 'preview';
+    case 'sme_register':
+    default:
+      return 'register';
+  }
+};
+
+export const getInitialTab = () => {
+  if (typeof window !== 'undefined') {
+    // 1. Check URL query params first (e.g. ?judge=true, ?checkin=true, ?admin=true, ?portal=true)
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('judge') === 'true' || params.get('contest') === 'true') return 'contest_judge';
+    if (params.get('checkin') === 'true') return 'sme_checkin';
+    if (params.get('portal') === 'true' || params.get('owner') === 'true') return 'sme_portal';
+    if (params.get('admin') === 'true' || params.get('settings') === 'true') return 'sme_admin';
+    if (params.get('form')) {
+      const f = params.get('form');
+      return f === 'form_1_sme_event' ? 'sme_register' : 'form_viewer';
+    }
+
+    // 2. Check window.location.hash
+    const fromHash = hashToTab(window.location.hash);
+    if (fromHash) return fromHash;
+
+    // 3. Fallback to localStorage saved active tab
+    try {
+      const saved = localStorage.getItem(ACTIVE_TAB_STORAGE_KEY);
+      if (saved && ['sme_portal', 'sme_checkin', 'sme_admin', 'contest_judge', 'sme_register', 'form_viewer', 'builder', 'theme', 'preview'].includes(saved)) {
+        return saved;
+      }
+    } catch (e) {}
+  }
+  return 'sme_register';
+};
 
 export default function App() {
   // 1. SME FAN Event Config State (Form 1)
@@ -37,24 +99,9 @@ export default function App() {
       const saved = localStorage.getItem(CONFIG_STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.members && Array.isArray(parsed.members)) {
-          let smeCount = 1;
-          let rotCount = 1;
-          let genCount = 1;
-          parsed.members = parsed.members.map(m => {
-            if (m.memberCode || m.code) {
-              return { ...m, memberCode: m.memberCode || m.code };
-            }
-            let autoCode = '';
-            if (m.club === 'สงสพัท') {
-              autoCode = `SME-${String(smeCount++).padStart(3, '0')}`;
-            } else if (m.club === 'โรตารี่') {
-              autoCode = `ROT-${String(rotCount++).padStart(3, '0')}`;
-            } else {
-              autoCode = `MEM-${String(genCount++).padStart(3, '0')}`;
-            }
-            return { ...m, memberCode: autoCode };
-          });
+        // Automatically sync official 71 SongSaphat + 6 Rotary members if local storage only has old mock members
+        if (!parsed.members || !Array.isArray(parsed.members) || parsed.members.length < initialSmeFanConfig.members.length) {
+          parsed.members = initialSmeFanConfig.members;
         }
         return parsed;
       }
@@ -64,15 +111,28 @@ export default function App() {
     return initialSmeFanConfig;
   });
 
-  // 2. Registrations List State (Form 1 attendees)
+  // 2. Registrations List State (Form 1 attendees - Completely wiped clean for real registrations)
   const [registrations, setRegistrations] = useState(() => {
     try {
       const saved = localStorage.getItem(REGISTRATIONS_STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          // Detect and purge old test registrations SME-001..SME-006
+          const hasOldMockData = parsed.some(r => 
+            ['SME-001', 'SME-002', 'SME-003', 'SME-004', 'SME-005', 'SME-006'].includes(r.ticketNo)
+          );
+          if (hasOldMockData) {
+            localStorage.removeItem(REGISTRATIONS_STORAGE_KEY);
+            return [];
+          }
+          return parsed;
+        }
+      }
     } catch (e) {
       console.warn("Could not load registrations:", e);
     }
-    return initialRegistrations;
+    return [];
   });
 
   // 3. Multi-Form Hub List State (Forms 1, 2, 3, 4)
@@ -103,12 +163,39 @@ export default function App() {
   // 6. Generic Form Data State (for optional generic builder)
   const [formData, setFormData] = useState(defaultFormData);
 
-  // Active Tab & Modal States: 'sme_register' | 'sme_admin' | 'form_viewer' | 'builder' | 'theme' | 'preview'
-  const [currentTab, setCurrentTab] = useState('sme_register');
+  // Active Tab & Modal States: Persisted across browser refresh via URL Hash & localStorage
+  const [currentTab, setCurrentTab] = useState(getInitialTab);
   const [isSheetsModalOpen, setIsSheetsModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [verifiedTicket, setVerifiedTicket] = useState(null);
+
+  // Auto-sync currentTab to URL Hash and localStorage
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(ACTIVE_TAB_STORAGE_KEY, currentTab);
+      const targetHash = '#' + tabToHash(currentTab);
+      if (window.location.hash !== targetHash) {
+        window.history.replaceState(null, '', targetHash);
+      }
+    } catch (e) {
+      console.warn("Could not sync active tab to hash/storage:", e);
+    }
+  }, [currentTab]);
+
+  // Listen for browser Hash changes (e.g. Back/Forward navigation or direct link clicks)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleHashChange = () => {
+      const nextTab = hashToTab(window.location.hash);
+      if (nextTab && nextTab !== currentTab) {
+        setCurrentTab(nextTab);
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [currentTab]);
 
   // Auto-save eventConfig locally & sync to Supabase Cloud
   useEffect(() => {
@@ -194,9 +281,12 @@ export default function App() {
 
       // 1.2 Hydrate registrations (Authoritative cloud source)
       fetchRegistrationsFromCloud().then(cloudData => {
-        if (cloudData && Array.isArray(cloudData) && cloudData.length > 0) {
+        if (cloudData && Array.isArray(cloudData)) {
           setRegistrations(cloudData);
           setLastCloudSync(new Date());
+          try {
+            localStorage.setItem(REGISTRATIONS_STORAGE_KEY, JSON.stringify(cloudData));
+          } catch (e) {}
         }
       }).catch(err => console.warn('Supabase initial fetch warning:', err));
     }
@@ -240,7 +330,7 @@ export default function App() {
       const pollTimer = setInterval(() => {
         if (typeof document !== 'undefined' && document.hidden) return;
         fetchRegistrationsFromCloud().then(cloudData => {
-          if (cloudData && Array.isArray(cloudData) && cloudData.length > 0) {
+          if (cloudData && Array.isArray(cloudData)) {
             setRegistrations(prev => {
               // Quick check if data changed by ticket count, checkedIn count, or photos
               const prevSummary = prev.map(p => `${p.ticketNo}_${p.checkedIn}_${!!p.photoUrl}_${p.giftNumber}`).join('|');
@@ -259,35 +349,16 @@ export default function App() {
     }
   }, [currentTab]);
 
-  // Check URL parameters on mount (e.g. ?form=form_2_satisfaction or ?admin=true or ?verify=SME-004)
+  // Check URL ticket verification parameter (e.g. ?verify=SME-004 or ?ticket=SME-004)
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
-    const formParam = params.get('form');
     const verifyParam = params.get('verify') || params.get('ticket');
 
-    if (verifyParam) {
+    if (verifyParam && registrations.length > 0) {
       const found = registrations.find(r => r.ticketNo?.toLowerCase() === verifyParam.toLowerCase());
       if (found) {
         setVerifiedTicket(found);
-      }
-    }
-
-    if (formParam) {
-      if (formParam === 'form_1_sme_event') {
-        setCurrentTab('sme_register');
-      } else {
-        setActiveFormId(formParam);
-        setCurrentTab('form_viewer');
-      }
-    } else if (params.get('judge') === 'true' || params.get('contest') === 'true') {
-      setCurrentTab('contest_judge');
-    } else if (params.get('checkin') === 'true') {
-      setCurrentTab('sme_checkin');
-    } else if (params.get('admin') === 'true' || window.location.hash === '#admin') {
-      if (currentUser) {
-        setCurrentTab('sme_portal');
-      } else {
-        setIsLoginModalOpen(true);
       }
     }
   }, [registrations]);
@@ -305,6 +376,8 @@ export default function App() {
   const handleLogout = () => {
     setCurrentUser(null);
     localStorage.removeItem(USER_STORAGE_KEY);
+    localStorage.removeItem(ACTIVE_TAB_STORAGE_KEY);
+    window.location.hash = '#register';
     setCurrentTab('sme_register');
   };
 
