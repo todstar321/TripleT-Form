@@ -62,10 +62,27 @@ export default function EventCheckInHub({
   onGoToSettings,
   onSwitchToPublicForm,
   onPurgeComplete,
-  onForceSyncCloud
+  onForceSyncCloud,
+  lastCloudSync
 }) {
   // Main Tab: "checkin" | "gifts" | "shirts" | "contest" | "lucky_draw"
   const [activeMainTab, setActiveMainTab] = useState("checkin");
+
+  // Sync animation state
+  const [isSyncing, setIsSyncing] = useState(false);
+  const handleManualSync = async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    playAudioEffect("beep");
+    if (onForceSyncCloud) {
+      try {
+        await onForceSyncCloud();
+      } catch (e) {
+        console.warn('Manual sync error:', e);
+      }
+    }
+    setTimeout(() => setIsSyncing(false), 800);
+  };
 
   // Storage Purge Modal State (Delete photos/slips after event)
   const [isPurgeModalOpen, setIsPurgeModalOpen] = useState(false);
@@ -741,12 +758,19 @@ export default function EventCheckInHub({
           {onForceSyncCloud && (
             <button
               type="button"
-              onClick={onForceSyncCloud}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/30 text-xs font-semibold text-emerald-300 hover:text-white transition-all shadow-sm cursor-pointer"
-              title="ซิงค์ข้อมูลล่าสุดจาก Supabase Cloud และล้างแคชจำลอง"
+              onClick={handleManualSync}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-sm cursor-pointer ${
+                isSyncing 
+                  ? "bg-emerald-500/30 border-emerald-400 text-emerald-200 animate-pulse" 
+                  : "bg-emerald-950/60 hover:bg-emerald-900/80 border-emerald-500/40 text-emerald-300 hover:text-white"
+              }`}
+              title={`ซิงค์ข้อมูล Cloud ล่าสุด (อัปเดตล่าสุด: ${lastCloudSync ? lastCloudSync.toLocaleTimeString('th-TH') : 'เรียลไทม์'})`}
             >
-              <RefreshCw className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden sm:inline">ซิงค์ Cloud</span>
+              <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${isSyncing ? "animate-spin" : ""}`} />
+              <span className="inline">ซิงค์ Cloud</span>
+              <span className="hidden lg:inline text-[10px] text-emerald-400/80 font-normal">
+                ({lastCloudSync ? lastCloudSync.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'สด'})
+              </span>
             </button>
           )}
 
@@ -3253,7 +3277,14 @@ export default function EventCheckInHub({
             const targetTicket = (ticketNo && !ticketNo.startsWith('http') && !ticketNo.startsWith('data:'))
               ? ticketNo
               : photoModalTarget?.ticketNo;
-            onUpdateAttendeePhoto(targetTicket, actualUrl);
+            
+            // Mark checkedIn: true as well when capturing photo at check-in desk
+            if (onCheckIn && targetTicket) {
+              onCheckIn(targetTicket, true);
+            }
+            if (onUpdateAttendeePhoto && targetTicket) {
+              onUpdateAttendeePhoto(targetTicket, actualUrl, true);
+            }
             setPhotoModalTarget(null);
             playAudioEffect("fanfare");
           }}

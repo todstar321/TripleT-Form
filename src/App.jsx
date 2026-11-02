@@ -22,7 +22,8 @@ import {
   fetchRegistrationsFromCloud, 
   upsertRegistrationToCloud,
   fetchEventConfigFromCloud,
-  saveEventConfigToCloud
+  saveEventConfigToCloud,
+  subscribeToRegistrations
 } from './utils/supabaseClient';
 
 const CONFIG_STORAGE_KEY = 'sme_fan_config_v3';
@@ -158,33 +159,101 @@ export default function App() {
     }
   }, [currentUser]);
 
-  // Background Cloud Sync Helper
-  const syncTicketToCloud = (ticket) => {
+  // Last Cloud Sync tracking
+  const [lastCloudSync, setLastCloudSync] = useState(new Date());
+
+  // Background Cloud Sync Helper (Fire-and-await with error logging)
+  const syncTicketToCloud = async (ticket) => {
     if (isSupabaseConfigured() && ticket) {
-      upsertRegistrationToCloud(ticket).catch(err => {
-        console.warn("Supabase background sync warning:", err);
-      });
+      try {
+        const ok = await upsertRegistrationToCloud(ticket);
+        if (ok) {
+          setLastCloudSync(new Date());
+        }
+        return ok;
+      } catch (err) {
+        console.warn("Supabase background sync error:", err);
+        return false;
+      }
     }
+    return false;
   };
 
-  // Initial Cloud Hydration from Supabase on mount
+  // 1. Initial Cloud Hydration from Supabase on mount
   useEffect(() => {
     if (isSupabaseConfigured()) {
-      // 1. Hydrate eventConfig (Banner, Sub-banner, Titles, Themes across all devices)
+      // 1.1 Hydrate eventConfig (Banner, Sub-banner, Titles, Themes across all devices)
       fetchEventConfigFromCloud().then(cloudConfig => {
         if (cloudConfig && typeof cloudConfig === 'object') {
           setEventConfig(prev => ({ ...prev, ...cloudConfig }));
         }
       }).catch(err => console.warn('Supabase config fetch warning:', err));
 
-      // 2. Hydrate registrations (Authoritative cloud source)
+      // 1.2 Hydrate registrations (Authoritative cloud source)
       fetchRegistrationsFromCloud().then(cloudData => {
         if (cloudData && Array.isArray(cloudData) && cloudData.length > 0) {
           setRegistrations(cloudData);
+          setLastCloudSync(new Date());
         }
       }).catch(err => console.warn('Supabase initial fetch warning:', err));
     }
   }, []);
+
+  // 2. Supabase Real-time Cloud Synchronization (Immediate multi-device sync)
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+
+    const unsubscribe = subscribeToRegistrations((changedAttendee, eventType, ticketNo) => {
+      console.log(`⚡ Supabase Realtime: [${eventType}] ticket: ${ticketNo}`);
+      setLastCloudSync(new Date());
+
+      if (eventType === 'DELETE') {
+        setRegistrations(prev => prev.filter(r => r.ticketNo !== ticketNo));
+      } else if (changedAttendee && changedAttendee.ticketNo) {
+        setRegistrations(prev => {
+          const index = prev.findIndex(r => r.ticketNo === changedAttendee.ticketNo);
+          if (index >= 0) {
+            const next = [...prev];
+            next[index] = { ...prev[index], ...changedAttendee };
+            return next;
+          } else {
+            return [...prev, changedAttendee];
+          }
+        });
+      }
+    });
+
+    return () => {
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
+  }, []);
+
+  // 3. Fallback Auto-polling every 8 seconds when on Event Check-In or Admin tabs
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+    if (['sme_checkin', 'sme_portal', 'contest_judge'].includes(currentTab)) {
+      const pollTimer = setInterval(() => {
+        fetchRegistrationsFromCloud().then(cloudData => {
+          if (cloudData && Array.isArray(cloudData) && cloudData.length > 0) {
+            setRegistrations(prev => {
+              // Quick check if data changed by ticket count, checkedIn count, or photos
+              const prevSummary = prev.map(p => `${p.ticketNo}_${p.checkedIn}_${!!p.photoUrl}_${p.giftNumber}`).join('|');
+              const newSummary = cloudData.map(p => `${p.ticketNo}_${p.checkedIn}_${!!p.photoUrl}_${p.giftNumber}`).join('|');
+              if (prevSummary !== newSummary) {
+                setLastCloudSync(new Date());
+                return cloudData;
+              }
+              return prev;
+            });
+          }
+        }).catch(err => console.warn('Auto-polling sync check warning:', err));
+      }, 8000);
+
+      return () => clearInterval(pollTimer);
+    }
+  }, [currentTab]);
 
   // Check URL parameters on mount (e.g. ?form=form_2_satisfaction or ?admin=true or ?verify=SME-004)
   useEffect(() => {
@@ -423,39 +492,56 @@ export default function App() {
     });
   };
 
-  // Handle Update Attendee Photo
-  const handleUpdateAttendeePhoto = (ticketNo, photoUrl) => {
+  // Handle Update Attendee Photo (with option to mark checkedIn: true upon capture)
+  const handleUpdateAttendeePhoto = (ticketNo, photoUrl, alsoCheckIn = true) => {
     if (!ticketNo) return;
-    setRegistrations(prev => prev.map(r => {
-      if (r.ticketNo === ticketNo) {
-        const updated = {
-          ...r,
-          photoUrl: photoUrl,
-          costumePhoto: photoUrl
-        };
-        syncTicketToCloud(updated);
-        return updated;
+    const nowTime = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
+    setRegistrations(prev => {
+      let updatedTicket = null;
+      const nextList = prev.map(r => {
+        if (r.ticketNo === ticketNo) {
+          updatedTicket = {
+            ...r,
+            photoUrl: photoUrl,
+            costumePhoto: photoUrl,
+            checkedIn: alsoCheckIn ? true : (r.checkedIn || false),
+            checkedInAt: (alsoCheckIn || r.checkedIn) ? (r.checkedInAt || nowTime) : null
+          };
+          return updatedTicket;
+        }
+        return r;
+      });
+
+      if (updatedTicket) {
+        syncTicketToCloud(updatedTicket);
       }
-      return r;
-    }));
+      return nextList;
+    });
   };
 
   // Handle Toggle Shirt Received
   const handleToggleShirtReceived = (ticketNo, received = true) => {
     if (!ticketNo) return;
     const nowTime = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
-    setRegistrations(prev => prev.map(r => {
-      if (r.ticketNo === ticketNo) {
-        const updated = {
-          ...r,
-          shirtReceived: received,
-          shirtReceivedAt: received ? nowTime : null
-        };
-        syncTicketToCloud(updated);
-        return updated;
+    setRegistrations(prev => {
+      let updatedTicket = null;
+      const nextList = prev.map(r => {
+        if (r.ticketNo === ticketNo) {
+          updatedTicket = {
+            ...r,
+            shirtReceived: received,
+            shirtReceivedAt: received ? nowTime : null
+          };
+          return updatedTicket;
+        }
+        return r;
+      });
+
+      if (updatedTicket) {
+        syncTicketToCloud(updatedTicket);
       }
-      return r;
-    }));
+      return nextList;
+    });
   };
 
   // Handle Delete Registration (Owner only)
@@ -583,6 +669,7 @@ export default function App() {
             onSwitchToPublicForm={() => setCurrentTab('sme_register')}
             onPurgeComplete={(cleaned) => setRegistrations(cleaned)}
             onForceSyncCloud={handleForceSyncCloud}
+            lastCloudSync={lastCloudSync}
           />
         )}
 
