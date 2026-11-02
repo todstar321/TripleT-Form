@@ -940,7 +940,7 @@ export default function SmeFanRegistration({
         </div>
       )}
 
-      <div className="relative z-10 max-w-2xl mx-auto pt-8 px-4 sm:px-6">
+      <div className="relative z-10 max-w-2xl mx-auto pt-4 sm:pt-8 px-2 sm:px-6">
         
         {/* ==================================================== */}
         {/* STEP 0: LANDING / WELCOME SCREEN                     */}
@@ -1006,7 +1006,7 @@ export default function SmeFanRegistration({
               </div>
 
               {/* Title & Info */}
-              <div className="p-6 sm:p-8 space-y-4 text-center">
+              <div className="p-4 sm:p-8 space-y-4 text-center">
                 {isInlineEditing ? (
                   <div className="space-y-1">
                     <span className="text-[11px] text-amber-400 font-medium block">✏️ แก้ไขหัวข้องาน (Event Title):</span>
@@ -1041,69 +1041,69 @@ export default function SmeFanRegistration({
                   </p>
                 )}
 
-                {/* Event Details Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-2 text-xs text-left max-w-lg mx-auto">
-                  <div className="p-3 rounded-2xl bg-white/5 border border-white/10 flex items-center space-x-3">
-                    <Calendar className="w-5 h-5 text-amber-400 shrink-0" />
+                {/* Event Details Grid - 2 columns side-by-side on mobile and desktop */}
+                <div className="grid grid-cols-2 gap-2 sm:gap-3 py-2 text-xs text-left max-w-lg mx-auto">
+                  <div className="p-2.5 sm:p-3 rounded-xl sm:rounded-2xl bg-white/5 border border-white/10 flex items-center space-x-2 sm:space-x-3">
+                    <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <div className="text-slate-400">วันและเวลาจัดงาน</div>
+                      <div className="text-[10px] sm:text-xs text-slate-400 truncate">วันและเวลาจัดงาน</div>
                       {isInlineEditing ? (
                         <input
                           type="text"
                           value={eventConfig.eventDate}
                           onChange={(e) => handleUpdateConfig('eventDate', e.target.value)}
-                          className="w-full text-xs font-semibold text-white bg-slate-950 border border-dashed border-amber-500/40 rounded-lg px-2 py-1 focus:outline-none focus:border-amber-400 mt-0.5"
+                          className="w-full text-[11px] sm:text-xs font-semibold text-white bg-slate-950 border border-dashed border-amber-500/40 rounded-lg px-2 py-1 focus:outline-none focus:border-amber-400 mt-0.5"
                         />
                       ) : (
-                        <div className="font-semibold text-white">{eventConfig.eventDate}</div>
+                        <div className="font-semibold text-white text-[11px] sm:text-xs truncate">{eventConfig.eventDate}</div>
                       )}
                     </div>
                   </div>
 
-                  <div className="p-3 rounded-2xl bg-white/5 border border-white/10 flex items-center space-x-3">
-                    <MapPin className="w-5 h-5 text-rose-400 shrink-0" />
+                  <div className="p-2.5 sm:p-3 rounded-xl sm:rounded-2xl bg-white/5 border border-white/10 flex items-center space-x-2 sm:space-x-3">
+                    <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-rose-400 shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <div className="text-slate-400">สถานที่จัดงาน</div>
+                      <div className="text-[10px] sm:text-xs text-slate-400 truncate">สถานที่จัดงาน</div>
                       {isInlineEditing ? (
                         <input
                           type="text"
                           value={eventConfig.eventVenue}
                           onChange={(e) => handleUpdateConfig('eventVenue', e.target.value)}
-                          className="w-full text-xs font-semibold text-white bg-slate-950 border border-dashed border-amber-500/40 rounded-lg px-2 py-1 focus:outline-none focus:border-amber-400 mt-0.5"
+                          className="w-full text-[11px] sm:text-xs font-semibold text-white bg-slate-950 border border-dashed border-amber-500/40 rounded-lg px-2 py-1 focus:outline-none focus:border-amber-400 mt-0.5"
                         />
                       ) : (
-                        <div className="font-semibold text-white">{eventConfig.eventVenue}</div>
+                        <div className="font-semibold text-white text-[11px] sm:text-xs truncate">{eventConfig.eventVenue}</div>
                       )}
                     </div>
                   </div>
                 </div>
 
-                {/* T-Shirt Quota Notice */}
-                <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/20 via-yellow-500/10 to-amber-500/20 border border-amber-500/40 text-amber-200 text-xs sm:text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center space-x-2.5 text-left">
-                    <Shirt className="w-6 h-6 text-amber-400 shrink-0" />
-                    <div>
-                      <span className="font-bold text-white">แจกเสื้อที่ระลึกฟรีสำหรับ {maxShirtQuota} ท่านแรก!</span>
-                      <div className="text-[11px] text-amber-300/80">เมื่อลงทะเบียนและแนบสลิปชำระเงินสำเร็จ</div>
+                {/* T-Shirt Quota Notice - Horizontal on both mobile and desktop */}
+                <div className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-gradient-to-r from-amber-500/20 via-yellow-500/10 to-amber-500/20 border border-amber-500/40 text-amber-200 text-xs sm:text-sm flex flex-row items-center justify-between gap-2">
+                  <div className="flex items-center space-x-2 sm:space-x-2.5 text-left min-w-0">
+                    <Shirt className="w-5 h-5 sm:w-6 sm:h-6 text-amber-400 shrink-0" />
+                    <div className="min-w-0">
+                      <span className="font-bold text-white text-xs sm:text-sm block truncate">แจกเสื้อฟรีสำหรับ {maxShirtQuota} ท่านแรก!</span>
+                      <div className="text-[10px] sm:text-[11px] text-amber-300/80 truncate">เมื่อลงทะเบียนและแนบสลิปชำระเงินสำเร็จ</div>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between sm:justify-end space-x-3">
+                  <div className="flex items-center justify-end space-x-2 sm:space-x-3 shrink-0">
                     {isInlineEditing && (
-                      <div className="flex items-center space-x-1.5">
-                        <span className="text-[11px] text-amber-300">โควตา:</span>
+                      <div className="flex items-center space-x-1">
+                        <span className="text-[10px] sm:text-[11px] text-amber-300">โควตา:</span>
                         <input
                           type="number"
                           min="0"
                           value={eventConfig.shirtQuota?.maxQuota || 15}
                           onChange={(e) => handleUpdateNested('shirtQuota', 'maxQuota', parseInt(e.target.value) || 0)}
-                          className="w-14 px-2 py-1 rounded-lg bg-slate-950 border border-dashed border-amber-400 text-amber-400 font-mono font-bold text-center text-xs focus:outline-none"
+                          className="w-12 px-1.5 py-0.5 rounded-lg bg-slate-950 border border-dashed border-amber-400 text-amber-400 font-mono font-bold text-center text-xs focus:outline-none"
                         />
                       </div>
                     )}
-                    <div className="text-right shrink-0 pl-2">
-                      <span className="text-xs text-slate-400 block">คงเหลือ</span>
-                      <span className="font-mono text-lg font-bold text-amber-400">{remainingShirtQuota}</span>
-                      <span className="text-[10px] text-slate-400">/{maxShirtQuota} สิทธิ์</span>
+                    <div className="text-right shrink-0 pl-1">
+                      <span className="text-[10px] sm:text-xs text-slate-400 block">คงเหลือ</span>
+                      <span className="font-mono text-base sm:text-lg font-bold text-amber-400">{remainingShirtQuota}</span>
+                      <span className="text-[10px] text-slate-400">/{maxShirtQuota}</span>
                     </div>
                   </div>
                 </div>
@@ -1161,8 +1161,8 @@ export default function SmeFanRegistration({
               {/* 50% Sub-Banner for Step 1 */}
               {renderSubBanner(1)}
 
-              <div className="p-6 sm:p-8">
-                <div className="text-center mb-8">
+              <div className="p-4 sm:p-8">
+                <div className="text-center mb-6 sm:mb-8">
                   <span className="text-xs font-mono px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 font-bold">
                   ขั้นตอนที่ 1 จาก 3
                 </span>
@@ -1174,8 +1174,8 @@ export default function SmeFanRegistration({
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                {/* Option 1: สมาชิก SME FAN (ปุ่มใหญ่กดได้ทันที + ข้อความกึ่งกลาง) */}
+              <div className="grid grid-cols-2 gap-2.5 sm:gap-5">
+                {/* Option 1: สมาชิก SME FAN (2 คอลัมน์เคียงข้างกันทั้งบนมือถือและคอมพิวเตอร์) */}
                 <button
                   type="button"
                   onClick={() => {
@@ -1184,20 +1184,20 @@ export default function SmeFanRegistration({
                       setStep(2);
                     }
                   }}
-                  className={`group relative w-full p-6 sm:p-8 rounded-3xl border transition-all text-center flex flex-col items-center justify-between cursor-pointer hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-2xl ${
+                  className={`group relative w-full p-3 sm:p-8 rounded-2xl sm:rounded-3xl border transition-all text-center flex flex-col items-center justify-between cursor-pointer hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-2xl ${
                     isWhiteCard
                       ? 'border-slate-200 bg-slate-50 hover:bg-amber-500/10 hover:border-amber-500 text-slate-800'
                       : 'border-white/10 bg-white/5 hover:border-amber-500 hover:bg-amber-500/10 text-white'
                   }`}
                 >
-                  <div className="space-y-4 flex flex-col items-center w-full">
+                  <div className="space-y-2.5 sm:space-y-4 flex flex-col items-center w-full">
                     {/* Centered Icon */}
-                    <div className="w-16 h-16 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center group-hover:scale-110 group-hover:bg-amber-500/20 group-hover:text-amber-400 transition-all shadow-inner">
-                      <UserCheck className="w-8 h-8" />
+                    <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center group-hover:scale-110 group-hover:bg-amber-500/20 group-hover:text-amber-400 transition-all shadow-inner">
+                      <UserCheck className="w-6 h-6 sm:w-8 sm:h-8" />
                     </div>
 
                     {/* Centered Title & Description */}
-                    <div className="space-y-2 w-full text-center">
+                    <div className="space-y-1 sm:space-y-2 w-full text-center">
                       {isInlineEditing ? (
                         <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
                           <label className="text-[10px] text-amber-400 font-medium block">✏️ แก้ไขหัวข้อตัวเลือกที่ 1:</label>
@@ -1205,23 +1205,23 @@ export default function SmeFanRegistration({
                             type="text"
                             value={eventConfig.memberCardTitle || "สมาชิก SME FAN"}
                             onChange={(e) => handleUpdateConfig('memberCardTitle', e.target.value)}
-                            className="w-full text-center text-sm font-bold text-white bg-slate-950 border border-dashed border-amber-500/50 rounded-xl px-2.5 py-1 focus:outline-none"
+                            className="w-full text-center text-xs sm:text-sm font-bold text-white bg-slate-950 border border-dashed border-amber-500/50 rounded-xl px-2 py-1 focus:outline-none"
                           />
                           <textarea
                             rows={2}
                             value={eventConfig.memberCardDesc || "สำหรับสมาชิกเดิมในสังกัดสนามต่างๆ เช่น สงสพัท, โรตารี่ (มีรายชื่อในระบบอยู่แล้ว)"}
                             onChange={(e) => handleUpdateConfig('memberCardDesc', e.target.value)}
-                            className="w-full text-center text-xs text-slate-300 bg-slate-950 border border-dashed border-amber-500/40 rounded-xl p-2 focus:outline-none"
+                            className="w-full text-center text-[10px] sm:text-xs text-slate-300 bg-slate-950 border border-dashed border-amber-500/40 rounded-xl p-1.5 focus:outline-none"
                           />
                         </div>
                       ) : (
                         <>
-                          <h3 className={`text-lg sm:text-xl font-extrabold group-hover:text-amber-400 transition-colors ${
+                          <h3 className={`text-sm sm:text-xl font-extrabold group-hover:text-amber-400 transition-colors ${
                             isWhiteCard ? 'text-slate-900' : 'text-white'
                           }`}>
                             {eventConfig.memberCardTitle || "สมาชิก SME FAN"}
                           </h3>
-                          <p className={`text-xs sm:text-sm mt-1 leading-relaxed max-w-xs mx-auto ${
+                          <p className={`text-[11px] sm:text-sm mt-0.5 sm:mt-1 leading-snug sm:leading-relaxed max-w-xs mx-auto line-clamp-3 sm:line-clamp-none ${
                             isWhiteCard ? 'text-slate-600' : 'text-slate-400 group-hover:text-slate-300'
                           }`}>
                             {eventConfig.memberCardDesc || "สำหรับสมาชิกเดิมในสังกัดสนามต่างๆ เช่น สงสพัท, โรตารี่ (มีรายชื่อในระบบอยู่แล้ว)"}
@@ -1232,13 +1232,13 @@ export default function SmeFanRegistration({
                   </div>
 
                   {/* Centered Action Button Pill */}
-                  <div className="mt-6 flex items-center justify-center space-x-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md group-hover:shadow-amber-500/30 group-hover:scale-105 transition-all">
-                    <span>เลือกลงทะเบียนสมาชิก</span>
-                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  <div className="mt-3 sm:mt-6 w-full flex items-center justify-center space-x-1 sm:space-x-2 px-1.5 sm:px-5 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md group-hover:shadow-amber-500/30 group-hover:scale-105 transition-all">
+                    <span><span className="hidden sm:inline">เลือก</span>ลงทะเบียนสมาชิก</span>
+                    <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 group-hover:translate-x-1 transition-transform shrink-0" />
                   </div>
                 </button>
 
-                {/* Option 2: แขกผู้มีเกียรติ (ปุ่มใหญ่กดได้ทันที + ข้อความกึ่งกลาง) */}
+                {/* Option 2: แขกผู้มีเกียรติ (2 คอลัมน์เคียงข้างกันทั้งบนมือถือและคอมพิวเตอร์) */}
                 <button
                   type="button"
                   onClick={() => {
@@ -1247,20 +1247,20 @@ export default function SmeFanRegistration({
                       setStep(2);
                     }
                   }}
-                  className={`group relative w-full p-6 sm:p-8 rounded-3xl border transition-all text-center flex flex-col items-center justify-between cursor-pointer hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-2xl ${
+                  className={`group relative w-full p-3 sm:p-8 rounded-2xl sm:rounded-3xl border transition-all text-center flex flex-col items-center justify-between cursor-pointer hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-2xl ${
                     isWhiteCard
                       ? 'border-slate-200 bg-slate-50 hover:bg-emerald-500/10 hover:border-emerald-500 text-slate-800'
                       : 'border-white/10 bg-white/5 hover:border-emerald-500 hover:bg-emerald-500/10 text-white'
                   }`}
                 >
-                  <div className="space-y-4 flex flex-col items-center w-full">
+                  <div className="space-y-2.5 sm:space-y-4 flex flex-col items-center w-full">
                     {/* Centered Icon */}
-                    <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center group-hover:scale-110 group-hover:bg-emerald-500/30 transition-all shadow-inner">
-                      <UserPlus className="w-8 h-8" />
+                    <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center group-hover:scale-110 group-hover:bg-emerald-500/30 transition-all shadow-inner">
+                      <UserPlus className="w-6 h-6 sm:w-8 sm:h-8" />
                     </div>
 
                     {/* Centered Title & Description */}
-                    <div className="space-y-2 w-full text-center">
+                    <div className="space-y-1 sm:space-y-2 w-full text-center">
                       {isInlineEditing ? (
                         <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
                           <label className="text-[10px] text-emerald-400 font-medium block">✏️ แก้ไขหัวข้อตัวเลือกที่ 2:</label>
@@ -1268,23 +1268,23 @@ export default function SmeFanRegistration({
                             type="text"
                             value={eventConfig.guestCardTitle || "แขกผู้มีเกียรติ (VIP Guest)"}
                             onChange={(e) => handleUpdateConfig('guestCardTitle', e.target.value)}
-                            className="w-full text-center text-sm font-bold text-white bg-slate-950 border border-dashed border-emerald-500/50 rounded-xl px-2.5 py-1 focus:outline-none"
+                            className="w-full text-center text-xs sm:text-sm font-bold text-white bg-slate-950 border border-dashed border-emerald-500/50 rounded-xl px-2 py-1 focus:outline-none"
                           />
                           <textarea
                             rows={2}
                             value={eventConfig.guestCardDesc || "สำหรับผู้ที่ได้รับคำเชิญจากสมาชิก SME FAN หรือบุคคลภายนอกที่สนใจร่วมงาน"}
                             onChange={(e) => handleUpdateConfig('guestCardDesc', e.target.value)}
-                            className="w-full text-center text-xs text-slate-300 bg-slate-950 border border-dashed border-emerald-500/40 rounded-xl p-2 focus:outline-none"
+                            className="w-full text-center text-[10px] sm:text-xs text-slate-300 bg-slate-950 border border-dashed border-emerald-500/40 rounded-xl p-1.5 focus:outline-none"
                           />
                         </div>
                       ) : (
                         <>
-                          <h3 className={`text-lg sm:text-xl font-extrabold group-hover:text-emerald-400 transition-colors ${
+                          <h3 className={`text-sm sm:text-xl font-extrabold group-hover:text-emerald-400 transition-colors ${
                             isWhiteCard ? 'text-slate-900' : 'text-white'
                           }`}>
-                            {eventConfig.guestCardTitle || "แขกผู้มีเกียรติ (VIP Guest)"}
+                            {eventConfig.guestCardTitle || "แขกผู้มีเกียรติ"}
                           </h3>
-                          <p className={`text-xs sm:text-sm mt-1 leading-relaxed max-w-xs mx-auto ${
+                          <p className={`text-[11px] sm:text-sm mt-0.5 sm:mt-1 leading-snug sm:leading-relaxed max-w-xs mx-auto line-clamp-3 sm:line-clamp-none ${
                             isWhiteCard ? 'text-slate-600' : 'text-slate-400 group-hover:text-slate-300'
                           }`}>
                             {eventConfig.guestCardDesc || "สำหรับผู้ที่ได้รับคำเชิญจากสมาชิก SME FAN หรือบุคคลภายนอกที่สนใจร่วมงาน"}
@@ -1295,9 +1295,9 @@ export default function SmeFanRegistration({
                   </div>
 
                   {/* Centered Action Button Pill */}
-                  <div className="mt-6 flex items-center justify-center space-x-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md group-hover:shadow-emerald-500/30 group-hover:scale-105 transition-all">
-                    <span>เลือกลงทะเบียนแขก</span>
-                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  <div className="mt-3 sm:mt-6 w-full flex items-center justify-center space-x-1 sm:space-x-2 px-1.5 sm:px-5 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md group-hover:shadow-emerald-500/30 group-hover:scale-105 transition-all">
+                    <span><span className="hidden sm:inline">เลือก</span>ลงทะเบียนแขก</span>
+                    <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 group-hover:translate-x-1 transition-transform shrink-0" />
                   </div>
                 </button>
               </div>
@@ -1326,7 +1326,7 @@ export default function SmeFanRegistration({
               {/* 50% Sub-Banner for Step 2 */}
               {renderSubBanner(2)}
 
-              <div className="p-6 sm:p-8">
+              <div className="p-4 sm:p-8">
                 <div className="mb-6">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-mono px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 font-bold">
@@ -1708,11 +1708,11 @@ export default function SmeFanRegistration({
                     </div>
                   </div>
 
-                  {/* DOB & Auto-Age with Custom Calendar Picker */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* DOB & Auto-Age with Custom Calendar Picker - 2 columns on mobile */}
+                  <div className="grid grid-cols-2 gap-2.5 sm:gap-4">
                     <div ref={calendarContainerRef} className="relative">
                       <div className="mb-1">
-                        <label className="block text-xs font-medium text-slate-300">
+                        <label className="block text-[11px] sm:text-xs font-medium text-slate-300 truncate">
                           วันเดือนปีเกิด <span className="text-rose-400">*</span>
                         </label>
                       </div>
@@ -1721,7 +1721,7 @@ export default function SmeFanRegistration({
                       <button
                         type="button"
                         onClick={() => setIsCalendarOpen(!isCalendarOpen)}
-                        className={`w-full px-3 py-2.5 rounded-xl text-xs bg-slate-950 border transition-all text-left flex items-center justify-between shadow-inner ${
+                        className={`w-full px-2.5 sm:px-3 py-2 sm:py-2.5 rounded-xl text-xs bg-slate-950 border transition-all text-left flex items-center justify-between shadow-inner ${
                           isCalendarOpen
                             ? 'border-emerald-500 ring-2 ring-emerald-500/30'
                             : birthDate
@@ -1729,19 +1729,19 @@ export default function SmeFanRegistration({
                             : 'border-white/10 text-slate-400 hover:border-white/20'
                         }`}
                       >
-                        <div className="flex items-center space-x-2 truncate">
-                          <Calendar className={`w-4 h-4 shrink-0 ${birthDate ? 'text-emerald-400' : 'text-slate-400'}`} />
-                          <span className={birthDate ? 'text-white font-medium text-xs' : 'text-slate-400 text-xs'}>
-                            {birthDate ? formatThaiDate(birthDate) : "คลิกเลือกวันที่ในปฏิทิน..."}
+                        <div className="flex items-center space-x-1.5 truncate">
+                          <Calendar className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${birthDate ? 'text-emerald-400' : 'text-slate-400'}`} />
+                          <span className={birthDate ? 'text-white font-medium text-[11px] sm:text-xs truncate' : 'text-slate-400 text-[11px] sm:text-xs truncate'}>
+                            {birthDate ? formatThaiDate(birthDate) : "เลือกวันเกิด..."}
                           </span>
                         </div>
                         <ChevronDown className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${isCalendarOpen ? 'rotate-180 text-emerald-400' : ''}`} />
                       </button>
-                      {errors.birthDate && <span className="text-rose-400 text-[11px] mt-1 block">{errors.birthDate}</span>}
+                      {errors.birthDate && <span className="text-rose-400 text-[10px] mt-1 block">{errors.birthDate}</span>}
 
                       {/* Interactive Calendar Popover Dialog */}
                       {isCalendarOpen && (
-                        <div className="absolute top-full left-0 right-0 sm:right-auto sm:w-80 mt-1.5 z-50 bg-slate-900 border border-white/20 rounded-2xl p-4 shadow-2xl backdrop-blur-xl animate-in fade-in duration-150">
+                        <div className="absolute top-full left-0 w-[calc(100vw-2.5rem)] max-w-xs sm:w-80 mt-1.5 z-50 bg-slate-900 border border-white/20 rounded-2xl p-4 shadow-2xl backdrop-blur-xl animate-in fade-in duration-150">
                           
                           {/* Header: Month & Year Controls */}
                           <div className="flex items-center justify-between mb-3 pb-2.5 border-b border-white/10">
@@ -2254,7 +2254,7 @@ export default function SmeFanRegistration({
               {/* 50% Sub-Banner for Step 3 */}
               {renderSubBanner(3)}
 
-              <div className="p-6 sm:p-8">
+              <div className="p-4 sm:p-8">
                 <div className="mb-6">
                 <span className="text-xs font-mono px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 font-bold">
                   ขั้นตอนที่ 3: สรุปยอดและชำระเงิน
@@ -2488,43 +2488,101 @@ export default function SmeFanRegistration({
                               )}
                             </div>
 
-                            {/* Details 2-col Grid */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                            {/* Details 2-col Grid on both Mobile and Desktop */}
+                            <div className="grid grid-cols-2 gap-2 text-xs">
                               <div className="bg-slate-950/70 p-2.5 rounded-xl border border-white/5 space-y-1">
-                                <span className="text-slate-400 block text-[10px]">🗓️ วันที่และเวลาโอน:</span>
-                                <div className="flex items-center space-x-1.5 font-semibold text-white">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-slate-400 block text-[10px]">🗓️ วันที่และเวลาโอน:</span>
+                                  {slipDetails.isDateDetected && (
+                                    <span className="text-[9px] text-emerald-400 font-bold bg-emerald-500/15 px-1.5 py-0.5 rounded border border-emerald-500/30">
+                                      ✓ จากสลิปจริง
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="space-y-1 font-semibold text-white">
                                   <input
                                     type="text"
                                     value={slipDetails.transferDate || ""}
                                     onChange={(e) => setSlipDetails(prev => ({ ...prev, transferDate: e.target.value }))}
-                                    className="w-24 bg-slate-900/80 px-1.5 py-0.5 rounded text-white text-xs border border-white/10 focus:outline-none focus:border-amber-400 font-mono"
+                                    placeholder="เช่น 2 พ.ย. 2569"
+                                    className="w-full bg-slate-900/80 px-2 py-1 rounded text-white text-[11px] sm:text-xs border border-white/10 focus:outline-none focus:border-amber-400 font-mono"
                                   />
-                                  <span className="text-slate-400 text-[11px]">เวลา</span>
-                                  <input
-                                    type="text"
-                                    value={slipDetails.transferTime || ""}
-                                    onChange={(e) => setSlipDetails(prev => ({ ...prev, transferTime: e.target.value }))}
-                                    className="w-20 bg-slate-900/80 px-1.5 py-0.5 rounded text-white text-xs border border-white/10 focus:outline-none focus:border-amber-400 font-mono"
-                                  />
+                                  <div className="flex items-center space-x-1">
+                                    <span className="text-slate-400 text-[10px] shrink-0">เวลา:</span>
+                                    <input
+                                      type="text"
+                                      value={slipDetails.transferTime || ""}
+                                      onChange={(e) => setSlipDetails(prev => ({ ...prev, transferTime: e.target.value }))}
+                                      placeholder="09:43 น."
+                                      className="w-full bg-slate-900/80 px-2 py-1 rounded text-white text-[11px] sm:text-xs border border-white/10 focus:outline-none focus:border-amber-400 font-mono"
+                                    />
+                                  </div>
                                 </div>
                               </div>
 
                               <div className="bg-slate-950/70 p-2.5 rounded-xl border border-white/5 space-y-1">
-                                <span className="text-slate-400 block text-[10px]">👤 ผู้โอนเงิน (ระบุในสลิป):</span>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-slate-400 block text-[10px]">👤 ผู้โอนเงิน (ในสลิป):</span>
+                                  {slipDetails.senderName && (
+                                    <span className="text-[9px] text-emerald-400 font-bold bg-emerald-500/15 px-1.5 py-0.5 rounded border border-emerald-500/30">
+                                      ✓ จากสลิปจริง
+                                    </span>
+                                  )}
+                                </div>
                                 <input
                                   type="text"
                                   value={slipDetails.senderName || ""}
                                   onChange={(e) => setSlipDetails(prev => ({ ...prev, senderName: e.target.value }))}
                                   placeholder="ชื่อผู้โอน"
-                                  className="w-full bg-slate-900/80 px-2 py-0.5 rounded text-amber-300 font-semibold text-xs border border-white/10 focus:outline-none focus:border-amber-400"
+                                  className="w-full bg-slate-900/80 px-2 py-1 rounded text-amber-300 font-semibold text-[11px] sm:text-xs border border-white/10 focus:outline-none focus:border-amber-400 mt-0.5"
                                 />
+                                <div className="text-[10px] text-slate-400 truncate">
+                                  ธนาคารต้นทาง: {slipDetails.bankName || "ธนาคารพาณิชย์"}
+                                </div>
                               </div>
 
-                              <div className="bg-slate-950/70 p-2.5 rounded-xl border border-white/5">
-                                <span className="text-slate-400 block text-[10px]">🏦 เข้าบัญชีปลายทาง:</span>
-                                <span className="font-semibold text-slate-200 text-xs block mt-0.5 truncate" title={slipDetails.receiverAccount}>
+                              {/* Receiving Bank Verification Card (Full Width) */}
+                              <div className={`p-2.5 sm:p-3 rounded-xl border col-span-2 space-y-1.5 ${
+                                slipDetails.receiverVerification?.status === 'mismatch'
+                                  ? 'bg-rose-950/60 border-rose-500/60'
+                                  : 'bg-slate-950/70 border-white/5'
+                              }`}>
+                                <div className="flex flex-wrap items-center justify-between gap-1">
+                                  <span className="text-slate-400 text-[10px] font-semibold flex items-center space-x-1">
+                                    <span>🏦 ตรวจสอบธนาคารและบัญชีผู้รับโอน:</span>
+                                  </span>
+                                  {slipDetails.receiverVerification?.status === 'verified' ? (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center space-x-1">
+                                      <Check className="w-3 h-3 text-emerald-400" />
+                                      <span>บัญชีทางการถูกต้อง</span>
+                                    </span>
+                                  ) : slipDetails.receiverVerification?.status === 'mismatch' ? (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/30 text-rose-300 border border-rose-500/60 flex items-center space-x-1 animate-pulse">
+                                      <AlertTriangle className="w-3 h-3 text-rose-400" />
+                                      <span>คำเตือน: บัญชีผู้รับไม่ตรงกับงาน!</span>
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300 border border-white/10">
+                                      บันทึกเข้าบัญชีงาน
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="text-xs font-semibold text-slate-200 mt-0.5 break-words">
                                   {slipDetails.receiverAccount}
-                                </span>
+                                </div>
+
+                                {slipDetails.receiverVerification?.status === 'mismatch' && (
+                                  <div className="p-2.5 rounded-xl bg-rose-900/50 border border-rose-500/50 text-[11px] text-rose-200 space-y-1 mt-1">
+                                    <div className="font-bold flex items-center space-x-1 text-rose-300">
+                                      <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                                      <span>{slipDetails.receiverVerification.message}</span>
+                                    </div>
+                                    <p className="text-[10px] text-slate-300">
+                                      กรุณาตรวจสอบว่าแนบสลิปผิดใบหรือไม่ หรือติดต่อฝ่ายการเงินเพื่อยืนยันยอดเงิน
+                                    </p>
+                                  </div>
+                                )}
                               </div>
 
                               <div className="bg-slate-950/70 p-3 rounded-xl border border-white/5 sm:col-span-2 space-y-2">
