@@ -6,8 +6,8 @@ export const initialSmeFanConfig = {
   eventId: "sme_fan_ny_2026",
   eventTitle: "งานสังสรรค์ปีใหม่ SME FAN 2026",
   eventSubtitle: "ขอเชิญสมาชิก SME FAN และแขกผู้มีเกียรติร่วมเฉลิมฉลองค่ำคืนแห่งความสุข ส่งท้ายปีเก่าต้อนรับปีใหม่",
-  eventDate: "วันเสาร์ที่ 10 มกราคม 2026 เวลา 17:30 - 22:30 น.",
-  eventVenue: "ห้องบอลรูม โรงแรมแกรนด์ริชมอนด์ (Grand Richmond Hotel)",
+  eventDate: "วันเสาร์ที่ 23 ธันวาคม 2026 เวลา 18:00 - 22:30 น.",
+  eventVenue: "ห้องแมกโนเลีย โรงแรมลีการ์เดนส์พลาซ่า หาดใหญ่ (Lee Gardens Plaza Hotel Hat Yai)",
   
   // Images
   bannerImage: "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=1920&q=80",

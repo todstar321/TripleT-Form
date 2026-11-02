@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { 
   Camera, 
   Search, 
@@ -48,6 +48,21 @@ import ShirtPresentationModal from "./ShirtPresentationModal";
 import ContestJudgeModal from "./ContestJudgeModal";
 import StoragePurgeModal from "./StoragePurgeModal";
 import { cleanPhoneNumber } from "../utils/phoneFormatter";
+
+// Shared singleton AudioContext to prevent lag, browser context exhaustion, and latency
+let sharedAudioCtx = null;
+const getSharedAudioContext = () => {
+  if (typeof window === "undefined") return null;
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return null;
+  if (!sharedAudioCtx || sharedAudioCtx.state === "closed") {
+    sharedAudioCtx = new AudioContextClass();
+  }
+  if (sharedAudioCtx.state === "suspended") {
+    sharedAudioCtx.resume().catch(() => {});
+  }
+  return sharedAudioCtx;
+};
 
 export default function EventCheckInHub({
   eventConfig,
@@ -243,7 +258,8 @@ export default function EventCheckInHub({
   const playAudioEffect = (type = "beep") => {
     if (!soundEnabled) return;
     try {
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const audioCtx = getSharedAudioContext();
+      if (!audioCtx) return;
       if (type === "beep") {
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
@@ -314,32 +330,37 @@ export default function EventCheckInHub({
 
   // General counts
   const totalCount = registrations.length;
-  const checkedInList = registrations.filter(r => r.checkedIn);
+  const checkedInList = useMemo(() => registrations.filter(r => r.checkedIn), [registrations]);
   const checkedInCount = checkedInList.length;
-  const giftList = registrations.filter(r => r.giftNumber).sort((a, b) => a.giftNumber - b.giftNumber);
+  const giftList = useMemo(
+    () => registrations.filter(r => r.giftNumber).sort((a, b) => (a.giftNumber || 0) - (b.giftNumber || 0)),
+    [registrations]
+  );
   const giftCount = giftList.length;
 
   // Shirt calculations
-  const shirtAttendees = registrations.filter(r => r.hasShirt);
+  const shirtAttendees = useMemo(() => registrations.filter(r => r.hasShirt), [registrations]);
   const shirtTotalCount = shirtAttendees.length;
-  const shirtReceivedCount = shirtAttendees.filter(r => r.shirtReceived).length;
+  const shirtReceivedCount = useMemo(() => shirtAttendees.filter(r => r.shirtReceived).length, [shirtAttendees]);
 
   // Filtered shirt attendees for Tab 3
-  const filteredShirtList = shirtAttendees.filter(r => {
-    if (filterShirtStatus === "received" && !r.shirtReceived) return false;
-    if (filterShirtStatus === "not_received" && r.shirtReceived) return false;
-    if (searchShirt.trim()) {
-      const q = searchShirt.toLowerCase();
-      const matchName = r.name?.toLowerCase().includes(q);
-      const matchNick = r.nickname?.toLowerCase().includes(q);
-      const matchTicket = r.ticketNo?.toLowerCase().includes(q);
-      const matchPhone = r.phone?.includes(q);
-      const matchClub = r.club?.toLowerCase().includes(q);
-      const matchSize = r.shirtSize?.toLowerCase().includes(q);
-      if (!matchName && !matchNick && !matchTicket && !matchPhone && !matchClub && !matchSize) return false;
-    }
-    return true;
-  });
+  const filteredShirtList = useMemo(() => {
+    return shirtAttendees.filter(r => {
+      if (filterShirtStatus === "received" && !r.shirtReceived) return false;
+      if (filterShirtStatus === "not_received" && r.shirtReceived) return false;
+      if (searchShirt.trim()) {
+        const q = searchShirt.toLowerCase();
+        const matchName = r.name?.toLowerCase().includes(q);
+        const matchNick = r.nickname?.toLowerCase().includes(q);
+        const matchTicket = r.ticketNo?.toLowerCase().includes(q);
+        const matchPhone = r.phone?.includes(q);
+        const matchClub = r.club?.toLowerCase().includes(q);
+        const matchSize = r.shirtSize?.toLowerCase().includes(q);
+        if (!matchName && !matchNick && !matchTicket && !matchPhone && !matchClub && !matchSize) return false;
+      }
+      return true;
+    });
+  }, [shirtAttendees, filterShirtStatus, searchShirt]);
 
   // Team creation handlers for Tab 4
   const handleCreateTeam = () => {
@@ -381,92 +402,100 @@ export default function EventCheckInHub({
   };
 
   // Contest Leaderboard Aggregation
-  const individualLeaderboard = registrations.map(attendee => {
-    let beautyTotal = 0;
-    let creativityTotal = 0;
-    let judgesVotedCount = 0;
+  const individualLeaderboard = useMemo(() => {
+    return registrations.map(attendee => {
+      let beautyTotal = 0;
+      let creativityTotal = 0;
+      let judgesVotedCount = 0;
 
-    allJudgeVotes.forEach(vote => {
-      const bScore = vote.scores?.individual?.beauty?.[attendee.ticketNo] || 0;
-      const cScore = vote.scores?.individual?.creativity?.[attendee.ticketNo] || 0;
-      if (bScore > 0 || cScore > 0) {
-        judgesVotedCount++;
-      }
-      beautyTotal += Number(bScore);
-      creativityTotal += Number(cScore);
+      allJudgeVotes.forEach(vote => {
+        const bScore = vote.scores?.individual?.beauty?.[attendee.ticketNo] || 0;
+        const cScore = vote.scores?.individual?.creativity?.[attendee.ticketNo] || 0;
+        if (bScore > 0 || cScore > 0) {
+          judgesVotedCount++;
+        }
+        beautyTotal += Number(bScore);
+        creativityTotal += Number(cScore);
+      });
+
+      return {
+        id: attendee.ticketNo,
+        ticketNo: attendee.ticketNo,
+        name: attendee.name,
+        nickname: attendee.nickname,
+        club: attendee.club,
+        photoUrl: attendee.photoUrl || attendee.costumePhoto,
+        checkedIn: attendee.checkedIn,
+        beautyTotal,
+        creativityTotal,
+        overallTotal: beautyTotal + creativityTotal,
+        judgesVotedCount
+      };
+    }).sort((a, b) => {
+      if (contestAwardView === "beauty") return b.beautyTotal - a.beautyTotal || b.overallTotal - a.overallTotal;
+      if (contestAwardView === "creativity") return b.creativityTotal - a.creativityTotal || b.overallTotal - a.overallTotal;
+      return b.overallTotal - a.overallTotal || b.beautyTotal - a.beautyTotal;
     });
+  }, [registrations, allJudgeVotes, contestAwardView]);
 
-    return {
-      id: attendee.ticketNo,
-      ticketNo: attendee.ticketNo,
-      name: attendee.name,
-      nickname: attendee.nickname,
-      club: attendee.club,
-      photoUrl: attendee.photoUrl || attendee.costumePhoto,
-      checkedIn: attendee.checkedIn,
-      beautyTotal,
-      creativityTotal,
-      overallTotal: beautyTotal + creativityTotal,
-      judgesVotedCount
-    };
-  }).sort((a, b) => {
-    if (contestAwardView === "beauty") return b.beautyTotal - a.beautyTotal || b.overallTotal - a.overallTotal;
-    if (contestAwardView === "creativity") return b.creativityTotal - a.creativityTotal || b.overallTotal - a.overallTotal;
-    return b.overallTotal - a.overallTotal || b.beautyTotal - a.beautyTotal;
-  });
+  const teamLeaderboard = useMemo(() => {
+    return contestTeams.map(team => {
+      let beautyTotal = 0;
+      let creativityTotal = 0;
+      let judgesVotedCount = 0;
 
-  const teamLeaderboard = contestTeams.map(team => {
-    let beautyTotal = 0;
-    let creativityTotal = 0;
-    let judgesVotedCount = 0;
+      allJudgeVotes.forEach(vote => {
+        const bScore = vote.scores?.team?.beauty?.[team.id] || 0;
+        const cScore = vote.scores?.team?.creativity?.[team.id] || 0;
+        if (bScore > 0 || cScore > 0) {
+          judgesVotedCount++;
+        }
+        beautyTotal += Number(bScore);
+        creativityTotal += Number(cScore);
+      });
 
-    allJudgeVotes.forEach(vote => {
-      const bScore = vote.scores?.team?.beauty?.[team.id] || 0;
-      const cScore = vote.scores?.team?.creativity?.[team.id] || 0;
-      if (bScore > 0 || cScore > 0) {
-        judgesVotedCount++;
-      }
-      beautyTotal += Number(bScore);
-      creativityTotal += Number(cScore);
+      return {
+        id: team.id,
+        name: team.name,
+        members: team.members || [],
+        photoUrl: team.photoUrl || team.members?.[0]?.photoUrl,
+        beautyTotal,
+        creativityTotal,
+        overallTotal: beautyTotal + creativityTotal,
+        judgesVotedCount
+      };
+    }).sort((a, b) => {
+      if (contestAwardView === "beauty") return b.beautyTotal - a.beautyTotal || b.overallTotal - a.overallTotal;
+      if (contestAwardView === "creativity") return b.creativityTotal - a.creativityTotal || b.overallTotal - a.overallTotal;
+      return b.overallTotal - a.overallTotal || b.beautyTotal - a.beautyTotal;
     });
-
-    return {
-      id: team.id,
-      name: team.name,
-      members: team.members || [],
-      photoUrl: team.photoUrl || team.members?.[0]?.photoUrl,
-      beautyTotal,
-      creativityTotal,
-      overallTotal: beautyTotal + creativityTotal,
-      judgesVotedCount
-    };
-  }).sort((a, b) => {
-    if (contestAwardView === "beauty") return b.beautyTotal - a.beautyTotal || b.overallTotal - a.overallTotal;
-    if (contestAwardView === "creativity") return b.creativityTotal - a.creativityTotal || b.overallTotal - a.overallTotal;
-    return b.overallTotal - a.overallTotal || b.beautyTotal - a.beautyTotal;
-  });
+  }, [contestTeams, allJudgeVotes, contestAwardView]);
 
   // Filtered check-in list (Sorted by ticket number or registration order 1..N)
-  const sortedRegistrations = [...registrations].sort((a, b) => {
-    const numA = parseInt((a.ticketNo || "").replace(/\D/g, "")) || 0;
-    const numB = parseInt((b.ticketNo || "").replace(/\D/g, "")) || 0;
-    return numA - numB;
-  });
+  const sortedRegistrations = useMemo(() => {
+    return [...registrations].sort((a, b) => {
+      const numA = parseInt((a.ticketNo || "").replace(/\D/g, "")) || 0;
+      const numB = parseInt((b.ticketNo || "").replace(/\D/g, "")) || 0;
+      return numA - numB;
+    });
+  }, [registrations]);
 
-  const filteredCheckInList = sortedRegistrations.filter(r => {
-    if (filterCheckInStatus === "checked_in" && !r.checkedIn) return false;
-    if (filterCheckInStatus === "not_checked_in" && r.checkedIn) return false;
-    if (filterCheckInClub !== "all" && r.club !== filterCheckInClub) return false;
-    if (searchCheckIn.trim()) {
-      const q = searchCheckIn.toLowerCase();
-      const matchName = r.name?.toLowerCase().includes(q);
-      const matchNick = r.nickname?.toLowerCase().includes(q);
-      const matchTicket = r.ticketNo?.toLowerCase().includes(q);
-      const matchPhone = r.phone?.includes(q);
-      if (!matchName && !matchNick && !matchTicket && !matchPhone) return false;
-    }
-    return true;
-  });
+  const filteredCheckInList = useMemo(() => {
+    return sortedRegistrations.filter(r => {
+      if (filterCheckInStatus === "checked_in" && !r.checkedIn) return false;
+      if (filterCheckInStatus === "not_checked_in" && r.checkedIn) return false;
+      if (filterCheckInClub !== "all" && r.club !== filterCheckInClub) return false;
+      if (searchCheckIn.trim()) {
+        const q = searchCheckIn.toLowerCase();
+        const matchName = r.name?.toLowerCase().includes(q);
+        const matchNick = r.nickname?.toLowerCase().includes(q);
+        const matchTicket = r.ticketNo?.toLowerCase().includes(q);
+        const matchPhone = r.phone?.includes(q);
+        if (!matchName && !matchNick && !matchTicket && !matchPhone) return false;
+      }
+      return true;
+    });
+  }, [sortedRegistrations, filterCheckInStatus, filterCheckInClub, searchCheckIn]);
 
   // Handle Scan QR Code success
   const handleScanSuccess = (scannedAttendee) => {
@@ -480,17 +509,22 @@ export default function EventCheckInHub({
   };
 
   // Eligible members for gift registration: Checked in AND do NOT have a gift yet
-  const eligibleForGift = registrations.filter(r => r.checkedIn && !r.giftNumber);
-  const filteredEligibleGift = eligibleForGift.filter(r => {
-    if (!searchGiftAttendee.trim()) return true;
-    const q = searchGiftAttendee.toLowerCase();
-    return (
-      r.name?.toLowerCase().includes(q) ||
-      r.nickname?.toLowerCase().includes(q) ||
-      r.ticketNo?.toLowerCase().includes(q) ||
-      r.phone?.includes(q)
-    );
-  });
+  const eligibleForGift = useMemo(
+    () => registrations.filter(r => r.checkedIn && !r.giftNumber),
+    [registrations]
+  );
+  const filteredEligibleGift = useMemo(() => {
+    return eligibleForGift.filter(r => {
+      if (!searchGiftAttendee.trim()) return true;
+      const q = searchGiftAttendee.toLowerCase();
+      return (
+        r.name?.toLowerCase().includes(q) ||
+        r.nickname?.toLowerCase().includes(q) ||
+        r.ticketNo?.toLowerCase().includes(q) ||
+        r.phone?.includes(q)
+      );
+    });
+  }, [eligibleForGift, searchGiftAttendee]);
 
   // Handle Register Gift for an attendee
   const handleSelectAttendeeForGift = (ticketNo) => {
@@ -638,30 +672,36 @@ export default function EventCheckInHub({
   };
 
   // Current candidate pool for lucky draw
-  const candidatePool = getCandidatePool();
+  const candidatePool = useMemo(() => {
+    return getCandidatePool();
+  }, [drawSubTab, checkedInList, registrations, grandPrizeWinners, giftQueueWinners, giftList]);
 
   // Search filtered pool for Right-Side Panel
-  const filteredCandidatePool = candidatePool.filter(r => {
-    if (!searchDrawPool.trim()) return true;
-    const q = searchDrawPool.toLowerCase();
-    const matchName = r.name?.toLowerCase().includes(q);
-    const matchNick = r.nickname?.toLowerCase().includes(q);
-    const matchTicket = r.ticketNo?.toLowerCase().includes(q);
-    const matchClub = r.club?.toLowerCase().includes(q);
-    return matchName || matchNick || matchTicket || matchClub;
-  });
+  const filteredCandidatePool = useMemo(() => {
+    return candidatePool.filter(r => {
+      if (!searchDrawPool.trim()) return true;
+      const q = searchDrawPool.toLowerCase();
+      const matchName = r.name?.toLowerCase().includes(q);
+      const matchNick = r.nickname?.toLowerCase().includes(q);
+      const matchTicket = r.ticketNo?.toLowerCase().includes(q);
+      const matchClub = r.club?.toLowerCase().includes(q);
+      return matchName || matchNick || matchTicket || matchClub;
+    });
+  }, [candidatePool, searchDrawPool]);
 
   // Filtered gift registered list for Mode 3 Right-Side Panel
-  const filteredGiftList = giftList.filter(g => {
-    if (!searchDrawPool.trim()) return true;
-    const q = searchDrawPool.toLowerCase();
-    const matchName = g.name?.toLowerCase().includes(q);
-    const matchNick = g.nickname?.toLowerCase().includes(q);
-    const matchTicket = g.ticketNo?.toLowerCase().includes(q);
-    const matchClub = g.club?.toLowerCase().includes(q);
-    const matchGiftNo = String(g.giftNumber || "").includes(q);
-    return matchName || matchNick || matchTicket || matchClub || matchGiftNo;
-  });
+  const filteredGiftList = useMemo(() => {
+    return giftList.filter(g => {
+      if (!searchDrawPool.trim()) return true;
+      const q = searchDrawPool.toLowerCase();
+      const matchName = g.name?.toLowerCase().includes(q);
+      const matchNick = g.nickname?.toLowerCase().includes(q);
+      const matchTicket = g.ticketNo?.toLowerCase().includes(q);
+      const matchClub = g.club?.toLowerCase().includes(q);
+      const matchGiftNo = String(g.giftNumber || "").includes(q);
+      return matchName || matchNick || matchTicket || matchClub || matchGiftNo;
+    });
+  }, [giftList, searchDrawPool]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
@@ -966,13 +1006,13 @@ export default function EventCheckInHub({
           <div className="bg-slate-900/70 rounded-2xl border border-white/10 shadow-2xl overflow-hidden">
             
             {/* Sheet Sub-header Bar */}
-            <div className="bg-slate-950/80 px-4 py-2.5 border-b border-white/10 flex items-center justify-between text-xs text-slate-400">
+            <div className="bg-slate-950/80 px-3 sm:px-4 py-2 sm:py-2.5 border-b border-white/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-[11px] sm:text-xs text-slate-400">
               <div className="flex items-center space-x-2 font-mono">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
                 <span className="font-bold text-slate-200">Google Sheets View:</span>
-                <span>ตารางรายชื่อผู้ลงทะเบียนออนไลน์ (เรียงลำดับ 1 ถึง {totalCount})</span>
+                <span className="truncate">ตารางรายชื่อผู้ลงทะเบียนออนไลน์ (เรียงลำดับ 1 ถึง {totalCount})</span>
               </div>
-              <div>
+              <div className="text-[10px] sm:text-xs text-slate-400">
                 แสดง {filteredCheckInList.length} จากทั้งหมด {totalCount} รายการ
               </div>
             </div>
@@ -982,16 +1022,16 @@ export default function EventCheckInHub({
               <table className="w-full text-left text-xs border-collapse">
                 <thead className="bg-slate-950/90 text-slate-400 font-semibold sticky top-0 z-10 border-b border-white/10">
                   <tr>
-                    <th className="py-3 px-3 w-14 text-center border-r border-white/5">ลำดับ</th>
-                    <th className="py-3 px-3.5 w-24 border-r border-white/5">เลขที่บัตร</th>
-                    <th className="py-3 px-2 w-16 text-center border-r border-white/5">รูปถ่าย 1:1</th>
-                    <th className="py-3 px-4 border-r border-white/5 min-w-[180px]">ชื่อ - นามสกุล (ชื่อเล่น)</th>
-                    <th className="py-3 px-3.5 border-r border-white/5 min-w-[120px]">ประเภท / สังกัด</th>
-                    <th className="py-3 px-3.5 border-r border-white/5">เบอร์โทรศัพท์</th>
-                    <th className="py-3 px-3.5 border-r border-white/5">เสื้อที่ระลึก</th>
-                    <th className="py-3 px-4 border-r border-white/5 min-w-[150px]">สถานะเข้างาน</th>
-                    <th className="py-3 px-3.5 border-r border-white/5 text-center">ของขวัญ</th>
-                    <th className="py-3 px-3 text-center">จัดการ</th>
+                    <th className="py-2.5 px-2 sm:py-3 sm:px-3 w-12 sm:w-14 text-center border-r border-white/5 text-[11px] sm:text-xs">ลำดับ</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 w-20 sm:w-24 border-r border-white/5 text-[11px] sm:text-xs">เลขที่บัตร</th>
+                    <th className="py-2.5 px-1.5 sm:py-3 sm:px-2 w-14 sm:w-16 text-center border-r border-white/5 text-[11px] sm:text-xs">รูปถ่าย</th>
+                    <th className="py-2.5 px-3 sm:py-3 sm:px-4 border-r border-white/5 min-w-[140px] sm:min-w-[180px] text-[11px] sm:text-xs">ชื่อ - นามสกุล (ชื่อเล่น)</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-white/5 min-w-[100px] sm:min-w-[120px] text-[11px] sm:text-xs">ประเภท / สังกัด</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-white/5 text-[11px] sm:text-xs">เบอร์โทรศัพท์</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-white/5 text-[11px] sm:text-xs">เสื้อที่ระลึก</th>
+                    <th className="py-2.5 px-3 sm:py-3 sm:px-4 border-r border-white/5 min-w-[130px] sm:min-w-[150px] text-[11px] sm:text-xs">สถานะเข้างาน</th>
+                    <th className="py-2.5 px-2 sm:py-3 sm:px-3.5 border-r border-white/5 text-center text-[11px] sm:text-xs">ของขวัญ</th>
+                    <th className="py-2.5 px-2 sm:py-3 sm:px-3 text-center text-[11px] sm:text-xs">จัดการ</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
@@ -1005,17 +1045,17 @@ export default function EventCheckInHub({
                         }`}
                       >
                         {/* 1. ลำดับ */}
-                        <td className="py-2.5 px-3 text-center font-mono text-slate-400 border-r border-white/5">
+                        <td className="py-2 px-2 sm:py-2.5 sm:px-3 text-center font-mono text-slate-400 border-r border-white/5 text-[11px] sm:text-xs">
                           {idx + 1}
                         </td>
 
                         {/* 2. เลขที่บัตร */}
-                        <td className="py-2.5 px-3.5 font-mono font-bold text-amber-400 border-r border-white/5">
+                        <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 font-mono font-bold text-amber-400 border-r border-white/5 text-[11px] sm:text-xs">
                           {r.ticketNo || "SME-001"}
                         </td>
 
                         {/* 2.5 รูปถ่าย (1:1) */}
-                        <td className="py-2 px-2 text-center border-r border-white/5">
+                        <td className="py-2 px-1.5 sm:py-2 sm:px-2 text-center border-r border-white/5">
                           {r.photoUrl || r.costumePhoto ? (
                             <button
                               type="button"
@@ -1026,7 +1066,7 @@ export default function EventCheckInHub({
                               <img
                                 src={r.photoUrl || r.costumePhoto}
                                 alt={r.name}
-                                className="w-10 h-10 rounded-xl object-cover border-2 border-amber-400/70 shadow-md mx-auto group-hover:border-amber-300"
+                                className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover border-2 border-amber-400/70 shadow-md mx-auto group-hover:border-amber-300"
                               />
                               <span className="absolute -bottom-1 -right-1 px-1 py-0.5 rounded-full bg-slate-900 border border-amber-400/60 text-[9px] text-amber-300 shadow leading-none font-bold">
                                 🔍
@@ -1046,44 +1086,44 @@ export default function EventCheckInHub({
                         </td>
 
                         {/* 3. ชื่อ - นามสกุล */}
-                        <td className="py-2.5 px-4 font-semibold text-white border-r border-white/5">
+                        <td className="py-2 px-3 sm:py-2.5 sm:px-4 font-semibold text-white border-r border-white/5 text-[11px] sm:text-xs">
                           <div className="flex items-center space-x-1.5">
                             <span>{r.name}</span>
                             {r.nickname && (
-                              <span className="text-amber-300 font-normal text-[11px]">
+                              <span className="text-amber-300 font-normal text-[10px] sm:text-[11px]">
                                 ({r.nickname})
                               </span>
                             )}
                           </div>
                           {r.email && (
-                            <div className="text-[10px] text-slate-400 font-normal">
+                            <div className="text-[9px] sm:text-[10px] text-slate-400 font-normal truncate max-w-[160px]">
                               {r.email}
                             </div>
                           )}
                         </td>
 
                         {/* 4. สังกัด */}
-                        <td className="py-2.5 px-3.5 border-r border-white/5">
+                        <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 border-r border-white/5 text-[11px] sm:text-xs">
                           {r.regType === "member" ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                            <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 whitespace-nowrap">
                               สมาชิก{r.club || "สงสพัท"}
                             </span>
                           ) : (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                            <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 whitespace-nowrap">
                               แขกผู้มีเกียรติ {r.club && `(${r.club})`}
                             </span>
                           )}
                         </td>
 
                         {/* 5. เบอร์โทร */}
-                        <td className="py-2.5 px-3.5 font-mono text-slate-300 border-r border-white/5">
+                        <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 font-mono text-slate-300 border-r border-white/5 text-[11px] sm:text-xs whitespace-nowrap">
                           {r.phone || "-"}
                         </td>
 
                         {/* 6. เสื้อที่ระลึก */}
-                        <td className="py-2.5 px-3.5 border-r border-white/5">
+                        <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 border-r border-white/5 text-[11px] sm:text-xs whitespace-nowrap">
                           {r.hasShirt ? (
-                            <span className="text-amber-300 font-medium text-[11px] flex items-center space-x-1">
+                            <span className="text-amber-300 font-medium text-[10px] sm:text-[11px] flex items-center space-x-1">
                               <Shirt className="w-3 h-3 text-amber-400" />
                               <span>{r.shirtSize} ({r.shirtGender || "ทั่วไป"})</span>
                             </span>
@@ -1093,23 +1133,23 @@ export default function EventCheckInHub({
                         </td>
 
                         {/* 7. สถานะเข้างาน */}
-                        <td className="py-2.5 px-4 border-r border-white/5">
+                        <td className="py-2 px-3 sm:py-2.5 sm:px-4 border-r border-white/5 whitespace-nowrap">
                           {isCheckedIn ? (
-                            <div className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold shadow-xs">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                            <div className="inline-flex items-center space-x-1 sm:space-x-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] sm:text-[11px] font-bold shadow-xs">
+                              <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-400" />
                               <span>เข้างานแล้ว {r.checkedInAt ? `(${r.checkedInAt})` : ""}</span>
                             </div>
                           ) : (
-                            <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full bg-slate-800 text-slate-400 text-[11px] font-medium border border-white/5">
+                            <span className="inline-flex items-center space-x-1 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-slate-800 text-slate-400 text-[10px] sm:text-[11px] font-medium border border-white/5">
                               <span>⏳ ยังไม่เข้างาน</span>
                             </span>
                           )}
                         </td>
 
                         {/* 8. สถานะของขวัญ */}
-                        <td className="py-2.5 px-3.5 text-center border-r border-white/5">
+                        <td className="py-2 px-2 sm:py-2.5 sm:px-3.5 text-center border-r border-white/5 whitespace-nowrap">
                           {r.giftNumber ? (
-                            <span className="font-mono font-extrabold px-2.5 py-0.5 rounded-md bg-amber-500/25 text-amber-300 border border-amber-500/40 text-xs">
+                            <span className="font-mono font-extrabold px-2 py-0.5 rounded-md bg-amber-500/25 text-amber-300 border border-amber-500/40 text-[10px] sm:text-xs">
                               🎁 #{r.giftNumber}
                             </span>
                           ) : (
@@ -1118,7 +1158,7 @@ export default function EventCheckInHub({
                         </td>
 
                         {/* 9. การจัดการ (ปุ่มเช็คอินฉุกเฉิน) */}
-                        <td className="py-2.5 px-3 text-center">
+                        <td className="py-2 px-2 sm:py-2.5 sm:px-3 text-center whitespace-nowrap">
                           {isCheckedIn ? (
                             <button
                               type="button"
@@ -1127,7 +1167,7 @@ export default function EventCheckInHub({
                                   onCheckIn(r.ticketNo, false);
                                 }
                               }}
-                              className="text-[10px] px-2 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 transition-all"
+                              className="text-[9px] sm:text-[10px] px-2 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 transition-all"
                               title="ยกเลิกการเช็คอิน"
                             >
                               ยกเลิก
@@ -1136,7 +1176,7 @@ export default function EventCheckInHub({
                             <button
                               type="button"
                               onClick={() => setEmergencyTarget(r)}
-                              className="text-[10px] px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-medium transition-all"
+                              className="text-[9px] sm:text-[10px] px-2 sm:px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-medium transition-all"
                               title="กดเช็คอินกรณีฉุกเฉิน (ผู้ร่วมงานไม่ได้บันทึกภาพบัตรมา)"
                             >
                               ⚡ เช็คอินฉุกเฉิน
@@ -1196,13 +1236,13 @@ export default function EventCheckInHub({
 
           {/* Google Sheets Style Table for Gifts */}
           <div className="bg-slate-900/70 rounded-2xl border border-white/10 shadow-2xl overflow-hidden">
-            <div className="bg-slate-950/80 px-4 py-2.5 border-b border-white/10 flex items-center justify-between text-xs text-slate-400 font-mono">
+            <div className="bg-slate-950/80 px-3 sm:px-4 py-2 sm:py-2.5 border-b border-white/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-[11px] sm:text-xs text-slate-400 font-mono">
               <div className="flex items-center space-x-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />
                 <span className="font-bold text-slate-200">Google Sheets View:</span>
-                <span>ตารางหมายเลขของขวัญ (เรียงลำดับ 1 ถึง {giftCount > 0 ? giftCount : "..."})</span>
+                <span className="truncate">ตารางหมายเลขของขวัญ (เรียงลำดับ 1 ถึง {giftCount > 0 ? giftCount : "..."})</span>
               </div>
-              <div>
+              <div className="text-[10px] sm:text-xs text-amber-400">
                 ทั้งหมด {giftCount} ชิ้น
               </div>
             </div>
@@ -1212,13 +1252,13 @@ export default function EventCheckInHub({
                 <table className="w-full text-left text-xs border-collapse">
                   <thead className="bg-slate-950/90 text-slate-400 font-semibold sticky top-0 z-10 border-b border-white/10">
                     <tr>
-                      <th className="py-3 px-4 w-28 text-center border-r border-white/5">หมายเลขของขวัญ</th>
-                      <th className="py-3 px-3.5 w-24 border-r border-white/5">เลขที่บัตร</th>
-                      <th className="py-3 px-4 border-r border-white/5 min-w-[180px]">ชื่อผู้มอบของขวัญ (ชื่อเล่น)</th>
-                      <th className="py-3 px-3.5 border-r border-white/5">สังกัด</th>
-                      <th className="py-3 px-3.5 border-r border-white/5">เบอร์โทรศัพท์</th>
-                      <th className="py-3 px-4 border-r border-white/5">เวลาที่นำมาลงทะเบียน</th>
-                      <th className="py-3 px-3 text-center">จัดการ</th>
+                      <th className="py-2.5 px-2.5 sm:py-3 sm:px-4 w-24 sm:w-28 text-center border-r border-white/5 text-[11px] sm:text-xs">หมายเลขของขวัญ</th>
+                      <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 w-20 sm:w-24 border-r border-white/5 text-[11px] sm:text-xs">เลขที่บัตร</th>
+                      <th className="py-2.5 px-3 sm:py-3 sm:px-4 border-r border-white/5 min-w-[140px] sm:min-w-[180px] text-[11px] sm:text-xs">ชื่อผู้มอบของขวัญ (ชื่อเล่น)</th>
+                      <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-white/5 text-[11px] sm:text-xs">สังกัด</th>
+                      <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-white/5 text-[11px] sm:text-xs">เบอร์โทรศัพท์</th>
+                      <th className="py-2.5 px-3 sm:py-3 sm:px-4 border-r border-white/5 text-[11px] sm:text-xs">เวลาลงทะเบียน</th>
+                      <th className="py-2.5 px-2 sm:py-3 sm:px-3 text-center text-[11px] sm:text-xs">จัดการ</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
@@ -1226,23 +1266,23 @@ export default function EventCheckInHub({
                       <tr key={g.ticketNo} className="hover:bg-white/[0.03] transition-colors">
                         
                         {/* 1. หมายเลขของขวัญ */}
-                        <td className="py-3 px-4 text-center border-r border-white/5">
-                          <span className="font-mono font-black text-sm px-3 py-1 rounded-xl bg-amber-500/25 text-amber-300 border border-amber-500/40 shadow-inner">
+                        <td className="py-2 px-2.5 sm:py-3 sm:px-4 text-center border-r border-white/5 whitespace-nowrap">
+                          <span className="font-mono font-black text-xs sm:text-sm px-2 sm:px-3 py-0.5 sm:py-1 rounded-xl bg-amber-500/25 text-amber-300 border border-amber-500/40 shadow-inner">
                             🎁 #{g.giftNumber}
                           </span>
                         </td>
 
                         {/* 2. เลขที่บัตร */}
-                        <td className="py-3 px-3.5 font-mono font-bold text-slate-300 border-r border-white/5">
+                        <td className="py-2 px-2.5 sm:py-3 sm:px-3.5 font-mono font-bold text-slate-300 border-r border-white/5 text-[11px] sm:text-xs whitespace-nowrap">
                           {g.ticketNo}
                         </td>
 
                         {/* 3. ชื่อผู้มอบ */}
-                        <td className="py-3 px-4 font-semibold text-white border-r border-white/5">
+                        <td className="py-2 px-3 sm:py-3 sm:px-4 font-semibold text-white border-r border-white/5 text-[11px] sm:text-xs">
                           <div className="flex items-center space-x-1.5">
                             <span>{g.name}</span>
                             {g.nickname && (
-                              <span className="text-amber-300 font-normal text-[11px]">
+                              <span className="text-amber-300 font-normal text-[10px] sm:text-[11px]">
                                 ({g.nickname})
                               </span>
                             )}
@@ -1250,22 +1290,22 @@ export default function EventCheckInHub({
                         </td>
 
                         {/* 4. สังกัด */}
-                        <td className="py-3 px-3.5 border-r border-white/5 text-slate-300">
+                        <td className="py-2 px-2.5 sm:py-3 sm:px-3.5 border-r border-white/5 text-slate-300 text-[11px] sm:text-xs whitespace-nowrap">
                           {g.regType === "member" ? `สมาชิก${g.club || "สงสพัท"}` : `แขกผู้มีเกียรติ (${g.club || "ทั่วไป"})`}
                         </td>
 
                         {/* 5. เบอร์โทร */}
-                        <td className="py-3 px-3.5 font-mono text-slate-400 border-r border-white/5">
+                        <td className="py-2 px-2.5 sm:py-3 sm:px-3.5 font-mono text-slate-400 border-r border-white/5 text-[11px] sm:text-xs whitespace-nowrap">
                           {g.phone || "-"}
                         </td>
 
                         {/* 6. เวลาลงทะเบียนของขวัญ */}
-                        <td className="py-3 px-4 font-mono text-emerald-400 border-r border-white/5">
+                        <td className="py-2 px-3 sm:py-3 sm:px-4 font-mono text-emerald-400 border-r border-white/5 text-[10px] sm:text-xs whitespace-nowrap">
                           {g.giftRegisteredAt || "18:00 น."}
                         </td>
 
                         {/* 7. ลบ / ยกเลิก */}
-                        <td className="py-3 px-3 text-center">
+                        <td className="py-2 px-2 sm:py-3 sm:px-3 text-center whitespace-nowrap">
                           <button
                             type="button"
                             onClick={() => {
@@ -1389,13 +1429,13 @@ export default function EventCheckInHub({
 
           {/* Google Sheets Style Table for Shirt Recipients */}
           <div className="bg-slate-900/70 rounded-2xl border border-white/10 shadow-2xl overflow-hidden">
-            <div className="bg-slate-950/80 px-4 py-2.5 border-b border-white/10 flex items-center justify-between text-xs text-slate-400 font-mono">
+            <div className="bg-slate-950/80 px-3 sm:px-4 py-2 sm:py-2.5 border-b border-white/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-[11px] sm:text-xs text-slate-400 font-mono">
               <div className="flex items-center space-x-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-teal-500" />
+                <span className="w-2.5 h-2.5 rounded-full bg-teal-500 shrink-0" />
                 <span className="font-bold text-slate-200">Google Sheets View:</span>
-                <span>ตารางผู้ได้รับสิทธิ์เสื้อที่ระลึก (แสดง {filteredShirtList.length} จาก {shirtTotalCount} รายการ)</span>
+                <span className="truncate">ตารางผู้ได้รับสิทธิ์เสื้อที่ระลึก (แสดง {filteredShirtList.length} จาก {shirtTotalCount} รายการ)</span>
               </div>
-              <div className="text-amber-400">
+              <div className="text-[10px] sm:text-xs text-amber-400">
                 คงเหลือยังไม่ได้รับ: {shirtTotalCount - shirtReceivedCount} ตัว
               </div>
             </div>
@@ -1405,15 +1445,15 @@ export default function EventCheckInHub({
                 <table className="w-full text-left text-xs border-collapse">
                   <thead className="bg-slate-950/90 text-slate-400 font-semibold sticky top-0 z-10 border-b border-white/10">
                     <tr>
-                      <th className="py-3 px-3 w-14 text-center border-r border-white/5">ลำดับ</th>
-                      <th className="py-3 px-3.5 w-24 border-r border-white/5">เลขที่บัตร</th>
-                      <th className="py-3 px-2 w-16 text-center border-r border-white/5">รูปถ่าย 1:1</th>
-                      <th className="py-3 px-4 border-r border-white/5 min-w-[180px]">ชื่อ - นามสกุล (ชื่อเล่น)</th>
-                      <th className="py-3 px-3.5 border-r border-white/5 min-w-[120px]">ประเภท / สังกัด / ผู้เชิญ</th>
-                      <th className="py-3 px-3.5 border-r border-white/5">เบอร์โทรศัพท์</th>
-                      <th className="py-3 px-3.5 border-r border-white/5">ไซซ์เสื้อที่ระลึก</th>
-                      <th className="py-3 px-3.5 border-r border-white/5 text-center">เข้างาน</th>
-                      <th className="py-3 px-4 text-center">สถานะรับเสื้อ</th>
+                      <th className="py-2.5 px-2 sm:py-3 sm:px-3 w-12 sm:w-14 text-center border-r border-white/5 text-[11px] sm:text-xs">ลำดับ</th>
+                      <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 w-20 sm:w-24 border-r border-white/5 text-[11px] sm:text-xs">เลขที่บัตร</th>
+                      <th className="py-2.5 px-1.5 sm:py-3 sm:px-2 w-14 sm:w-16 text-center border-r border-white/5 text-[11px] sm:text-xs">รูปถ่าย</th>
+                      <th className="py-2.5 px-3 sm:py-3 sm:px-4 border-r border-white/5 min-w-[140px] sm:min-w-[180px] text-[11px] sm:text-xs">ชื่อ - นามสกุล (ชื่อเล่น)</th>
+                      <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-white/5 min-w-[100px] sm:min-w-[120px] text-[11px] sm:text-xs">ประเภท / สังกัด / ผู้เชิญ</th>
+                      <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-white/5 text-[11px] sm:text-xs">เบอร์โทรศัพท์</th>
+                      <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-white/5 text-[11px] sm:text-xs">ไซซ์เสื้อที่ระลึก</th>
+                      <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-white/5 text-center text-[11px] sm:text-xs">เข้างาน</th>
+                      <th className="py-2.5 px-3 sm:py-3 sm:px-4 text-center text-[11px] sm:text-xs">สถานะรับเสื้อ</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
@@ -1423,17 +1463,17 @@ export default function EventCheckInHub({
                         <tr key={r.ticketNo} className={`hover:bg-white/[0.03] transition-colors ${isReceived ? "bg-teal-950/15" : ""}`}>
                           
                           {/* 1. ลำดับ */}
-                          <td className="py-2.5 px-3 text-center font-mono text-slate-400 border-r border-white/5">
+                          <td className="py-2 px-2 sm:py-2.5 sm:px-3 text-center font-mono text-slate-400 border-r border-white/5 text-[11px] sm:text-xs">
                             {idx + 1}
                           </td>
 
                           {/* 2. เลขที่บัตร */}
-                          <td className="py-2.5 px-3.5 font-mono font-bold text-amber-400 border-r border-white/5">
+                          <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 font-mono font-bold text-amber-400 border-r border-white/5 text-[11px] sm:text-xs whitespace-nowrap">
                             {r.ticketNo}
                           </td>
 
                           {/* 3. รูปถ่าย 1:1 */}
-                          <td className="py-2 px-2 text-center border-r border-white/5">
+                          <td className="py-2 px-1.5 sm:py-2 sm:px-2 text-center border-r border-white/5">
                             {r.photoUrl || r.costumePhoto ? (
                               <button
                                 type="button"
@@ -1444,7 +1484,7 @@ export default function EventCheckInHub({
                                 <img
                                   src={r.photoUrl || r.costumePhoto}
                                   alt={r.name}
-                                  className="w-10 h-10 rounded-xl object-cover border-2 border-teal-400/70 shadow-md mx-auto group-hover:border-teal-300"
+                                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover border-2 border-teal-400/70 shadow-md mx-auto group-hover:border-teal-300"
                                 />
                                 <span className="absolute -bottom-1 -right-1 px-1 py-0.5 rounded-full bg-slate-900 border border-teal-400/60 text-[9px] text-teal-300 shadow leading-none font-bold">
                                   🔍
@@ -1464,69 +1504,69 @@ export default function EventCheckInHub({
                           </td>
 
                           {/* 4. ชื่อ - สกุล */}
-                          <td className="py-2.5 px-4 font-semibold text-white border-r border-white/5">
+                          <td className="py-2 px-3 sm:py-2.5 sm:px-4 font-semibold text-white border-r border-white/5 text-[11px] sm:text-xs">
                             <div className="flex items-center space-x-1.5">
                               <span>{r.name}</span>
                               {r.nickname && (
-                                <span className="text-amber-300 font-normal text-[11px]">
+                                <span className="text-amber-300 font-normal text-[10px] sm:text-[11px]">
                                   ({r.nickname})
                                 </span>
                               )}
                             </div>
                             {r.email && (
-                              <div className="text-[10px] text-slate-400 font-normal">
+                              <div className="text-[9px] sm:text-[10px] text-slate-400 font-normal truncate max-w-[160px]">
                                 {r.email}
                               </div>
                             )}
                           </td>
 
                           {/* 5. สังกัด */}
-                          <td className="py-2.5 px-3.5 border-r border-white/5">
+                          <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 border-r border-white/5 text-[11px] sm:text-xs">
                             {r.regType === "member" ? (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                              <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 whitespace-nowrap">
                                 สมาชิก{r.club || "สงสพัท"}
                               </span>
                             ) : (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                              <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 whitespace-nowrap">
                                 แขก {r.club && `(${r.club})`}
                               </span>
                             )}
                           </td>
 
                           {/* 6. เบอร์โทร */}
-                          <td className="py-2.5 px-3.5 font-mono text-slate-300 border-r border-white/5">
+                          <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 font-mono text-slate-300 border-r border-white/5 text-[11px] sm:text-xs whitespace-nowrap">
                             {r.phone || "-"}
                           </td>
 
                           {/* 7. ไซซ์เสื้อ */}
-                          <td className="py-2.5 px-3.5 border-r border-white/5">
-                            <span className="inline-flex items-center space-x-1 font-mono font-bold px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs">
-                              <Shirt className="w-3.5 h-3.5 text-amber-400" />
+                          <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 border-r border-white/5 whitespace-nowrap">
+                            <span className="inline-flex items-center space-x-1 font-mono font-bold px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] sm:text-xs">
+                              <Shirt className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-amber-400" />
                               <span>ไซซ์ {r.shirtSize} ({r.shirtGender || "ทั่วไป"})</span>
                             </span>
                           </td>
 
                           {/* 8. สถานะเข้างาน */}
-                          <td className="py-2.5 px-3.5 text-center border-r border-white/5">
+                          <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 text-center border-r border-white/5 whitespace-nowrap">
                             {r.checkedIn ? (
-                              <span className="text-emerald-400 font-bold text-[11px]">✓ เข้างาน</span>
+                              <span className="text-emerald-400 font-bold text-[10px] sm:text-[11px]">✓ เข้างาน</span>
                             ) : (
-                              <span className="text-slate-500 text-[11px]">ยังไม่เข้า</span>
+                              <span className="text-slate-500 text-[10px] sm:text-[11px]">ยังไม่เข้า</span>
                             )}
                           </td>
 
                           {/* 9. ส่งมอบเสื้อ */}
-                          <td className="py-2.5 px-4 text-center">
+                          <td className="py-2 px-3 sm:py-2.5 sm:px-4 text-center whitespace-nowrap">
                             {isReceived ? (
-                              <div className="inline-flex items-center space-x-2">
-                                <span className="inline-flex items-center space-x-1 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40 text-xs shadow-xs">
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                              <div className="inline-flex items-center space-x-1.5 sm:space-x-2">
+                                <span className="inline-flex items-center space-x-1 px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40 text-[10px] sm:text-xs shadow-xs">
+                                  <CheckCircle2 className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-emerald-400" />
                                   <span>รับเสื้อแล้ว ✓</span>
                                 </span>
                                 <button
                                   type="button"
                                   onClick={() => onToggleShirtReceived(r.ticketNo, false)}
-                                  className="text-[10px] text-slate-500 hover:text-rose-400 underline transition-colors"
+                                  className="text-[9px] sm:text-[10px] text-slate-500 hover:text-rose-400 underline transition-colors"
                                   title="คลิกเพื่อยกเลิกสถานะรับเสื้อหากกดผิด"
                                 >
                                   แก้ไข
@@ -1540,15 +1580,14 @@ export default function EventCheckInHub({
                                   playAudioEffect("fanfare");
                                   setPhotoModalTarget(r);
                                 }}
-                                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 font-bold text-xs shadow-md shadow-teal-500/20 hover:scale-105 active:scale-95 transition-all inline-flex items-center space-x-1.5 cursor-pointer"
+                                className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 font-bold text-[10px] sm:text-xs shadow-md shadow-teal-500/20 hover:scale-105 active:scale-95 transition-all inline-flex items-center space-x-1 cursor-pointer"
                                 title="ส่งมอบเสื้อและเปิดกล้องถ่ายรูปบุคคลทันที"
                               >
-                                <Shirt className="w-3.5 h-3.5" />
+                                <Shirt className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
                                 <span>📦 ส่งมอบเสื้อ</span>
                               </button>
                             )}
                           </td>
-
                         </tr>
                       );
                     })}
@@ -1927,14 +1966,14 @@ export default function EventCheckInHub({
 
               {/* Detailed Ranking Table */}
               <div className="bg-slate-900/70 rounded-2xl border border-white/10 shadow-2xl overflow-hidden">
-                <div className="bg-slate-950/80 px-4 py-3 border-b border-white/10 flex items-center justify-between text-xs text-slate-400">
+                <div className="bg-slate-950/80 px-3 sm:px-4 py-2 sm:py-3 border-b border-white/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-[11px] sm:text-xs text-slate-400">
                   <div className="flex items-center space-x-2 font-mono">
-                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
                     <span className="font-bold text-slate-200">
                       ตารางสรุปผลคะแนนรวมคณะกรรมการ ({contestCategoryView === "individual" ? "ผู้เข้าประกวดเดี่ยว" : "ทีมเข้าประกวด"})
                     </span>
                   </div>
-                  <div className="text-slate-400">
+                  <div className="text-[10px] sm:text-xs text-slate-400">
                     กรรมการลงคะแนนแล้ว {allJudgeVotes.length} ท่าน
                   </div>
                 </div>
@@ -1943,14 +1982,14 @@ export default function EventCheckInHub({
                   <table className="w-full text-left text-xs border-collapse">
                     <thead className="bg-slate-950/90 text-slate-400 font-semibold sticky top-0 z-10 border-b border-white/10">
                       <tr>
-                        <th className="py-3 px-3 w-16 text-center border-r border-white/5">อันดับ</th>
-                        <th className="py-3 px-2 w-16 text-center border-r border-white/5">รูปถ่าย 1:1</th>
-                        <th className="py-3 px-4 border-r border-white/5 min-w-[180px]">ผู้เข้าประกวด</th>
-                        <th className="py-3 px-3.5 border-r border-white/5 min-w-[130px]">สังกัด / สมาชิก</th>
-                        <th className="py-3 px-3.5 border-r border-white/5 text-center">ความสวยงาม</th>
-                        <th className="py-3 px-3.5 border-r border-white/5 text-center">ความคิดสร้างสรรค์</th>
-                        <th className="py-3 px-3.5 border-r border-white/5 text-center font-bold text-amber-400">คะแนนรวม</th>
-                        <th className="py-3 px-3.5 text-center">กรรมการที่ให้คะแนน</th>
+                        <th className="py-2.5 px-2 sm:py-3 sm:px-3 w-12 sm:w-16 text-center border-r border-white/5 text-[11px] sm:text-xs">อันดับ</th>
+                        <th className="py-2.5 px-1.5 sm:py-3 sm:px-2 w-14 sm:w-16 text-center border-r border-white/5 text-[11px] sm:text-xs">รูปถ่าย</th>
+                        <th className="py-2.5 px-3 sm:py-3 sm:px-4 border-r border-white/5 min-w-[140px] sm:min-w-[180px] text-[11px] sm:text-xs">ผู้เข้าประกวด</th>
+                        <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-white/5 min-w-[110px] sm:min-w-[130px] text-[11px] sm:text-xs">สังกัด / สมาชิก</th>
+                        <th className="py-2.5 px-2 sm:py-3 sm:px-3.5 border-r border-white/5 text-center text-[11px] sm:text-xs">ความสวยงาม</th>
+                        <th className="py-2.5 px-2 sm:py-3 sm:px-3.5 border-r border-white/5 text-center text-[11px] sm:text-xs">ความคิดสร้างสรรค์</th>
+                        <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-white/5 text-center font-bold text-amber-400 text-[11px] sm:text-xs">คะแนนรวม</th>
+                        <th className="py-2.5 px-2 sm:py-3 sm:px-3.5 text-center text-[11px] sm:text-xs">กรรมการ</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
@@ -1961,77 +2000,77 @@ export default function EventCheckInHub({
                             idx === 0 && item.overallTotal > 0 ? "bg-amber-500/10" : ""
                           }`}
                         >
-                          <td className="py-3 px-3 text-center font-mono border-r border-white/5">
+                          <td className="py-2 px-2 sm:py-3 sm:px-3 text-center font-mono border-r border-white/5 text-[11px] sm:text-xs">
                             {idx === 0 && item.overallTotal > 0 ? (
-                              <span className="text-base">🥇</span>
+                              <span className="text-sm sm:text-base">🥇</span>
                             ) : idx === 1 && item.overallTotal > 0 ? (
-                              <span className="text-base">🥈</span>
+                              <span className="text-sm sm:text-base">🥈</span>
                             ) : idx === 2 && item.overallTotal > 0 ? (
-                              <span className="text-base">🥉</span>
+                              <span className="text-sm sm:text-base">🥉</span>
                             ) : (
                               <span className="text-slate-400 font-bold">{idx + 1}</span>
                             )}
                           </td>
 
-                          <td className="py-2 px-2 text-center border-r border-white/5">
+                          <td className="py-2 px-1.5 sm:py-2 sm:px-2 text-center border-r border-white/5">
                             {item.photoUrl ? (
                               <img
                                 src={item.photoUrl}
                                 alt={item.name}
-                                className="w-10 h-10 rounded-xl object-cover border border-white/15 mx-auto"
+                                className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover border border-white/15 mx-auto"
                               />
                             ) : (
-                              <div className="w-10 h-10 rounded-xl bg-slate-800 border border-white/10 flex items-center justify-center text-slate-400 mx-auto">
+                              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-800 border border-white/10 flex items-center justify-center text-slate-400 mx-auto">
                                 <Users className="w-4 h-4" />
                               </div>
                             )}
                           </td>
 
-                          <td className="py-3 px-4 font-semibold text-white border-r border-white/5">
+                          <td className="py-2 px-3 sm:py-3 sm:px-4 font-semibold text-white border-r border-white/5 text-[11px] sm:text-xs">
                             <div className="flex items-center space-x-1.5">
                               <span>{item.name}</span>
                               {item.nickname && (
-                                <span className="text-amber-300 font-normal text-[11px]">
+                                <span className="text-amber-300 font-normal text-[10px] sm:text-[11px]">
                                   ({item.nickname})
                                 </span>
                               )}
                             </div>
                             {item.ticketNo && (
-                              <span className="font-mono text-[10px] text-amber-400/80">
+                              <span className="font-mono text-[9px] sm:text-[10px] text-amber-400/80">
                                 {item.ticketNo}
                               </span>
                             )}
                           </td>
 
-                          <td className="py-3 px-3.5 border-r border-white/5 text-slate-300">
+                          <td className="py-2 px-2.5 sm:py-3 sm:px-3.5 border-r border-white/5 text-slate-300 text-[11px] sm:text-xs">
                             {contestCategoryView === "individual" ? (
                               item.club || "สงสพัท"
                             ) : (
-                              <span className="text-[11px] text-slate-400">
+                              <span className="text-[10px] sm:text-[11px] text-slate-400 line-clamp-1">
                                 {item.members?.map(m => m.name).join(", ") || "-"}
                               </span>
                             )}
                           </td>
 
-                          <td className="py-3 px-3.5 text-center border-r border-white/5 font-mono">
-                            <span className="px-2.5 py-0.5 rounded-lg bg-white/5 text-slate-200 font-bold">
+                          <td className="py-2 px-2 sm:py-3 sm:px-3.5 text-center border-r border-white/5 font-mono whitespace-nowrap">
+                            <span className="px-2 py-0.5 rounded-lg bg-white/5 text-slate-200 font-bold text-[10px] sm:text-xs">
                               {item.beautyTotal}
                             </span>
                           </td>
 
-                          <td className="py-3 px-3.5 text-center border-r border-white/5 font-mono">
-                            <span className="px-2.5 py-0.5 rounded-lg bg-white/5 text-slate-200 font-bold">
+                          <td className="py-2 px-2 sm:py-3 sm:px-3.5 text-center border-r border-white/5 font-mono whitespace-nowrap">
+                            <span className="px-2 py-0.5 rounded-lg bg-white/5 text-slate-200 font-bold text-[10px] sm:text-xs">
                               {item.creativityTotal}
                             </span>
                           </td>
 
-                          <td className="py-3 px-3.5 text-center border-r border-white/5 font-mono">
-                            <span className="px-3 py-1 rounded-xl bg-amber-500/20 text-amber-300 font-extrabold text-sm border border-amber-500/30">
+                          <td className="py-2 px-2.5 sm:py-3 sm:px-3.5 text-center border-r border-white/5 font-mono whitespace-nowrap">
+                            <span className="px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-xl bg-amber-500/20 text-amber-300 font-extrabold text-xs sm:text-sm border border-amber-500/30">
                               {item.overallTotal}
                             </span>
                           </td>
 
-                          <td className="py-3 px-3.5 text-center text-slate-400">
+                          <td className="py-2 px-2 sm:py-3 sm:px-3.5 text-center text-slate-400 text-[10px] sm:text-xs whitespace-nowrap">
                             {item.judgesVotedCount} ท่าน
                           </td>
                         </tr>

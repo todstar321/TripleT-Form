@@ -128,13 +128,16 @@ export default function App() {
     }
   }, [eventConfig]);
 
-  // Auto-save registrations
+  // Auto-save registrations (Debounced by 400ms to keep button taps instant and lag-free)
   useEffect(() => {
-    try {
-      localStorage.setItem(REGISTRATIONS_STORAGE_KEY, JSON.stringify(registrations));
-    } catch (e) {
-      console.error("Failed to save registrations:", e);
-    }
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem(REGISTRATIONS_STORAGE_KEY, JSON.stringify(registrations));
+      } catch (e) {
+        console.error("Failed to save registrations:", e);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
   }, [registrations]);
 
   // Auto-save formsList
@@ -230,11 +233,12 @@ export default function App() {
     };
   }, []);
 
-  // 3. Fallback Auto-polling every 8 seconds when on Event Check-In or Admin tabs
+  // 3. Fallback Auto-polling every 25 seconds when on Event Check-In or Admin tabs (Realtime WebSocket handles instant sync)
   useEffect(() => {
     if (!isSupabaseConfigured()) return;
     if (['sme_checkin', 'sme_portal', 'contest_judge'].includes(currentTab)) {
       const pollTimer = setInterval(() => {
+        if (typeof document !== 'undefined' && document.hidden) return;
         fetchRegistrationsFromCloud().then(cloudData => {
           if (cloudData && Array.isArray(cloudData) && cloudData.length > 0) {
             setRegistrations(prev => {
@@ -249,7 +253,7 @@ export default function App() {
             });
           }
         }).catch(err => console.warn('Auto-polling sync check warning:', err));
-      }, 8000);
+      }, 25000);
 
       return () => clearInterval(pollTimer);
     }

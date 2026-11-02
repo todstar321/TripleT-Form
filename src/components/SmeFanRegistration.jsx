@@ -1043,10 +1043,10 @@ export default function SmeFanRegistration({
 
                 {/* Event Details Grid - 2 columns side-by-side on mobile and desktop */}
                 <div className="grid grid-cols-2 gap-2 sm:gap-3 py-2 text-xs text-left max-w-lg mx-auto">
-                  <div className="p-2.5 sm:p-3 rounded-xl sm:rounded-2xl bg-white/5 border border-white/10 flex items-center space-x-2 sm:space-x-3">
-                    <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 shrink-0" />
+                  <div className="p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-white/5 border border-white/10 flex items-start space-x-2 sm:space-x-2.5">
+                    <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 shrink-0 mt-0.5" />
                     <div className="flex-1 min-w-0">
-                      <div className="text-[10px] sm:text-xs text-slate-400 truncate">วันและเวลาจัดงาน</div>
+                      <div className="text-[10px] sm:text-xs text-slate-400 font-medium">วันและเวลาจัดงาน</div>
                       {isInlineEditing ? (
                         <input
                           type="text"
@@ -1055,15 +1055,26 @@ export default function SmeFanRegistration({
                           className="w-full text-[11px] sm:text-xs font-semibold text-white bg-slate-950 border border-dashed border-amber-500/40 rounded-lg px-2 py-1 focus:outline-none focus:border-amber-400 mt-0.5"
                         />
                       ) : (
-                        <div className="font-semibold text-white text-[11px] sm:text-xs truncate">{eventConfig.eventDate}</div>
+                        <div className="font-semibold text-white text-[11px] sm:text-xs leading-snug break-words mt-0.5">
+                          {eventConfig.eventDate?.includes('เวลา') ? (
+                            <>
+                              <div className="leading-tight">{eventConfig.eventDate.split('เวลา')[0].trim()}</div>
+                              <div className="text-amber-300 font-normal text-[10px] sm:text-[11px] leading-tight pt-0.5">
+                                เวลา {eventConfig.eventDate.split('เวลา')[1].trim()}
+                              </div>
+                            </>
+                          ) : (
+                            <div>{eventConfig.eventDate}</div>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
 
-                  <div className="p-2.5 sm:p-3 rounded-xl sm:rounded-2xl bg-white/5 border border-white/10 flex items-center space-x-2 sm:space-x-3">
-                    <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-rose-400 shrink-0" />
+                  <div className="p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-white/5 border border-white/10 flex items-start space-x-2 sm:space-x-2.5">
+                    <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-rose-400 shrink-0 mt-0.5" />
                     <div className="flex-1 min-w-0">
-                      <div className="text-[10px] sm:text-xs text-slate-400 truncate">สถานที่จัดงาน</div>
+                      <div className="text-[10px] sm:text-xs text-slate-400 font-medium">สถานที่จัดงาน</div>
                       {isInlineEditing ? (
                         <input
                           type="text"
@@ -1072,7 +1083,18 @@ export default function SmeFanRegistration({
                           className="w-full text-[11px] sm:text-xs font-semibold text-white bg-slate-950 border border-dashed border-amber-500/40 rounded-lg px-2 py-1 focus:outline-none focus:border-amber-400 mt-0.5"
                         />
                       ) : (
-                        <div className="font-semibold text-white text-[11px] sm:text-xs truncate">{eventConfig.eventVenue}</div>
+                        <div className="font-semibold text-white text-[11px] sm:text-xs leading-snug break-words mt-0.5">
+                          {eventConfig.eventVenue?.includes('(') ? (
+                            <>
+                              <div className="leading-tight">{eventConfig.eventVenue.split('(')[0].trim()}</div>
+                              <div className="text-slate-400 font-normal text-[10px] sm:text-[11px] leading-tight pt-0.5">
+                                ({eventConfig.eventVenue.split('(')[1]}
+                              </div>
+                            </>
+                          ) : (
+                            <div>{eventConfig.eventVenue}</div>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -2911,8 +2933,67 @@ export default function SmeFanRegistration({
         </div>
       )}
 
+        {/* Admin & Live Edit Control Buttons (Placed at bottom of form, non-floating) */}
+        <div className="mt-8 pt-4 border-t border-white/5 flex flex-wrap items-center justify-center gap-2.5">
+          {currentUser ? (
+            <>
+              {/* Toggle Inline Form Editing */}
+              <button
+                type="button"
+                onClick={() => setIsInlineEditing(!isInlineEditing)}
+                className={`flex items-center space-x-1.5 px-4 py-2 rounded-full shadow-lg text-xs font-bold transition-all border ${
+                  isInlineEditing
+                    ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 border-amber-300 ring-4 ring-amber-500/20'
+                    : 'bg-slate-900/90 hover:bg-slate-800 text-amber-300 border-amber-500/40 hover:scale-105'
+                }`}
+                title="สลับโหมดแก้ไขฟอร์มสดเหมือน Google Forms"
+              >
+                {isInlineEditing ? (
+                  <>
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>ดูตัวอย่างฟอร์มจริง</span>
+                  </>
+                ) : (
+                  <>
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>✏️ แก้ไขฟอร์มนี้ (เหมือน Google Forms)</span>
+                  </>
+                )}
+              </button>
+
+              {/* Admin Dashboard Button */}
+              {onAdminClick && (
+                <button
+                  type="button"
+                  onClick={onAdminClick}
+                  title={`เข้าสู่แดชบอร์ดในนาม: ${currentUser.name}`}
+                  className="flex items-center space-x-1.5 px-4 py-2 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-white/10 hover:border-amber-500/40 text-slate-300 hover:text-white shadow-lg text-xs font-semibold transition-all hover:scale-105"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                  <span>แดชบอร์ด Owner</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300">
+                    {currentUser.role === 'owner' ? 'Owner' : currentUser.role === 'manager' ? 'Manager' : 'Staff'}
+                  </span>
+                </button>
+              )}
+            </>
+          ) : (
+            onAdminClick && (
+              <button
+                type="button"
+                onClick={onAdminClick}
+                title="เข้าสู่ระบบผู้ดูแลเพื่อแก้ไขฟอร์ม (Admin Login) หรือกด Ctrl+Shift+A"
+                className="flex items-center space-x-1.5 px-4 py-2 rounded-full bg-slate-900/85 hover:bg-slate-800 border border-white/10 hover:border-amber-500/40 text-slate-400 hover:text-amber-300 shadow-md text-xs font-medium transition-all hover:scale-105"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>แอดมิน / แก้ไขฟอร์ม</span>
+              </button>
+            )
+          )}
+        </div>
+
         {/* Form Footer */}
-        <footer className="mt-12 text-center text-xs text-slate-400 space-y-2.5 pb-10">
+        <footer className="mt-8 text-center text-xs text-slate-400 space-y-2.5 pb-10">
           <p className="font-medium text-slate-300">
             © 2026 {eventConfig.eventTitle || "งานสังสรรค์ปีใหม่ SME FAN 2026"}
           </p>
@@ -3451,64 +3532,6 @@ export default function SmeFanRegistration({
         onRecordDownload={handleRecordDownloadWrapper}
       />
 
-      {/* Floating Action Buttons for Form View, Live Edit & Admin Portal */}
-      <div className="fixed bottom-4 right-4 z-40 flex items-center space-x-2">
-        {currentUser ? (
-          <>
-            {/* Toggle Inline Form Editing */}
-            <button
-              type="button"
-              onClick={() => setIsInlineEditing(!isInlineEditing)}
-              className={`flex items-center space-x-1.5 px-3.5 py-2 rounded-full backdrop-blur-md shadow-2xl text-xs font-bold transition-all border ${
-                isInlineEditing
-                  ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 border-amber-300 ring-4 ring-amber-500/20'
-                  : 'bg-slate-900/90 hover:bg-slate-800 text-amber-300 border-amber-500/40 hover:scale-105'
-              }`}
-              title="สลับโหมดแก้ไขฟอร์มสดเหมือน Google Forms"
-            >
-              {isInlineEditing ? (
-                <>
-                  <Eye className="w-3.5 h-3.5" />
-                  <span>ดูตัวอย่างฟอร์มจริง</span>
-                </>
-              ) : (
-                <>
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>✏️ แก้ไขฟอร์มนี้ (เหมือน Google Forms)</span>
-                </>
-              )}
-            </button>
-
-            {/* Admin Dashboard Button */}
-            {onAdminClick && (
-              <button
-                type="button"
-                onClick={onAdminClick}
-                title={`เข้าสู่แดชบอร์ดในนาม: ${currentUser.name}`}
-                className="flex items-center space-x-1.5 px-3.5 py-2 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-white/10 hover:border-amber-500/40 text-slate-300 hover:text-white backdrop-blur-md shadow-xl text-xs font-semibold transition-all hover:scale-105"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-                <span>แดชบอร์ด Owner</span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300">
-                  {currentUser.role === 'owner' ? 'Owner' : currentUser.role === 'manager' ? 'Manager' : 'Staff'}
-                </span>
-              </button>
-            )}
-          </>
-        ) : (
-          onAdminClick && (
-            <button
-              type="button"
-              onClick={onAdminClick}
-              title="เข้าสู่ระบบผู้ดูแลเพื่อแก้ไขฟอร์ม (Admin Login) หรือกด Ctrl+Shift+A"
-              className="flex items-center space-x-1.5 px-3.5 py-2 rounded-full bg-slate-900/85 hover:bg-slate-800 border border-white/10 hover:border-amber-500/40 text-slate-400 hover:text-amber-300 backdrop-blur-md shadow-xl text-xs font-medium transition-all hover:scale-105"
-            >
-              <Lock className="w-3.5 h-3.5" />
-              <span>แอดมิน / แก้ไขฟอร์ม</span>
-            </button>
-          )
-        )}
-      </div>
 
       {/* ==================================================== */}
       {/* THEME PRESETS MODAL (17 Themes + Rainbow)            */}
