@@ -140,6 +140,14 @@ export default function App() {
       const saved = localStorage.getItem(CONFIG_STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
+        // Automatically replace old stock Unsplash conference photo or legacy heavy base64 with official Cloudinary banner
+        if (
+          !parsed.bannerImage ||
+          parsed.bannerImage.includes('photo-1511578314322-379afb476865') ||
+          parsed.bannerImage.startsWith('data:image')
+        ) {
+          parsed.bannerImage = initialSmeFanConfig.bannerImage;
+        }
         // Automatically sync official 71 SongSaphat + 6 Rotary members if local storage only has old mock members
         if (!parsed.members || !Array.isArray(parsed.members) || parsed.members.length < initialSmeFanConfig.members.length) {
           parsed.members = initialSmeFanConfig.members;
@@ -271,7 +279,22 @@ export default function App() {
     try {
       localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(eventConfig));
     } catch (e) {
-      console.error("Failed to save eventConfig:", e);
+      console.error("Failed to save eventConfig locally:", e);
+      if (e.name === 'QuotaExceededError') {
+        try {
+          const sanitized = { ...eventConfig };
+          if (sanitized.bannerImage?.startsWith('data:image')) {
+            sanitized.bannerImage = initialSmeFanConfig.bannerImage;
+          }
+          if (sanitized.backgroundImage?.startsWith('data:image')) {
+            sanitized.backgroundImage = initialSmeFanConfig.backgroundImage;
+          }
+          if (sanitized.subBannerImage?.startsWith('data:image')) {
+            sanitized.subBannerImage = '';
+          }
+          localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(sanitized));
+        } catch (err) {}
+      }
     }
 
     if (isSupabaseConfigured()) {
@@ -344,7 +367,15 @@ export default function App() {
       // 1.1 Hydrate eventConfig (Banner, Sub-banner, Titles, Themes across all devices)
       fetchEventConfigFromCloud().then(cloudConfig => {
         if (cloudConfig && typeof cloudConfig === 'object') {
-          setEventConfig(prev => ({ ...prev, ...cloudConfig }));
+          const sanitizedCloud = { ...cloudConfig };
+          if (
+            !sanitizedCloud.bannerImage ||
+            sanitizedCloud.bannerImage.includes('photo-1511578314322-379afb476865') ||
+            sanitizedCloud.bannerImage.startsWith('data:image')
+          ) {
+            sanitizedCloud.bannerImage = initialSmeFanConfig.bannerImage;
+          }
+          setEventConfig(prev => ({ ...prev, ...sanitizedCloud }));
           // Verify active user against cloud force-logout policy
           setCurrentUser(prevUser => {
             if (prevUser && !isValidAdminSession(prevUser, cloudConfig)) {
@@ -399,7 +430,15 @@ export default function App() {
     const unsubscribeConfig = subscribeToEventConfig((cloudConfig) => {
       if (cloudConfig && typeof cloudConfig === 'object') {
         console.log("⚡ Supabase Realtime: event_config updated from cloud");
-        setEventConfig(prev => ({ ...prev, ...cloudConfig }));
+        const sanitizedCloud = { ...cloudConfig };
+        if (
+          !sanitizedCloud.bannerImage ||
+          sanitizedCloud.bannerImage.includes('photo-1511578314322-379afb476865') ||
+          sanitizedCloud.bannerImage.startsWith('data:image')
+        ) {
+          sanitizedCloud.bannerImage = initialSmeFanConfig.bannerImage;
+        }
+        setEventConfig(prev => ({ ...prev, ...sanitizedCloud }));
         setCurrentUser(prevUser => {
           if (prevUser && !isValidAdminSession(prevUser, cloudConfig)) {
             console.warn("🔒 Cloud Realtime: Session revoked by server policy");

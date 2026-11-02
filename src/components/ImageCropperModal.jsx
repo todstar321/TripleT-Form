@@ -1,19 +1,25 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Crop, ZoomIn, ZoomOut, Check, Upload, Move, RotateCcw } from 'lucide-react';
+import { X, Crop, ZoomIn, ZoomOut, Check, Upload, Move, RotateCcw, Loader2, CloudUpload } from 'lucide-react';
+import { uploadToCloudinary } from '../utils/cloudinary';
 
 export default function ImageCropperModal({
   isOpen,
   onClose,
   onCropComplete,
   defaultAspect = 16 / 9,
+  aspectRatio: propAspect,
+  targetField,
+  customSubfolder,
   title = "ปรับขนาดและตัดรูปภาพ (Image Cropper)"
 }) {
+  const effectiveAspect = propAspect || defaultAspect || 16 / 9;
   const [imageSrc, setImageSrc] = useState(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [aspectRatio, setAspectRatio] = useState(defaultAspect); // width / height
+  const [aspectRatio, setAspectRatio] = useState(effectiveAspect); // width / height
+  const [isUploading, setIsUploading] = useState(false);
 
   const canvasRef = useRef(null);
   const imageRef = useRef(null);
@@ -24,9 +30,10 @@ export default function ImageCropperModal({
     if (isOpen) {
       setZoom(1);
       setPan({ x: 0, y: 0 });
-      setAspectRatio(defaultAspect);
+      setAspectRatio(effectiveAspect);
+      setIsUploading(false);
     }
-  }, [isOpen, defaultAspect]);
+  }, [isOpen, effectiveAspect]);
 
   if (!isOpen) return null;
 
@@ -64,49 +71,86 @@ export default function ImageCropperModal({
     setIsDragging(false);
   };
 
-  // Perform canvas crop
-  const handleApplyCrop = () => {
+  // Determine Cloudinary target subfolder
+  const getSubfolder = () => {
+    if (customSubfolder) return customSubfolder;
+    if (targetField === 'banner' || title?.includes('หน้าปก')) return 'banners';
+    if (targetField === 'subBanner' || title?.includes('หน้าถัดไป') || title?.includes('Sub-Banner')) return 'sub_banners';
+    if (targetField === 'background' || title?.includes('พื้นหลัง')) return 'backgrounds';
+    if (targetField === 'shirtMockup' || title?.includes('เสื้อ')) return 'shirts';
+    return 'banners';
+  };
+
+  // Perform canvas crop and upload directly to Cloudinary
+  const handleApplyCrop = async () => {
     if (!imageSrc || !imageRef.current) return;
 
-    const img = imageRef.current;
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
+    setIsUploading(true);
 
-    // Desired output resolution (HD high quality)
-    const targetWidth = 1920;
-    const targetHeight = Math.round(targetWidth / aspectRatio);
-    canvas.width = targetWidth;
-    canvas.height = targetHeight;
+    try {
+      const img = imageRef.current;
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
 
-    // Viewport dimensions in modal (e.g. 500 x 500/aspectRatio)
-    const viewportWidth = 480;
-    const viewportHeight = 480 / aspectRatio;
+      // Desired output resolution (HD high quality)
+      const targetWidth = 1920;
+      const targetHeight = Math.round(targetWidth / aspectRatio);
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
 
-    // Scale factor from viewport to full canvas
-    const scale = targetWidth / viewportWidth;
+      // Viewport dimensions in modal (e.g. 480 x 480/aspectRatio)
+      const viewportWidth = 480;
+      const viewportHeight = 480 / aspectRatio;
 
-    ctx.save();
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(0, 0, targetWidth, targetHeight);
+      // Scale factor from viewport to full canvas
+      const scale = targetWidth / viewportWidth;
 
-    // Calculate drawing center & transformed dimensions
-    const drawX = (pan.x + viewportWidth / 2) * scale;
-    const drawY = (pan.y + viewportHeight / 2) * scale;
-    const drawWidth = img.naturalWidth * zoom * (viewportWidth / img.naturalWidth) * scale;
-    const drawHeight = img.naturalHeight * zoom * (viewportWidth / img.naturalWidth) * scale;
+      ctx.save();
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 0, targetWidth, targetHeight);
 
-    ctx.drawImage(
-      img,
-      drawX - drawWidth / 2,
-      drawY - drawHeight / 2,
-      drawWidth,
-      drawHeight
-    );
-    ctx.restore();
+      // Calculate drawing center & transformed dimensions
+      const drawX = (pan.x + viewportWidth / 2) * scale;
+      const drawY = (pan.y + viewportHeight / 2) * scale;
+      const drawWidth = img.naturalWidth * zoom * (viewportWidth / img.naturalWidth) * scale;
+      const drawHeight = img.naturalHeight * zoom * (viewportWidth / img.naturalWidth) * scale;
 
-    const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
-    onCropComplete(croppedDataUrl);
-    onClose();
+      ctx.drawImage(
+        img,
+        drawX - drawWidth / 2,
+        drawY - drawHeight / 2,
+        drawWidth,
+        drawHeight
+      );
+      ctx.restore();
+
+      // Export canvas as quality JPEG
+      const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
+
+      // Upload directly to Cloudinary for permanent CDN storage
+      const subfolder = getSubfolder();
+      const cloudUrl = await uploadToCloudinary(croppedDataUrl, {}, subfolder);
+      const finalUrl = cloudUrl || croppedDataUrl;
+
+      onCropComplete(finalUrl);
+      onClose();
+    } catch (err) {
+      console.error('Error during image crop & upload:', err);
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1200;
+        canvas.height = Math.round(1200 / aspectRatio);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(imageRef.current, 0, 0, canvas.width, canvas.height);
+        const fallbackUrl = canvas.toDataURL('image/jpeg', 0.75);
+        onCropComplete(fallbackUrl);
+      } catch (e) {
+        onCropComplete(imageSrc);
+      }
+      onClose();
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   return (
@@ -287,18 +331,28 @@ export default function ImageCropperModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-all"
+            disabled={isUploading}
+            className="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-all disabled:opacity-40"
           >
             ยกเลิก
           </button>
           <button
             type="button"
             onClick={handleApplyCrop}
-            disabled={!imageSrc}
-            className="flex items-center space-x-1.5 px-5 py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition-all shadow-lg shadow-amber-500/20 disabled:opacity-40"
+            disabled={!imageSrc || isUploading}
+            className="flex items-center space-x-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition-all shadow-lg shadow-amber-500/20 disabled:opacity-40 cursor-pointer"
           >
-            <Check className="w-4 h-4" />
-            <span>ยืนยันและใช้งานรูปนี้</span>
+            {isUploading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                <span>กำลังบันทึกและอัปโหลดขึ้นคลาวด์...</span>
+              </>
+            ) : (
+              <>
+                <CloudUpload className="w-4 h-4" />
+                <span>บันทึกและใช้งานรูปนี้</span>
+              </>
+            )}
           </button>
         </div>
 

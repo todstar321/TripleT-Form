@@ -11,7 +11,7 @@ export const initialSmeFanConfig = {
   forceLogoutBefore: "2026-11-03T06:25:00.000+07:00",
   
   // Images
-  bannerImage: "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=1920&q=80",
+  bannerImage: "https://res.cloudinary.com/dx2asgfo7/image/upload/v1793663023/triple_t_forms/sme_fan_2026/banners/official_sme_fan_banner_2026.png",
   subBannerMode: "same", // 'same' | 'custom'
   subBannerImage: "",
   subBannerPositionY: 50, // 0 - 100% vertical offset to slide image

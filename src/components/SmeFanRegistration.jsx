@@ -3973,6 +3973,7 @@ export default function SmeFanRegistration({
       <ImageCropperModal
         isOpen={cropperModalOpen}
         onClose={() => setCropperModalOpen(false)}
+        targetField={cropperTarget}
         defaultAspect={
           cropperTarget === 'subBanner'
             ? 16 / 4
