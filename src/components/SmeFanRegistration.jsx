@@ -184,6 +184,7 @@ export default function SmeFanRegistration({
   const [slipDetails, setSlipDetails] = useState(null);
   const [isUploadingSlip, setIsUploadingSlip] = useState(false);
   const [isAnalyzingSlip, setIsAnalyzingSlip] = useState(false);
+  const [slipStatusMessage, setSlipStatusMessage] = useState("");
   const [copiedAccount, setCopiedAccount] = useState(false);
 
   // Shirt selection
@@ -656,13 +657,18 @@ export default function SmeFanRegistration({
       const localDataUrl = event.target.result;
       setSlipPreview(localDataUrl);
 
-      // Smart Slip Verification & QR Reader
+      // Smart Slip Verification & QR Reader with AI OCR
       try {
-        const details = await analyzeSlipData(localDataUrl, {
-          attendeeName: name.trim() || "ผู้ลงทะเบียน",
-          expectedAmount: calculatedFee,
-          bankAccount: eventConfig.bankInfo || eventConfig.bankAccount
-        });
+        setSlipStatusMessage("กำลังตรวจหา QR Code และอ่านยอดเงินจริงจากสลิปด้วย AI OCR...");
+        const details = await analyzeSlipData(
+          localDataUrl,
+          {
+            attendeeName: name.trim() || "ผู้ลงทะเบียน",
+            expectedAmount: calculatedFee,
+            bankAccount: eventConfig.bankInfo || eventConfig.bankAccount
+          },
+          (progressText) => setSlipStatusMessage(progressText)
+        );
         setSlipDetails(details);
         if (details.amount !== undefined && details.amount < calculatedFee && calculatedFee > 0) {
           setUnderpaidModalOpen(true);
@@ -671,6 +677,7 @@ export default function SmeFanRegistration({
         console.warn("Could not analyze slip:", err);
       } finally {
         setIsAnalyzingSlip(false);
+        setSlipStatusMessage("");
       }
 
       try {
@@ -2436,7 +2443,18 @@ export default function SmeFanRegistration({
                           <img src={slipPreview} alt="Slip Preview" className="h-44 object-contain mx-auto" />
                         </div>
                         {/* Live Slip Verification Summary Card */}
-                        {slipDetails && (
+                        {isAnalyzingSlip ? (
+                          <div className="bg-slate-900/95 border border-amber-500/40 rounded-2xl p-4 text-center space-y-2.5 shadow-xl animate-pulse">
+                            <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto" />
+                            <div className="space-y-1">
+                              <h5 className="text-xs font-bold text-white">กำลังอ่านและตรวจสอบยอดเงินจากสลิปจริงด้วย AI OCR...</h5>
+                              <p className="text-[11px] text-amber-300 font-medium">
+                                {slipStatusMessage || "กำลังวิเคราะห์ตัวเลข วันที่ และรหัสธุรกรรมจากภาพ..."}
+                              </p>
+                              <span className="text-[10px] text-slate-400 block">ระบบกำลังถอดรหัสตัวเลขจริง เพื่อตรวจสอบว่ายอดเงินถูกต้องหรือไม่</span>
+                            </div>
+                          </div>
+                        ) : slipDetails && (
                           <div className="bg-slate-900/90 border border-emerald-500/40 rounded-2xl p-4 text-left space-y-3 shadow-xl">
                             <div className="flex items-center justify-between pb-2 border-b border-white/10">
                               <div className="flex items-center space-x-2">
@@ -2448,10 +2466,22 @@ export default function SmeFanRegistration({
                                   <span className="text-[10px] text-slate-400">ระบบถอดรหัสและบันทึกข้อมูลสลิปลงระบบอัตโนมัติ</span>
                                 </div>
                               </div>
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center space-x-1">
-                                <ShieldCheck className="w-3 h-3" />
-                                <span>อ่านข้อมูลสำเร็จ</span>
-                              </span>
+                              {slipDetails.isUnderpaid ? (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center space-x-1">
+                                  <AlertTriangle className="w-3 h-3 text-rose-400" />
+                                  <span>ยอดเงินไม่ครบ (ขาดอีก {slipDetails.shortage?.toLocaleString()} บ.)</span>
+                                </span>
+                              ) : slipDetails.isOverpaid ? (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center space-x-1">
+                                  <ShieldCheck className="w-3 h-3 text-amber-400" />
+                                  <span>ยอดถูกต้อง + สมทบ (+{slipDetails.contribution?.toLocaleString()} บ.)</span>
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center space-x-1">
+                                  <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                                  <span>อ่านข้อมูลสำเร็จ</span>
+                                </span>
+                              )}
                             </div>
 
                             {/* Details 2-col Grid */}
