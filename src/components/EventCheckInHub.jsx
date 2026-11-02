@@ -37,7 +37,8 @@ import {
   Image as ImageIcon,
   Copy,
   CheckCheck,
-  UserCheck
+  UserCheck,
+  Download
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import QRCode from "qrcode";
@@ -60,7 +61,8 @@ export default function EventCheckInHub({
   onBackToPortal,
   onGoToSettings,
   onSwitchToPublicForm,
-  onPurgeComplete
+  onPurgeComplete,
+  onForceSyncCloud
 }) {
   // Main Tab: "checkin" | "gifts" | "shirts" | "contest" | "lucky_draw"
   const [activeMainTab, setActiveMainTab] = useState("checkin");
@@ -74,6 +76,8 @@ export default function EventCheckInHub({
 
   // Photo Capture Modal State (1:1 Ratio)
   const [photoModalTarget, setPhotoModalTarget] = useState(null);
+  // High-Resolution Photo Viewer Lightbox State
+  const [photoViewerTarget, setPhotoViewerTarget] = useState(null);
 
   // Shirt Presentation & Management State
   const [isShirtSlideOpen, setIsShirtSlideOpen] = useState(false);
@@ -734,6 +738,18 @@ export default function EventCheckInHub({
             <span className="hidden sm:inline">ลบรูปหลังจบงาน</span>
           </button>
 
+          {onForceSyncCloud && (
+            <button
+              type="button"
+              onClick={onForceSyncCloud}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/30 text-xs font-semibold text-emerald-300 hover:text-white transition-all shadow-sm cursor-pointer"
+              title="ซิงค์ข้อมูลล่าสุดจาก Supabase Cloud และล้างแคชจำลอง"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="hidden sm:inline">ซิงค์ Cloud</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={onGoToSettings}
@@ -977,26 +993,26 @@ export default function EventCheckInHub({
                         {/* 2.5 รูปถ่าย (1:1) */}
                         <td className="py-2 px-2 text-center border-r border-white/5">
                           {r.photoUrl || r.costumePhoto ? (
-                            <div className="relative inline-block group">
+                            <button
+                              type="button"
+                              onClick={() => setPhotoViewerTarget(r)}
+                              className="relative inline-block cursor-pointer group hover:scale-110 active:scale-95 transition-all mx-auto"
+                              title="คลิกเพื่อดูรูปถ่ายขนาดใหญ่"
+                            >
                               <img
                                 src={r.photoUrl || r.costumePhoto}
                                 alt={r.name}
-                                className="w-10 h-10 rounded-xl object-cover border border-amber-400/50 shadow-md mx-auto"
+                                className="w-10 h-10 rounded-xl object-cover border-2 border-amber-400/70 shadow-md mx-auto group-hover:border-amber-300"
                               />
-                              <button
-                                type="button"
-                                onClick={() => setPhotoModalTarget(r)}
-                                className="absolute inset-0 bg-slate-950/70 opacity-0 group-hover:opacity-100 rounded-xl flex items-center justify-center text-amber-300 transition-all"
-                                title="เปลี่ยนรูปถ่าย"
-                              >
-                                <Camera className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
+                              <span className="absolute -bottom-1 -right-1 px-1 py-0.5 rounded-full bg-slate-900 border border-amber-400/60 text-[9px] text-amber-300 shadow leading-none font-bold">
+                                🔍
+                              </span>
+                            </button>
                           ) : (
                             <button
                               type="button"
                               onClick={() => setPhotoModalTarget(r)}
-                              className="p-1.5 px-2 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-300 border border-white/10 hover:border-emerald-500/30 transition-all inline-flex items-center space-x-1"
+                              className="p-1.5 px-2 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-300 border border-white/10 hover:border-emerald-500/30 transition-all inline-flex items-center space-x-1 cursor-pointer"
                               title="ถ่ายรูปผู้เข้าร่วมงาน (สัดส่วน 1:1)"
                             >
                               <Camera className="w-3.5 h-3.5" />
@@ -1395,26 +1411,26 @@ export default function EventCheckInHub({
                           {/* 3. รูปถ่าย 1:1 */}
                           <td className="py-2 px-2 text-center border-r border-white/5">
                             {r.photoUrl || r.costumePhoto ? (
-                              <div className="relative inline-block group">
+                              <button
+                                type="button"
+                                onClick={() => setPhotoViewerTarget(r)}
+                                className="relative inline-block cursor-pointer group hover:scale-110 active:scale-95 transition-all mx-auto"
+                                title="คลิกเพื่อดูรูปถ่ายขนาดใหญ่"
+                              >
                                 <img
                                   src={r.photoUrl || r.costumePhoto}
                                   alt={r.name}
-                                  className="w-10 h-10 rounded-xl object-cover border border-amber-400/50 shadow-md mx-auto"
+                                  className="w-10 h-10 rounded-xl object-cover border-2 border-teal-400/70 shadow-md mx-auto group-hover:border-teal-300"
                                 />
-                                <button
-                                  type="button"
-                                  onClick={() => setPhotoModalTarget(r)}
-                                  className="absolute inset-0 bg-slate-950/70 opacity-0 group-hover:opacity-100 rounded-xl flex items-center justify-center text-amber-300 transition-all"
-                                  title="เปลี่ยนรูปถ่าย"
-                                >
-                                  <Camera className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
+                                <span className="absolute -bottom-1 -right-1 px-1 py-0.5 rounded-full bg-slate-900 border border-teal-400/60 text-[9px] text-teal-300 shadow leading-none font-bold">
+                                  🔍
+                                </span>
+                              </button>
                             ) : (
                               <button
                                 type="button"
                                 onClick={() => setPhotoModalTarget(r)}
-                                className="p-1.5 px-2 rounded-xl bg-white/5 hover:bg-teal-500/20 text-slate-400 hover:text-teal-300 border border-white/10 hover:border-teal-500/30 transition-all inline-flex items-center space-x-1"
+                                className="p-1.5 px-2 rounded-xl bg-white/5 hover:bg-teal-500/20 text-slate-400 hover:text-teal-300 border border-white/10 hover:border-teal-500/30 transition-all inline-flex items-center space-x-1 cursor-pointer"
                                 title="ถ่ายรูปผู้เข้าร่วมงาน (สัดส่วน 1:1)"
                               >
                                 <Camera className="w-3.5 h-3.5" />
@@ -3230,12 +3246,105 @@ export default function EventCheckInHub({
           isOpen={!!photoModalTarget}
           onClose={() => setPhotoModalTarget(null)}
           attendee={photoModalTarget}
-          onSavePhoto={(photoUrl) => {
-            onUpdateAttendeePhoto(photoModalTarget.ticketNo, photoUrl);
+          onSavePhoto={(photoUrl, ticketNo) => {
+            const actualUrl = (typeof photoUrl === 'string' && (photoUrl.startsWith('http') || photoUrl.startsWith('data:')))
+              ? photoUrl
+              : (typeof ticketNo === 'string' && (ticketNo.startsWith('http') || ticketNo.startsWith('data:')) ? ticketNo : photoUrl);
+            const targetTicket = (ticketNo && !ticketNo.startsWith('http') && !ticketNo.startsWith('data:'))
+              ? ticketNo
+              : photoModalTarget?.ticketNo;
+            onUpdateAttendeePhoto(targetTicket, actualUrl);
             setPhotoModalTarget(null);
             playAudioEffect("fanfare");
           }}
         />
+      )}
+
+      {/* MODAL 5.5: ATTENDEE PHOTO VIEWER (LIGHTBOX) */}
+      {photoViewerTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fadeIn">
+          <div className="bg-slate-900 rounded-3xl border border-amber-500/40 shadow-2xl w-full max-w-sm sm:max-w-md p-5 sm:p-6 space-y-4">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400">
+                  <Camera className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-white text-base leading-tight">
+                    {photoViewerTarget.name} {photoViewerTarget.nickname ? `(${photoViewerTarget.nickname})` : ''}
+                  </h3>
+                  <p className="text-xs text-amber-400 font-mono font-semibold">
+                    {photoViewerTarget.ticketNo} • สนาม {photoViewerTarget.club || 'สงสพัท'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPhotoViewerTarget(null)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* High-Res Photo Display */}
+            <div className="relative rounded-2xl overflow-hidden aspect-square border-2 border-amber-400/40 shadow-2xl bg-black flex items-center justify-center">
+              <img
+                src={photoViewerTarget.photoUrl || photoViewerTarget.costumePhoto}
+                alt={photoViewerTarget.name}
+                className="w-full h-full object-cover"
+              />
+            </div>
+
+            {/* Info Badges */}
+            <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-2xl bg-white/5 border border-white/10 text-xs">
+              <div className="text-slate-300">
+                เสื้อที่ระลึก: <strong className="text-white">ไซส์ {photoViewerTarget.shirtSize || 'L'} ({photoViewerTarget.shirtGender || 'ชาย'})</strong>
+              </div>
+              <div>
+                {photoViewerTarget.shirtReceived ? (
+                  <span className="text-[10px] font-bold text-teal-300 bg-teal-500/20 border border-teal-500/30 px-2 py-0.5 rounded-full">
+                    ✓ รับเสื้อแล้ว
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold text-amber-300 bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 rounded-full">
+                    📦 ยังไม่ได้รับเสื้อ
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  const target = photoViewerTarget;
+                  setPhotoViewerTarget(null);
+                  setPhotoModalTarget(target);
+                }}
+                className="py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center justify-center space-x-1.5 shadow-md shadow-amber-500/20 transition-all cursor-pointer"
+              >
+                <Camera className="w-4 h-4" />
+                <span>📸 ถ่ายรูปใหม่</span>
+              </button>
+
+              <a
+                href={photoViewerTarget.photoUrl || photoViewerTarget.costumePhoto}
+                download={`รูปถ่าย_${photoViewerTarget.ticketNo}_${photoViewerTarget.name}.jpg`}
+                target="_blank"
+                rel="noreferrer"
+                className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center justify-center space-x-1.5 border border-white/10 transition-all cursor-pointer text-center"
+              >
+                <Download className="w-4 h-4" />
+                <span>💾 บันทึกรูปภาพ</span>
+              </a>
+            </div>
+
+          </div>
+        </div>
       )}
 
       {/* MODAL 6: SHIRT 16:9 MASTER PRESENTATION SLIDE */}

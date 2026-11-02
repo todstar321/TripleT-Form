@@ -733,7 +733,11 @@ export default function SmeFanRegistration({
 
   // Submit Registration
   const handleSubmitRegistration = () => {
-    const ticketNumber = existingAttendee?.ticketNo || `SME-${String(registrations.length + 1).padStart(3, '0')}`;
+    const maxNum = registrations.reduce((max, r) => {
+      const match = (r.ticketNo || '').match(/\d+/);
+      return match ? Math.max(max, parseInt(match[0], 10)) : max;
+    }, 0);
+    const ticketNumber = existingAttendee?.ticketNo || `SME-${String(maxNum + 1).padStart(3, '0')}`;
     const nowStr = new Date().toLocaleString('th-TH');
 
     // 6-Month Slip Expiry Date (180 days from now)

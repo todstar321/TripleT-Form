@@ -36,16 +36,16 @@ export default function AttendeePhotoModal({
   const fileInputRef = useRef(null);
   const nativeCameraInputRef = useRef(null);
 
-  // Initialize with existing photo or start camera
+  // Initialize camera whenever modal opens (fresh capture ready)
   useEffect(() => {
     if (isOpen) {
-      setCapturedImage(attendee?.photoUrl || attendee?.costumePhoto || null);
+      setCapturedImage(null);
       setCameraError(null);
       if (activeMode === 'camera') {
         // Small delay to ensure DOM is ready
         const timer = setTimeout(() => {
           startCamera(facingMode);
-        }, 100);
+        }, 120);
         return () => clearTimeout(timer);
       }
     } else {
@@ -233,15 +233,16 @@ export default function AttendeePhotoModal({
     setIsSaving(true);
     try {
       const finalUrl = await uploadToCloudinary(capturedImage, {}, "attendees");
+      const urlToSave = finalUrl || capturedImage;
       if (onSavePhoto && attendee) {
-        onSavePhoto(attendee.ticketNo, finalUrl);
+        onSavePhoto(urlToSave, attendee.ticketNo);
       }
       stopCamera();
       onClose();
     } catch (err) {
       console.warn("Cloudinary upload fallback to local image:", err);
       if (onSavePhoto && attendee) {
-        onSavePhoto(attendee.ticketNo, capturedImage);
+        onSavePhoto(capturedImage, attendee.ticketNo);
       }
       stopCamera();
       onClose();

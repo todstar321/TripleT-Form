@@ -177,15 +177,10 @@ export default function App() {
         }
       }).catch(err => console.warn('Supabase config fetch warning:', err));
 
-      // 2. Hydrate registrations
+      // 2. Hydrate registrations (Authoritative cloud source)
       fetchRegistrationsFromCloud().then(cloudData => {
         if (cloudData && Array.isArray(cloudData) && cloudData.length > 0) {
-          setRegistrations(prev => {
-            const ticketMap = new Map();
-            prev.forEach(r => ticketMap.set(r.ticketNo, r));
-            cloudData.forEach(c => ticketMap.set(c.ticketNo, { ...(ticketMap.get(c.ticketNo) || {}), ...c }));
-            return Array.from(ticketMap.values());
-          });
+          setRegistrations(cloudData);
         }
       }).catch(err => console.warn('Supabase initial fetch warning:', err));
     }
@@ -508,6 +503,24 @@ export default function App() {
     }
   };
 
+  // Force sync from Supabase Cloud and purge stale local cache
+  const handleForceSyncCloud = async () => {
+    try {
+      if (!isSupabaseConfigured()) {
+        alert("ยังไม่ได้เชื่อมต่อ Supabase ครับ");
+        return;
+      }
+      const cloudData = await fetchRegistrationsFromCloud();
+      if (cloudData && Array.isArray(cloudData)) {
+        setRegistrations(cloudData);
+        localStorage.setItem(REGISTRATIONS_STORAGE_KEY, JSON.stringify(cloudData));
+        alert(`ซิงค์ข้อมูลจาก Cloud สำเร็จ 100%! พบข้อมูลผู้ลงทะเบียน ${cloudData.length} รายการ (ล้างข้อมูลจำลองเดิมเรียบร้อยแล้วครับ)`);
+      }
+    } catch (e) {
+      alert("เกิดข้อผิดพลาดในการซิงค์ข้อมูล: " + e.message);
+    }
+  };
+
   // Sync Google Sheets URL across both config states
   const handleSetFormDataWithSheets = (updater) => {
     setFormData(prev => {
@@ -569,6 +582,7 @@ export default function App() {
             onGoToSettings={() => setCurrentTab('sme_admin')}
             onSwitchToPublicForm={() => setCurrentTab('sme_register')}
             onPurgeComplete={(cleaned) => setRegistrations(cleaned)}
+            onForceSyncCloud={handleForceSyncCloud}
           />
         )}
 
@@ -647,6 +661,7 @@ export default function App() {
             setFormsList={setFormsList}
             onViewForm={handleViewForm}
             onPurgeComplete={(cleaned) => setRegistrations(cleaned)}
+            onForceSyncCloud={handleForceSyncCloud}
           />
         )}
 

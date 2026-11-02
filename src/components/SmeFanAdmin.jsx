@@ -68,6 +68,7 @@ export default function SmeFanAdmin({
   setFormsList,
   onViewForm,
   onPurgeComplete,
+  onForceSyncCloud,
   initialActiveTab = 'overview'
 }) {
   const [activeTab, setActiveTab] = useState(initialActiveTab); 
@@ -720,6 +721,18 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
           </div>
 
           <div className="flex items-center space-x-2 shrink-0 flex-wrap gap-y-2">
+            {onForceSyncCloud && (
+              <button
+                type="button"
+                onClick={onForceSyncCloud}
+                className="flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition-all hover:scale-105"
+                title="ซิงค์ข้อมูลล่าสุดจาก Supabase Cloud และล้างข้อมูลจำลอง"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>🔄 ซิงค์ Cloud</span>
+              </button>
+            )}
+
             {onGoToCheckIn && (
               <button
                 type="button"

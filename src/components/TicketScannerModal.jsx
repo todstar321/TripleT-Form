@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Camera, CheckCircle2, User, Sparkles, RefreshCw, Volume2, ShieldCheck, AlertCircle, Shirt } from 'lucide-react';
 import jsQR from 'jsqr';
+import { getSupabase } from '../utils/supabaseClient';
 
 export default function TicketScannerModal({
   isOpen,
@@ -39,30 +40,111 @@ export default function TicketScannerModal({
     }
   };
 
-  // Find attendee from scanned text
-  const matchAttendee = (text) => {
+  // Find attendee from scanned text with multi-tier precision matching
+  const matchAttendee = async (text) => {
     if (!text) return null;
     const clean = text.trim();
-    // 1. Try matching ticketNo e.g. "SME-004"
-    const ticketMatch = clean.match(/SME-\d+/i) || clean.match(/ROT-\d+/i) || clean.match(/MEM-\d+/i);
-    if (ticketMatch) {
-      const found = registrations.find(r => r.ticketNo?.toLowerCase() === ticketMatch[0].toLowerCase());
-      if (found) return found;
+
+    // 1. Extract Ticket Number with exact regex
+    // Matches: [เลขที่บัตร SME-003], ?verify=SME-003, ?ticket=SME-003, or standalone SME-003 / ROT-001 / MEM-001
+    const bracketMatch = clean.match(/\[เลขที่บัตร\s*([A-Za-z0-9-]+)\]/i);
+    const urlMatch = clean.match(/[?&](?:verify|ticket)=([A-Za-z0-9-]+)/i);
+    const standardMatch = clean.match(/(?:SME|ROT|MEM)-\d+/i);
+    const genericCodeMatch = clean.match(/\b[A-Za-z]{3}-\d{3,4}\b/i);
+
+    const extractedTicketNo = (
+      bracketMatch?.[1] || 
+      urlMatch?.[1] || 
+      standardMatch?.[0] || 
+      genericCodeMatch?.[0] || 
+      ''
+    ).trim();
+
+    // 1.1 Match ticketNo directly against in-memory registrations
+    if (extractedTicketNo) {
+      const foundInState = registrations.find(
+        r => r.ticketNo && r.ticketNo.toLowerCase() === extractedTicketNo.toLowerCase()
+      );
+      if (foundInState) return foundInState;
+
+      // 1.2 If not found in state, check Supabase Cloud on-the-fly
+      try {
+        const client = getSupabase();
+        if (client) {
+          const { data } = await client
+            .from('registrations')
+            .select('*')
+            .ilike('ticket_no', extractedTicketNo)
+            .maybeSingle();
+
+          if (data) {
+            return {
+              ticketNo: data.ticket_no,
+              name: data.name,
+              nickname: data.nickname || '',
+              phone: data.phone || '',
+              email: data.email || '',
+              regType: data.reg_type || 'member',
+              club: data.club || 'สงสพัท',
+              amount: Number(data.amount) || 500,
+              paidAmount: Number(data.paid_amount) || 500,
+              paymentStatus: data.payment_status || 'paid',
+              paymentSlip: data.payment_slip || null,
+              hasShirt: Boolean(data.has_shirt),
+              shirtSize: data.shirt_size || 'L',
+              shirtGender: data.shirt_gender || 'ชาย',
+              shirtReceived: Boolean(data.shirt_received),
+              checkedIn: Boolean(data.checked_in),
+              giftNumber: data.gift_number || null,
+              photoUrl: data.photo_url || null,
+              costumePhoto: data.costume_photo || null
+            };
+          }
+        }
+      } catch (err) {
+        console.warn('On-the-fly cloud ticket check error:', err);
+      }
     }
-    // 2. Try matching name in registrations
-    const nameFound = registrations.find(r => clean.includes(r.name) || (r.nickname && clean.includes(r.nickname)));
+
+    // 2. Exact / Safe Full Name Match (requires minimum 4 characters to prevent accidental matches)
+    const nameFound = registrations.find(r => {
+      if (!r.name || r.name.trim().length < 4) return false;
+      const cleanName = r.name.trim().toLowerCase();
+      const target = clean.toLowerCase();
+      return target.includes(cleanName) || cleanName.includes(target);
+    });
     if (nameFound) return nameFound;
 
-    // 3. Fallback mock attendee parsed from text
+    // 3. Exact Phone Number Match (digits only)
+    const digitsInClean = clean.replace(/\D/g, '');
+    if (digitsInClean.length >= 9) {
+      const phoneFound = registrations.find(r => {
+        if (!r.phone) return false;
+        const rDigits = r.phone.replace(/\D/g, '');
+        return rDigits.length >= 9 && digitsInClean.includes(rDigits);
+      });
+      if (phoneFound) return phoneFound;
+    }
+
+    // 4. Nickname match ONLY if wrapped in parentheses e.g. "(โต๊ด)" or "(ทีป์)"
+    const nickFound = registrations.find(r => {
+      if (!r.nickname || r.nickname.trim().length < 2) return false;
+      const nick = r.nickname.trim();
+      return clean.includes(`(${nick})`);
+    });
+    if (nickFound) return nickFound;
+
+    // 5. Intelligent Fallback: parse from card string format e.g. "ชื่อ [เลขที่บัตร SME-xxx] - บทบาท"
+    const parsedName = clean.split('[')[0].replace(/•/g, '').replace(/\([^)]*\)/g, '').trim() || 'ผู้ลงทะเบียน';
     return {
-      ticketNo: ticketMatch ? ticketMatch[0].toUpperCase() : 'PASS-OK',
-      name: clean.split('[')[0].replace('•', '').trim() || 'ผู้ลงทะเบียน',
+      ticketNo: extractedTicketNo ? extractedTicketNo.toUpperCase() : 'PASS-OK',
+      name: parsedName,
       nickname: '',
-      club: 'สงสพัท',
-      regType: 'member',
-      hasShirt: true,
-      shirtSize: 'L',
-      shirtGender: 'ชาย',
+      club: clean.includes('โรตารี่') ? 'โรตารี่' : 'สงสพัท',
+      regType: clean.includes('สมาชิก') ? 'member' : 'guest',
+      hasShirt: clean.includes('ไซซ์') || clean.includes('เสื้อ'),
+      shirtSize: clean.match(/ไซซ์\s*([SMLX32]+)/i)?.[1]?.toUpperCase() || 'L',
+      shirtGender: clean.includes('หญิง') ? 'หญิง' : 'ชาย',
       amount: 500,
       paidAmount: 500
     };
@@ -120,15 +202,16 @@ export default function TicketScannerModal({
 
         if (code && code.data) {
           playBeep();
-          const matched = matchAttendee(code.data);
-          setScanResult({
-            raw: code.data,
-            attendee: matched
-          });
-          if (onCheckIn && matched) {
-            onCheckIn(matched);
-          }
           stopCamera();
+          matchAttendee(code.data).then(matched => {
+            setScanResult({
+              raw: code.data,
+              attendee: matched
+            });
+            if (onCheckIn && matched) {
+              onCheckIn(matched);
+            }
+          });
           return;
         }
       }
@@ -148,11 +231,12 @@ export default function TicketScannerModal({
   if (!isOpen) return null;
 
   // Handle simulation test
-  const handleSimulate = (sampleText) => {
+  const handleSimulate = async (sampleText) => {
     playBeep();
-    const matched = matchAttendee(sampleText || simulatedInput);
+    const raw = sampleText || simulatedInput;
+    const matched = await matchAttendee(raw);
     setScanResult({
-      raw: sampleText || simulatedInput,
+      raw: raw,
       attendee: matched
     });
     if (onCheckIn && matched) {
