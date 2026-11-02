@@ -347,6 +347,40 @@ export function subscribeToRegistrations(onDataChange) {
   }
 }
 
+/**
+ * Subscribe to Supabase Realtime changes on event_config table.
+ * Used for instant security policy sync (e.g. force logout broadcast).
+ */
+export function subscribeToEventConfig(onConfigChange) {
+  const client = getSupabase();
+  if (!client) return null;
+
+  try {
+    const channelName = `realtime_cfg_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    const channel = client
+      .channel(channelName)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'event_config' },
+        (payload) => {
+          if (!onConfigChange) return;
+          if (payload.new && payload.new.config) {
+            onConfigChange(payload.new.config);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      try {
+        client.removeChannel(channel);
+      } catch (e) {}
+    };
+  } catch (err) {
+    return null;
+  }
+}
+
 // Bulk Photo Purge on Supabase
 export async function purgePhotosInCloud(purgeType = 'all') {
   const client = getSupabase();

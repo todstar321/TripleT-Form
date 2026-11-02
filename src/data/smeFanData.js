@@ -8,6 +8,7 @@ export const initialSmeFanConfig = {
   eventSubtitle: "ขอเชิญสมาชิก SME FAN และแขกผู้มีเกียรติร่วมเฉลิมฉลองค่ำคืนแห่งความสุข ส่งท้ายปีเก่าต้อนรับปีใหม่",
   eventDate: "วันเสาร์ที่ 23 ธันวาคม 2026 เวลา 18:00 - 22:30 น.",
   eventVenue: "ห้องแมกโนเลีย โรงแรมลีการ์เดนส์พลาซ่า หาดใหญ่ (Lee Gardens Plaza Hotel Hat Yai)",
+  forceLogoutBefore: "2026-11-03T06:25:00.000+07:00",
   
   // Images
   bannerImage: "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=1920&q=80",

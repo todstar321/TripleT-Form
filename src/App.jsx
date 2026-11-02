@@ -23,13 +23,33 @@ import {
   upsertRegistrationToCloud,
   fetchEventConfigFromCloud,
   saveEventConfigToCloud,
-  subscribeToRegistrations
+  subscribeToRegistrations,
+  subscribeToEventConfig
 } from './utils/supabaseClient';
 
 const CONFIG_STORAGE_KEY = 'sme_fan_config_v3';
 const REGISTRATIONS_STORAGE_KEY = 'sme_fan_registrations_v3';
 const USER_STORAGE_KEY = 'sme_fan_admin_user_v4';
 const ACTIVE_TAB_STORAGE_KEY = 'sme_fan_active_tab_v3';
+
+// Global Session Cutoff Timestamp (Revokes any session created before this exact millisecond)
+export const GLOBAL_AUTH_EPOCH = 1793661600000; // 2026-11-03 06:20:00+07:00
+
+// Helper to strictly validate active admin sessions
+export const isValidAdminSession = (user, config) => {
+  if (!user || typeof user !== 'object') return false;
+  if (!user.role || !['owner', 'manager', 'admin'].includes(user.role)) return false;
+  // Require explicit login timestamp from AdminLoginModal
+  if (!user.authTimestamp || typeof user.authTimestamp !== 'number') return false;
+  if (user.authTimestamp < GLOBAL_AUTH_EPOCH) return false;
+
+  // Check cloud forceLogoutBefore if set
+  if (config?.forceLogoutBefore) {
+    const minTime = new Date(config.forceLogoutBefore).getTime();
+    if (!isNaN(minTime) && user.authTimestamp < minTime) return false;
+  }
+  return true;
+};
 
 // URL Hash to Tab identifier mapping
 export const hashToTab = (hashStr) => {
@@ -71,8 +91,10 @@ export const getInitialTab = () => {
       const savedUser = localStorage.getItem(USER_STORAGE_KEY);
       if (savedUser) {
         const u = JSON.parse(savedUser);
-        if (u && (u.role === 'owner' || u.role === 'manager' || u.role === 'admin')) {
+        if (isValidAdminSession(u, initialSmeFanConfig)) {
           hasLoggedInUser = true;
+        } else {
+          localStorage.removeItem(USER_STORAGE_KEY);
         }
       }
     } catch (e) {}
@@ -165,11 +187,22 @@ export default function App() {
     return initialFormsList;
   });
 
-  // 4. Current Logged-in Admin User (Defaults to null so public visitors are NOT admins)
+  // 4. Current Logged-in Admin User (Guaranteed NULL for regular attendees, requires valid timestamp)
   const [currentUser, setCurrentUser] = useState(() => {
     try {
+      // Purge all legacy storage keys across all devices
+      ['sme_fan_admin_user', 'sme_fan_admin_user_v1', 'sme_fan_admin_user_v2', 'sme_fan_admin_user_v3'].forEach(k => {
+        localStorage.removeItem(k);
+      });
       const saved = localStorage.getItem(USER_STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (isValidAdminSession(parsed, initialSmeFanConfig)) {
+          return parsed;
+        } else {
+          localStorage.removeItem(USER_STORAGE_KEY);
+        }
+      }
     } catch (e) {
       console.warn("Could not load user:", e);
     }
@@ -220,6 +253,18 @@ export default function App() {
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, [currentTab, currentUser]);
+
+  // Immediate Security Watchdog: Kicks unauthorized users out of admin tabs instantly
+  useEffect(() => {
+    if (!currentUser && ['sme_portal', 'sme_admin', 'sme_checkin'].includes(currentTab)) {
+      console.warn("🔒 Security: Unauthorized tab access revoked, redirecting to #register");
+      setCurrentTab('sme_register');
+      if (typeof window !== 'undefined') {
+        window.history.replaceState(null, '', '#register');
+        localStorage.removeItem(ACTIVE_TAB_STORAGE_KEY);
+      }
+    }
+  }, [currentUser, currentTab]);
 
   // Auto-save eventConfig locally & sync to Supabase Cloud
   useEffect(() => {
@@ -300,6 +345,15 @@ export default function App() {
       fetchEventConfigFromCloud().then(cloudConfig => {
         if (cloudConfig && typeof cloudConfig === 'object') {
           setEventConfig(prev => ({ ...prev, ...cloudConfig }));
+          // Verify active user against cloud force-logout policy
+          setCurrentUser(prevUser => {
+            if (prevUser && !isValidAdminSession(prevUser, cloudConfig)) {
+              console.warn("🔒 Cloud Security: Force logging out unauthorized session");
+              localStorage.removeItem(USER_STORAGE_KEY);
+              return null;
+            }
+            return prevUser;
+          });
         }
       }).catch(err => console.warn('Supabase config fetch warning:', err));
 
@@ -320,7 +374,8 @@ export default function App() {
   useEffect(() => {
     if (!isSupabaseConfigured()) return;
 
-    const unsubscribe = subscribeToRegistrations((changedAttendee, eventType, ticketNo) => {
+    // 2.1 Realtime registrations sync
+    const unsubscribeRegs = subscribeToRegistrations((changedAttendee, eventType, ticketNo) => {
       console.log(`⚡ Supabase Realtime: [${eventType}] ticket: ${ticketNo}`);
       setLastCloudSync(new Date());
 
@@ -340,10 +395,25 @@ export default function App() {
       }
     });
 
-    return () => {
-      if (typeof unsubscribe === 'function') {
-        unsubscribe();
+    // 2.2 Realtime event_config sync (Broadcast instant force-logout across all open devices)
+    const unsubscribeConfig = subscribeToEventConfig((cloudConfig) => {
+      if (cloudConfig && typeof cloudConfig === 'object') {
+        console.log("⚡ Supabase Realtime: event_config updated from cloud");
+        setEventConfig(prev => ({ ...prev, ...cloudConfig }));
+        setCurrentUser(prevUser => {
+          if (prevUser && !isValidAdminSession(prevUser, cloudConfig)) {
+            console.warn("🔒 Cloud Realtime: Session revoked by server policy");
+            localStorage.removeItem(USER_STORAGE_KEY);
+            return null;
+          }
+          return prevUser;
+        });
       }
+    });
+
+    return () => {
+      if (typeof unsubscribeRegs === 'function') unsubscribeRegs();
+      if (typeof unsubscribeConfig === 'function') unsubscribeConfig();
     };
   }, []);
 
@@ -898,7 +968,14 @@ export default function App() {
         onClose={() => setIsLoginModalOpen(false)}
         adminUsers={eventConfig.adminUsers || []}
         onLoginSuccess={(user) => {
-          setCurrentUser(user);
+          const authUser = {
+            ...user,
+            authTimestamp: Date.now()
+          };
+          setCurrentUser(authUser);
+          try {
+            localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(authUser));
+          } catch (e) {}
           setCurrentTab('sme_portal');
           alert(`เข้าสู่ระบบในฐานะ: ${user.name} (${user.role === 'owner' ? 'เจ้าของ' : user.role === 'manager' ? 'ผู้จัดการ' : 'แอดมิน'})`);
         }}
