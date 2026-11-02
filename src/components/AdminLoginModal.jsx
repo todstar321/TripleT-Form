@@ -17,29 +17,27 @@ export default function AdminLoginModal({
     if (e) e.preventDefault();
     setErrorMsg("");
 
-    const cleanInputEmail = email.trim().toLowerCase();
-    const cleanInputPhone = phone.replace(/\D/g, "");
+    const cleanInputUsername = email.trim().toLowerCase();
+    const cleanDigits = phone.replace(/\D/g, "");
+    const rawPass = phone.trim();
 
     const foundUser = adminUsers.find(u => {
-      const uEmail = u.email.trim().toLowerCase();
-      const uPhone = u.phone.replace(/\D/g, "");
-      return uEmail === cleanInputEmail && uPhone === cleanInputPhone;
+      const uEmail = (u.email || "").trim().toLowerCase();
+      const uPhoneDigits = (u.phone || "").replace(/\D/g, "");
+      // Match username by email or phone digits
+      const usernameMatch = (uEmail && uEmail === cleanInputUsername) || 
+                            (uPhoneDigits && cleanInputUsername.replace(/\D/g, '') === uPhoneDigits);
+      // Match password by phone number digits or exact password string
+      const passwordMatch = (uPhoneDigits && cleanDigits === uPhoneDigits) || 
+                            (u.password && u.password === rawPass);
+      return usernameMatch && passwordMatch;
     });
 
     if (foundUser) {
       onLoginSuccess(foundUser);
       onClose();
     } else {
-      setErrorMsg("อีเมลหรือรหัสผ่าน (เบอร์โทรศัพท์) ไม่ถูกต้อง");
-    }
-  };
-
-  // Quick switch for testing
-  const handleQuickLogin = (roleName) => {
-    const user = adminUsers.find(u => u.role === roleName) || adminUsers[0];
-    if (user) {
-      onLoginSuccess(user);
-      onClose();
+      setErrorMsg("อีเมล/ชื่อผู้ใช้งาน หรือรหัสผ่าน (เบอร์โทรศัพท์) ไม่ถูกต้อง");
     }
   };
 
@@ -117,34 +115,10 @@ export default function AdminLoginModal({
           </button>
         </form>
 
-        {/* Quick Login Presets for testing */}
-        <div className="pt-4 border-t border-white/10 space-y-2">
-          <span className="text-[11px] text-slate-400 block text-center">
-            ทางลัดทดสอบเข้าสู่ระบบตามสิทธิ์ต่างๆ:
-          </span>
-          <div className="grid grid-cols-3 gap-2 text-[10px]">
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('owner')}
-              className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 transition-all font-bold"
-            >
-              1. สิทธิ์เจ้าของ (Owner)
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('manager')}
-              className="p-2 rounded-xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20 transition-all font-bold"
-            >
-              2. สิทธิ์ผู้จัดการ (Manager)
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('admin')}
-              className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20 transition-all font-bold"
-            >
-              3. สิทธิ์แอดมิน (Staff)
-            </button>
-          </div>
+        <div className="pt-2 text-center">
+          <p className="text-[11px] text-slate-500">
+            ระบบความปลอดภัยสำหรับผู้ดูแลกิจกรรม SME FAN 2026
+          </p>
         </div>
 
       </div>

@@ -2933,64 +2933,50 @@ export default function SmeFanRegistration({
         </div>
       )}
 
-        {/* Admin & Live Edit Control Buttons (Placed at bottom of form, non-floating) */}
-        <div className="mt-8 pt-4 border-t border-white/5 flex flex-wrap items-center justify-center gap-2.5">
-          {currentUser ? (
-            <>
-              {/* Toggle Inline Form Editing */}
-              <button
-                type="button"
-                onClick={() => setIsInlineEditing(!isInlineEditing)}
-                className={`flex items-center space-x-1.5 px-4 py-2 rounded-full shadow-lg text-xs font-bold transition-all border ${
-                  isInlineEditing
-                    ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 border-amber-300 ring-4 ring-amber-500/20'
-                    : 'bg-slate-900/90 hover:bg-slate-800 text-amber-300 border-amber-500/40 hover:scale-105'
-                }`}
-                title="สลับโหมดแก้ไขฟอร์มสดเหมือน Google Forms"
-              >
-                {isInlineEditing ? (
-                  <>
-                    <Eye className="w-3.5 h-3.5" />
-                    <span>ดูตัวอย่างฟอร์มจริง</span>
-                  </>
-                ) : (
-                  <>
-                    <Edit3 className="w-3.5 h-3.5" />
-                    <span>✏️ แก้ไขฟอร์มนี้ (เหมือน Google Forms)</span>
-                  </>
-                )}
-              </button>
-
-              {/* Admin Dashboard Button */}
-              {onAdminClick && (
-                <button
-                  type="button"
-                  onClick={onAdminClick}
-                  title={`เข้าสู่แดชบอร์ดในนาม: ${currentUser.name}`}
-                  className="flex items-center space-x-1.5 px-4 py-2 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-white/10 hover:border-amber-500/40 text-slate-300 hover:text-white shadow-lg text-xs font-semibold transition-all hover:scale-105"
-                >
-                  <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-                  <span>แดชบอร์ด Owner</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300">
-                    {currentUser.role === 'owner' ? 'Owner' : currentUser.role === 'manager' ? 'Manager' : 'Staff'}
-                  </span>
-                </button>
+        {/* Admin & Live Edit Control Buttons: Only shown to logged-in Admin/Owner, NEVER shown to public members */}
+        {currentUser && (
+          <div className="mt-8 pt-4 border-t border-white/5 flex flex-wrap items-center justify-center gap-2.5">
+            {/* Toggle Inline Form Editing */}
+            <button
+              type="button"
+              onClick={() => setIsInlineEditing(!isInlineEditing)}
+              className={`flex items-center space-x-1.5 px-4 py-2 rounded-full shadow-lg text-xs font-bold transition-all border ${
+                isInlineEditing
+                  ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 border-amber-300 ring-4 ring-amber-500/20'
+                  : 'bg-slate-900/90 hover:bg-slate-800 text-amber-300 border-amber-500/40 hover:scale-105'
+              }`}
+              title="สลับโหมดแก้ไขฟอร์มสดเหมือน Google Forms"
+            >
+              {isInlineEditing ? (
+                <>
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>ดูตัวอย่างฟอร์มจริง</span>
+                </>
+              ) : (
+                <>
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>✏️ แก้ไขฟอร์มนี้ (เหมือน Google Forms)</span>
+                </>
               )}
-            </>
-          ) : (
-            onAdminClick && (
+            </button>
+
+            {/* Admin Dashboard Button */}
+            {onAdminClick && (
               <button
                 type="button"
                 onClick={onAdminClick}
-                title="เข้าสู่ระบบผู้ดูแลเพื่อแก้ไขฟอร์ม (Admin Login) หรือกด Ctrl+Shift+A"
-                className="flex items-center space-x-1.5 px-4 py-2 rounded-full bg-slate-900/85 hover:bg-slate-800 border border-white/10 hover:border-amber-500/40 text-slate-400 hover:text-amber-300 shadow-md text-xs font-medium transition-all hover:scale-105"
+                title={`เข้าสู่แดชบอร์ดในนาม: ${currentUser.name}`}
+                className="flex items-center space-x-1.5 px-4 py-2 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-white/10 hover:border-amber-500/40 text-slate-300 hover:text-white shadow-lg text-xs font-semibold transition-all hover:scale-105"
               >
-                <Lock className="w-3.5 h-3.5" />
-                <span>แอดมิน / แก้ไขฟอร์ม</span>
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                <span>แดชบอร์ด Owner</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300">
+                  {currentUser.role === 'owner' ? 'Owner' : currentUser.role === 'manager' ? 'Manager' : 'Staff'}
+                </span>
               </button>
-            )
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         {/* Form Footer */}
         <footer className="mt-8 text-center text-xs text-slate-400 space-y-2.5 pb-10">

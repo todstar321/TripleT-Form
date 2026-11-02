@@ -28,7 +28,7 @@ import {
 
 const CONFIG_STORAGE_KEY = 'sme_fan_config_v3';
 const REGISTRATIONS_STORAGE_KEY = 'sme_fan_registrations_v3';
-const USER_STORAGE_KEY = 'sme_fan_admin_user_v3';
+const USER_STORAGE_KEY = 'sme_fan_admin_user_v4';
 const ACTIVE_TAB_STORAGE_KEY = 'sme_fan_active_tab_v3';
 
 // URL Hash to Tab identifier mapping
@@ -66,12 +66,23 @@ export const tabToHash = (tab) => {
 
 export const getInitialTab = () => {
   if (typeof window !== 'undefined') {
+    let hasLoggedInUser = false;
+    try {
+      const savedUser = localStorage.getItem(USER_STORAGE_KEY);
+      if (savedUser) {
+        const u = JSON.parse(savedUser);
+        if (u && (u.role === 'owner' || u.role === 'manager' || u.role === 'admin')) {
+          hasLoggedInUser = true;
+        }
+      }
+    } catch (e) {}
+
     // 1. Check URL query params first (e.g. ?judge=true, ?checkin=true, ?admin=true, ?portal=true)
     const params = new URLSearchParams(window.location.search);
     if (params.get('judge') === 'true' || params.get('contest') === 'true') return 'contest_judge';
-    if (params.get('checkin') === 'true') return 'sme_checkin';
-    if (params.get('portal') === 'true' || params.get('owner') === 'true') return 'sme_portal';
-    if (params.get('admin') === 'true' || params.get('settings') === 'true') return 'sme_admin';
+    if (params.get('checkin') === 'true') return hasLoggedInUser ? 'sme_checkin' : 'sme_register';
+    if (params.get('portal') === 'true' || params.get('owner') === 'true') return hasLoggedInUser ? 'sme_portal' : 'sme_register';
+    if (params.get('admin') === 'true' || params.get('settings') === 'true') return hasLoggedInUser ? 'sme_admin' : 'sme_register';
     if (params.get('form')) {
       const f = params.get('form');
       return f === 'form_1_sme_event' ? 'sme_register' : 'form_viewer';
@@ -79,12 +90,20 @@ export const getInitialTab = () => {
 
     // 2. Check window.location.hash
     const fromHash = hashToTab(window.location.hash);
-    if (fromHash) return fromHash;
+    if (fromHash) {
+      if (['sme_portal', 'sme_admin', 'sme_checkin'].includes(fromHash) && !hasLoggedInUser) {
+        return 'sme_register';
+      }
+      return fromHash;
+    }
 
     // 3. Fallback to localStorage saved active tab
     try {
       const saved = localStorage.getItem(ACTIVE_TAB_STORAGE_KEY);
       if (saved && ['sme_portal', 'sme_checkin', 'sme_admin', 'contest_judge', 'sme_register', 'form_viewer', 'builder', 'theme', 'preview'].includes(saved)) {
+        if (['sme_portal', 'sme_admin', 'sme_checkin'].includes(saved) && !hasLoggedInUser) {
+          return 'sme_register';
+        }
         return saved;
       }
     } catch (e) {}
@@ -146,7 +165,7 @@ export default function App() {
     return initialFormsList;
   });
 
-  // 4. Current Logged-in Admin User (Defaults to Owner for instant testing)
+  // 4. Current Logged-in Admin User (Defaults to null so public visitors are NOT admins)
   const [currentUser, setCurrentUser] = useState(() => {
     try {
       const saved = localStorage.getItem(USER_STORAGE_KEY);
@@ -154,7 +173,7 @@ export default function App() {
     } catch (e) {
       console.warn("Could not load user:", e);
     }
-    return initialSmeFanConfig.adminUsers[0]; // Owner
+    return null; // Public guest by default (NOT admin)
   });
 
   // 5. Active form viewing in FormHubViewer
@@ -190,12 +209,17 @@ export default function App() {
     const handleHashChange = () => {
       const nextTab = hashToTab(window.location.hash);
       if (nextTab && nextTab !== currentTab) {
-        setCurrentTab(nextTab);
+        if (['sme_portal', 'sme_admin', 'sme_checkin'].includes(nextTab) && !currentUser) {
+          setIsLoginModalOpen(true);
+          setCurrentTab('sme_register');
+        } else {
+          setCurrentTab(nextTab);
+        }
       }
     };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [currentTab]);
+  }, [currentTab, currentUser]);
 
   // Auto-save eventConfig locally & sync to Supabase Cloud
   useEffect(() => {

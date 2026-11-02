@@ -62,9 +62,9 @@ export const initialSmeFanConfig = {
   adminUsers: [
     {
       id: "u_owner",
-      name: "ทีป์ชลิต ทองจันทร์",
-      email: "teepchalit@smefan.com",
-      phone: "081-234-5678",
+      name: "คุณทีป์ชลิต ทองจันทร์ (ผอ.โต๊ด)",
+      email: "Todstar321@gmail.com",
+      phone: "093-792-5665",
       role: "owner" // 'owner' | 'manager' | 'admin'
     },
     {

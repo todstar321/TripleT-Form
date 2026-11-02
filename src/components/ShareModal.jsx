@@ -122,9 +122,9 @@ export default function ShareModal({ isOpen, onClose, formData, onSwitchToPrevie
               <div className="mt-2.5 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs flex items-start space-x-2.5">
                 <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                 <div className="space-y-0.5">
-                  <span className="font-bold">โหมดแสดงเฉพาะแบบฟอร์ม (Clean Form View):</span>
+                  <span className="font-bold">โหมดสำหรับสมาชิกทั่วไป (Public Member View):</span>
                   <p className="text-[11px] text-emerald-200/80 leading-relaxed">
-                    เมื่อผู้ลงทะเบียนเปิดลิงก์นี้ ระบบจะแสดงเฉพาะหน้าแบบฟอร์มลงทะเบียนอย่างสวยงาม โดยซ่อนแถบเมนูแอดมินและเมนูด้านบนทั้งหมดอย่างสะอาดตา
+                    ลิงก์นี้ปลอดภัย 100% สำหรับส่งให้สมาชิก สมาชิกจะเห็นเฉพาะแบบฟอร์มลงทะเบียน โดยปุ่มแก้ไขฟอร์มและแดชบอร์ด Owner จะถูกซ่อนทั้งหมด สมาชิกจะไม่สามารถแก้ไขข้อมูลหรือเข้าถึงระบบหลังบ้านได้ครับ
                   </p>
                 </div>
               </div>
