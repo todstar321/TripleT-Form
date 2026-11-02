@@ -17,8 +17,13 @@ import { initialSmeFanConfig, initialRegistrations } from './data/smeFanData';
 import { initialFormsList, FORMS_STORAGE_KEY } from './data/formsData';
 import { defaultFormData } from './data/defaultForm';
 import { submitSmeFanTicketToSheets } from './utils/googleSheets';
-import { cleanPhoneNumber } from './utils/phoneFormatter';
-import { isSupabaseConfigured, fetchRegistrationsFromCloud, upsertRegistrationToCloud } from './utils/supabaseClient';
+import { 
+  isSupabaseConfigured, 
+  fetchRegistrationsFromCloud, 
+  upsertRegistrationToCloud,
+  fetchEventConfigFromCloud,
+  saveEventConfigToCloud
+} from './utils/supabaseClient';
 
 const CONFIG_STORAGE_KEY = 'sme_fan_config_v3';
 const REGISTRATIONS_STORAGE_KEY = 'sme_fan_registrations_v3';
@@ -104,12 +109,21 @@ export default function App() {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [verifiedTicket, setVerifiedTicket] = useState(null);
 
-  // Auto-save eventConfig
+  // Auto-save eventConfig locally & sync to Supabase Cloud
   useEffect(() => {
     try {
       localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(eventConfig));
     } catch (e) {
       console.error("Failed to save eventConfig:", e);
+    }
+
+    if (isSupabaseConfigured()) {
+      const timer = setTimeout(() => {
+        saveEventConfigToCloud(eventConfig).catch(err => {
+          console.warn("Cloud config sync warning:", err);
+        });
+      }, 600);
+      return () => clearTimeout(timer);
     }
   }, [eventConfig]);
 
@@ -156,6 +170,14 @@ export default function App() {
   // Initial Cloud Hydration from Supabase on mount
   useEffect(() => {
     if (isSupabaseConfigured()) {
+      // 1. Hydrate eventConfig (Banner, Sub-banner, Titles, Themes across all devices)
+      fetchEventConfigFromCloud().then(cloudConfig => {
+        if (cloudConfig && typeof cloudConfig === 'object') {
+          setEventConfig(prev => ({ ...prev, ...cloudConfig }));
+        }
+      }).catch(err => console.warn('Supabase config fetch warning:', err));
+
+      // 2. Hydrate registrations
       fetchRegistrationsFromCloud().then(cloudData => {
         if (cloudData && Array.isArray(cloudData) && cloudData.length > 0) {
           setRegistrations(prev => {

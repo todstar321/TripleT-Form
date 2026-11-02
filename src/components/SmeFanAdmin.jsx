@@ -47,7 +47,7 @@ import MemberSpreadsheet from './MemberSpreadsheet';
 import TicketScannerModal from './TicketScannerModal';
 import StoragePurgeModal from './StoragePurgeModal';
 import { themePresetsList } from '../data/smeFanData';
-import { testSupabaseConnection, saveSupabaseConfig, getSupabaseConfig, isSupabaseConfigured, upsertRegistrationToCloud } from '../utils/supabaseClient';
+import { testSupabaseConnection, saveSupabaseConfig, getSupabaseConfig, isSupabaseConfigured, upsertRegistrationToCloud, saveEventConfigToCloud } from '../utils/supabaseClient';
 import { testCloudinaryConnection, saveCloudinaryConfig, getCloudinaryConfig, isCloudinaryConfigured } from '../utils/cloudinary';
 
 export default function SmeFanAdmin({
@@ -365,6 +365,20 @@ export default function SmeFanAdmin({
     }
     setIsSyncingAll(false);
     alert(`ซิงค์ข้อมูลขึ้น Supabase สำเร็จเรียบร้อยแล้ว ${successCount} จาก ${registrations.length} รายการ!`);
+  };
+
+  const [isSavingConfig, setIsSavingConfig] = useState(false);
+
+  const handleSaveConfigToSupabase = async () => {
+    setIsSavingConfig(true);
+    saveSupabaseConfig(sbConfig.url, sbConfig.anonKey);
+    const ok = await saveEventConfigToCloud(eventConfig);
+    setIsSavingConfig(false);
+    if (ok) {
+      alert("บันทึกการตั้งค่าหน้าปก, ธีมสี, และข้อมูลกิจกรรมขึ้น Supabase เรียบร้อยแล้ว! อุปกรณ์ของคนอื่นที่เปิดใช้งานจะอัปเดตตามทันที");
+    } else {
+      alert("ไม่สามารถบันทึกได้ กรุณาตรวจสอบว่าสร้างตาราง event_config ใน Supabase หรือยังครับ");
+    }
   };
 
   const handleSaveCloudinary = (e) => {
@@ -1649,7 +1663,17 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
                   </a>
                 </div>
 
-                <div className="pt-2">
+                <div className="pt-2 space-y-2">
+                  <button
+                    type="button"
+                    disabled={isSavingConfig}
+                    onClick={handleSaveConfigToSupabase}
+                    className="w-full py-2 rounded-xl text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 transition-all flex items-center justify-center space-x-1.5 shadow-sm disabled:opacity-50"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5 text-amber-600" />
+                    <span>{isSavingConfig ? 'กำลังบันทึกหน้าปก...' : 'ซิงค์รูปหน้าปก & ธีมปัจจุบันขึ้น Supabase ทันที'}</span>
+                  </button>
+
                   <button
                     type="button"
                     disabled={isSyncingAll}

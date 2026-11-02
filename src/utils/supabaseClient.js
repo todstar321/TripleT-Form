@@ -244,3 +244,45 @@ export async function purgePhotosInCloud(purgeType = 'all') {
     };
   }
 }
+
+// Fetch Event Config (Banner, Theme, Settings) from Cloud
+export async function fetchEventConfigFromCloud() {
+  const client = getSupabase();
+  if (!client) return null;
+
+  try {
+    const { data, error } = await client
+      .from('event_config')
+      .select('config')
+      .eq('id', 'current')
+      .maybeSingle();
+
+    if (error || !data) return null;
+    return data.config;
+  } catch (err) {
+    console.warn('fetchEventConfigFromCloud warning:', err);
+    return null;
+  }
+}
+
+// Save Event Config to Cloud
+export async function saveEventConfigToCloud(config) {
+  const client = getSupabase();
+  if (!client || !config) return false;
+
+  try {
+    const { error } = await client
+      .from('event_config')
+      .upsert({
+        id: 'current',
+        config: config,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'id' });
+
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.warn('saveEventConfigToCloud warning:', err);
+    return false;
+  }
+}

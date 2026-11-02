@@ -37,21 +37,7 @@ CREATE TABLE IF NOT EXISTS public.registrations (
 -- 2. Table: event_config (การตั้งค่าระบบ, ธีมสี, รูปหน้าปก)
 CREATE TABLE IF NOT EXISTS public.event_config (
     id TEXT PRIMARY KEY DEFAULT 'current',
-    event_title TEXT DEFAULT 'งานสังสรรค์ปีใหม่ SME FAN 2026',
-    event_subtitle TEXT DEFAULT 'ระบบลงทะเบียน & กิจกรรมหน้างาน',
-    event_date TEXT,
-    event_location TEXT,
-    banner_image TEXT,
-    sub_banner_image TEXT,
-    sub_banner_mode TEXT DEFAULT 'standard',
-    sub_banner_position_y INTEGER DEFAULT 50,
-    member_price NUMERIC DEFAULT 500,
-    guest_price NUMERIC DEFAULT 500,
-    theme_color TEXT DEFAULT 'amber',
-    card_mode TEXT DEFAULT 'dark',
-    custom_colors JSONB DEFAULT '{}'::jsonb,
-    cloudinary_config JSONB DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
+    config JSONB NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
