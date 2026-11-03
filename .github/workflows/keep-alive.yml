@@ -1,0 +1,38 @@
+name: Supabase Database Keep-Alive (กระตุ้นฐานข้อมูลกันหลับ)
+
+on:
+  schedule:
+    # Run twice daily: 00:00 UTC (07:00 Thai Time) and 12:00 UTC (19:00 Thai Time)
+    - cron: '0 0,12 * * *'
+  workflow_dispatch: # Allow manual trigger from GitHub Actions tab
+
+jobs:
+  keep-alive:
+    name: Ping Supabase & Vercel
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase Database
+        run: |
+          echo "🔄 Sending keep-alive ping to Supabase Database..."
+          HTTP_STATUS=$(curl -s -o response.json -w "%{http_code}" -X GET "https://hsswobqnjzwqsczbxmrj.supabase.co/rest/v1/event_config?select=id&limit=1" \
+            -H "apikey: sb_publishable_fr8rj2iLrQhkl3Yjg7qGPg_O4FnnIYG" \
+            -H "Authorization: Bearer sb_publishable_fr8rj2iLrQhkl3Yjg7qGPg_O4FnnIYG")
+          
+          echo "Supabase HTTP Status Code: $HTTP_STATUS"
+          cat response.json
+          echo ""
+
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+            echo "✅ Supabase is ACTIVE and healthy. Keep-alive successful!"
+          else
+            echo "⚠️ Warning: Ping received status $HTTP_STATUS"
+          fi
+
+      - name: Ping Vercel Frontend App
+        run: |
+          echo "🌐 Sending keep-alive ping to Vercel App..."
+          V_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://triple-t-form.vercel.app/")
+          echo "Vercel HTTP Status Code: $V_STATUS"
+          if [ "$V_STATUS" -eq 200 ]; then
+            echo "✅ Vercel App is LIVE and accessible."
+          fi
