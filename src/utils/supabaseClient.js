@@ -213,6 +213,7 @@ export function mapCloudToRegistration(r) {
     paidAmount: Number(r.paid_amount) || 500,
     paymentStatus: r.payment_status || 'paid',
     paymentSlip: r.payment_slip || null,
+    slipUrl: r.payment_slip || null,
     slipUploadedAt: r.slip_uploaded_at || null,
     hasShirt: Boolean(r.has_shirt),
     shirtSize: r.shirt_size || 'L',
@@ -226,7 +227,9 @@ export function mapCloudToRegistration(r) {
     photoUrl: r.photo_url || null,
     costumePhoto: r.costume_photo || null,
     recommenderName: r.recommender_name || '',
+    recommender: r.recommender_name || '',
     guestTitle: r.guest_title || '',
+    prefix: r.guest_title || '',
     createdAt: r.created_at,
     updatedAt: r.updated_at
   };
@@ -269,7 +272,7 @@ export async function upsertRegistrationToCloud(reg) {
       amount: Number(reg.amount) || 500,
       paid_amount: Number(reg.paidAmount) || 500,
       payment_status: reg.paymentStatus || 'paid',
-      payment_slip: reg.paymentSlip || null,
+      payment_slip: reg.paymentSlip || reg.slipUrl || null,
       slip_uploaded_at: toSafeIsoTimestamp(reg.slipUploadedAt),
       has_shirt: Boolean(reg.hasShirt),
       shirt_size: reg.shirtSize || 'L',
@@ -282,8 +285,8 @@ export async function upsertRegistrationToCloud(reg) {
       gift_registered_at: toSafeIsoTimestamp(reg.giftRegisteredAt),
       photo_url: reg.photoUrl || null,
       costume_photo: reg.costumePhoto || null,
-      recommender_name: reg.recommenderName || '',
-      guest_title: reg.guestTitle || '',
+      recommender_name: reg.recommenderName || reg.recommender || '',
+      guest_title: reg.guestTitle || reg.prefix || '',
       updated_at: new Date().toISOString()
     };
 

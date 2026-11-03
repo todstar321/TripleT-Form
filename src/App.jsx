@@ -160,21 +160,13 @@ export default function App() {
     return initialSmeFanConfig;
   });
 
-  // 2. Registrations List State (Form 1 attendees - Completely wiped clean for real registrations)
+  // 2. Registrations List State (Preserves real registered attendees across reloads)
   const [registrations, setRegistrations] = useState(() => {
     try {
       const saved = localStorage.getItem(REGISTRATIONS_STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          // Detect and purge old test registrations SME-001..SME-006
-          const hasOldMockData = parsed.some(r => 
-            ['SME-001', 'SME-002', 'SME-003', 'SME-004', 'SME-005', 'SME-006'].includes(r.ticketNo)
-          );
-          if (hasOldMockData) {
-            localStorage.removeItem(REGISTRATIONS_STORAGE_KEY);
-            return [];
-          }
           return parsed;
         }
       }
@@ -388,14 +380,25 @@ export default function App() {
         }
       }).catch(err => console.warn('Supabase config fetch warning:', err));
 
-      // 1.2 Hydrate registrations (Authoritative cloud source)
+      // 1.2 Hydrate registrations (Authoritative cloud source + merge offline/local)
       fetchRegistrationsFromCloud().then(cloudData => {
         if (cloudData && Array.isArray(cloudData)) {
-          setRegistrations(cloudData);
+          setRegistrations(prev => {
+            const cloudTicketNos = new Set(cloudData.map(r => r.ticketNo));
+            const localOnly = (prev || []).filter(r => r && r.ticketNo && !cloudTicketNos.has(r.ticketNo));
+
+            // Sync any local tickets to cloud if missing in cloud
+            if (localOnly.length > 0) {
+              localOnly.forEach(t => syncTicketToCloud(t));
+            }
+
+            const merged = [...cloudData, ...localOnly];
+            try {
+              localStorage.setItem(REGISTRATIONS_STORAGE_KEY, JSON.stringify(merged));
+            } catch (e) {}
+            return merged;
+          });
           setLastCloudSync(new Date());
-          try {
-            localStorage.setItem(REGISTRATIONS_STORAGE_KEY, JSON.stringify(cloudData));
-          } catch (e) {}
         }
       }).catch(err => console.warn('Supabase initial fetch warning:', err));
     }
@@ -604,6 +607,10 @@ export default function App() {
         submitSmeFanTicketToSheets(eventConfig.googleSheetsUrl, updatedTicket).catch(err => {
           console.warn("Background sheet sync failed for download record:", err);
         });
+      }
+
+      if (updatedTicket) {
+        syncTicketToCloud(updatedTicket);
       }
 
       return nextList;
