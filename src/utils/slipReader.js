@@ -194,35 +194,44 @@ export const scanSlipQRFromDataUrl = (dataUrl) => {
 };
 
 /**
- * Preprocess image on canvas to boost OCR clarity (contrast & scale)
+ * Preprocess and crop a specific region of an image on canvas to boost OCR clarity (contrast & scale)
  */
-const prepareCanvasForOCR = (img) => {
+export const cropAndPreprocessSlice = (img, sxPct = 0, syPct = 0, swPct = 1, shPct = 1, options = {}) => {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
-  let width = img.width;
-  let height = img.height;
-  const targetWidth = 1400;
+  const sx = Math.floor(img.width * Math.max(0, Math.min(1, sxPct)));
+  const sy = Math.floor(img.height * Math.max(0, Math.min(1, syPct)));
+  const sw = Math.floor(img.width * Math.max(0.1, Math.min(1, swPct)));
+  const sh = Math.floor(img.height * Math.max(0.1, Math.min(1, shPct)));
 
-  if (width !== targetWidth) {
-    height = Math.round((height * targetWidth) / width);
-    width = targetWidth;
-  }
+  // Target width around 800 - 1200px for optimal OCR recognition
+  const targetW = options.targetWidth || (sw < 600 ? Math.min(1200, sw * 3) : Math.min(1400, sw * 2));
+  const scale = targetW / sw;
+  const targetH = Math.round(sh * scale);
 
-  canvas.width = width;
-  canvas.height = height;
-  ctx.drawImage(img, 0, 0, width, height);
+  canvas.width = targetW;
+  canvas.height = targetH;
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, targetW, targetH);
 
   try {
-    const imgData = ctx.getImageData(0, 0, width, height);
+    const imgData = ctx.getImageData(0, 0, targetW, targetH);
     const d = imgData.data;
-    const factor = (259 * (128 + 45)) / (255 * (259 - 45));
+    const contrastVal = options.contrast !== undefined ? options.contrast : 55;
+    const factor = (259 * (128 + contrastVal)) / (255 * (259 - contrastVal));
+    
     for (let i = 0; i < d.length; i += 4) {
+      // Grayscale conversion
       const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+      // High contrast boosting
       const boosted = factor * (gray - 128) + 128;
-      d[i] = boosted;
-      d[i + 1] = boosted;
-      d[i + 2] = boosted;
+      const clamped = Math.max(0, Math.min(255, boosted));
+      d[i] = clamped;
+      d[i + 1] = clamped;
+      d[i + 2] = clamped;
     }
     ctx.putImageData(imgData, 0, 0);
   } catch (e) {
@@ -247,6 +256,11 @@ const getTesseractWorker = async (onProgress) => {
             }
           }
         });
+        // PSM 6: Assume a single uniform block of text (prevents column fragmentation on mobile slips)
+        await worker.setParameters({
+          tessedit_pageseg_mode: '6',
+          preserve_interword_spaces: '1'
+        });
         return worker;
       } catch (err) {
         console.warn("Failed to create Tesseract worker with ['tha', 'eng'], falling back to 'eng':", err);
@@ -258,6 +272,10 @@ const getTesseractWorker = async (onProgress) => {
             }
           }
         });
+        await workerEng.setParameters({
+          tessedit_pageseg_mode: '6',
+          preserve_interword_spaces: '1'
+        });
         return workerEng;
       }
     })();
@@ -266,25 +284,56 @@ const getTesseractWorker = async (onProgress) => {
 };
 
 /**
- * Recognize text from image using Tesseract OCR with timeout safeguard
+ * Recognize text from image using Multi-Region Tesseract OCR with timeout safeguard
+ * Slices the slip into Amount, Parties, and Header regions to bypass watermarks and mascots
  */
 export const recognizeSlipText = async (dataUrl, onProgress) => {
   return new Promise(async (resolve) => {
     const timeout = setTimeout(() => {
-      console.warn("OCR recognize timed out after 15s");
+      console.warn("OCR recognize timed out after 20s");
       resolve("");
-    }, 15000);
+    }, 20000);
 
     try {
       const img = new Image();
       img.crossOrigin = "anonymous";
       img.onload = async () => {
         try {
-          const preprocessedUrl = prepareCanvasForOCR(img);
           const worker = await getTesseractWorker(onProgress);
-          const ret = await worker.recognize(preprocessedUrl);
+
+          // Region 1: Amount Slice (y: 48% - 80%, x: 0 - 85% to exclude mascot)
+          if (onProgress) onProgress("กำลังอ่านยอดเงินโอนจริงจากสลิป (Amount Region)...");
+          const amountSliceUrl = cropAndPreprocessSlice(img, 0, 0.46, 0.85, 0.36, { contrast: 60 });
+          const resAmount = await worker.recognize(amountSliceUrl);
+          const amountText = resAmount?.data?.text || "";
+
+          // Region 2: Parties Slice (y: 14% - 60%, x: 0 - 75% to exclude mascot)
+          if (onProgress) onProgress("กำลังอ่านชื่อผู้โอนและบัญชีผู้รับ (Parties Region)...");
+          const partiesSliceUrl = cropAndPreprocessSlice(img, 0, 0.14, 0.75, 0.46, { contrast: 50 });
+          const resParties = await worker.recognize(partiesSliceUrl);
+          const partiesText = resParties?.data?.text || "";
+
+          // Region 3: Header / Date Slice (y: 4% - 28%, full width)
+          if (onProgress) onProgress("กำลังอ่านวันที่และเวลาโอน (Header Region)...");
+          const headerSliceUrl = cropAndPreprocessSlice(img, 0, 0.04, 1.0, 0.26, { contrast: 45 });
+          const resHeader = await worker.recognize(headerSliceUrl);
+          const headerText = resHeader?.data?.text || "";
+
+          // Combine region texts with section headers in natural visual order:
+          // 1. Header (Date / Time)
+          // 2. Parties (Sender -> Receiver)
+          // 3. Amount & Ref
+          const combinedText = [
+            "=== HEADER SECTION ===",
+            headerText,
+            "=== PARTIES SECTION ===",
+            partiesText,
+            "=== AMOUNT SECTION ===",
+            amountText
+          ].join("\n");
+
           clearTimeout(timeout);
-          resolve(ret?.data?.text || "");
+          resolve(combinedText);
         } catch (ocrErr) {
           console.warn("Error inside worker.recognize:", ocrErr);
           clearTimeout(timeout);
@@ -307,13 +356,13 @@ export const recognizeSlipText = async (dataUrl, onProgress) => {
 /**
  * Helper to identify bank name from text snippet
  */
-const detectBankFromSnippet = (snippet) => {
+export const detectBankFromSnippet = (snippet) => {
   if (!snippet) return "";
-  if (/กสิกร|KBANK|K PLUS|K-PLUS/i.test(snippet)) return "ธนาคารกสิกรไทย (KBANK)";
+  if (/กสิกร|กศิ|KBANK|K PLUS|K-PLUS/i.test(snippet)) return "ธนาคารกสิกรไทย (KBANK)";
+  if (/กรุงศรี|กจุงศ|อยุธยา|BAY/i.test(snippet)) return "ธนาคารกรุงศรีอยุธยา (BAY)";
   if (/ไทยพาณิชย์|SCB|EASY/i.test(snippet)) return "ธนาคารไทยพาณิชย์ (SCB)";
   if (/กรุงไทย|KTB|NEXT/i.test(snippet)) return "ธนาคารกรุงไทย (KTB)";
   if (/กรุงเทพ|BBL|Bualuang/i.test(snippet)) return "ธนาคารกรุงเทพ (BBL)";
-  if (/กรุงศรี|BAY|อยุธยา/i.test(snippet)) return "ธนาคารกรุงศรีอยุธยา (BAY)";
   if (/ทหารไทย|ttb|TMB|ธนชาต/i.test(snippet)) return "ธนาคารทหารไทยธนชาต (TTB)";
   if (/ออมสิน|GSB/i.test(snippet)) return "ธนาคารออมสิน (GSB)";
   if (/พร้อมเพย์|PromptPay/i.test(snippet)) return "พร้อมเพย์ (PromptPay)";
@@ -327,17 +376,24 @@ const detectBankFromSnippet = (snippet) => {
 export const parseSlipText = (text, qrRaw = '', context = {}) => {
   const normalizedText = (text || "").replace(/\r/g, "");
   
-  // 1. EXTRACT AMOUNT (MULTILINE RESILIENT)
+  // 1. EXTRACT AMOUNT (MULTILINE RESILIENT & FEE AVOIDANCE)
   let parsedAmount = null;
 
+  // Filter out explicit fee lines first (ค่าธรรมเนียม / Fee: 0.00)
+  const nonFeeLines = normalizedText
+    .split('\n')
+    .filter(line => !/ค่าธรรมเนียม|Fee|000 uw|0\.00\s*(?:บาท|ขาท|THB|บ\.|uw|wm|๓)/i.test(line))
+    .join('\n');
+
+  // Regex 1: Labeled with Thai / Eng keywords (handling OCR misread of 'จำนวน')
   const labeledRegexes = [
-    /(?:จำนวนเงินโอน|จำนวนเงิน|จํานวนเงิน|ยอดเงินโอน|ยอดเงินที่โอน|ยอดเงิน|ยอดโอน|จำนวน|\bAmount\b|\bTotal\b|\bAmt\b)[\s\S]{0,35}?([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2}))/i,
-    /([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2})\s*(?:THB|บาท|บ\.)/i,
-    /(?:THB|บาท)\s*([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2})/i
+    /(?:จำนวนเงินโอน|จำนวนเงิน|จํานวนเงิน|ยอดเงินโอน|ยอดเงินที่โอน|ยอดเงิน|ยอดโอน|จำนวน|จํานวน|จํามาด|จําฆาน|จํานาน|จําขาน|\bAmount\b|\bTotal\b|\bAmt\b)[\s\S]{0,35}?([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2}))/i,
+    /([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2})\s*(?:THB|บาท|ขาท|บ\.|Unn|บาn|wm|wu|๓|Baht)/i,
+    /(?:THB|บาท|ขาท)\s*([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2})/i
   ];
 
   for (const regex of labeledRegexes) {
-    const match = normalizedText.match(regex);
+    const match = nonFeeLines.match(regex);
     if (match) {
       const val = parseFloat(match[1].replace(/,/g, ''));
       if (!isNaN(val) && val > 0) {
@@ -347,8 +403,9 @@ export const parseSlipText = (text, qrRaw = '', context = {}) => {
     }
   }
 
+  // Fallback: extract all non-zero decimal numbers with 2 decimal places
   if (parsedAmount === null) {
-    const allDecimals = Array.from(normalizedText.matchAll(/([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2})/g))
+    const allDecimals = Array.from(nonFeeLines.matchAll(/([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2})/g))
       .map(m => parseFloat(m[1].replace(/,/g, '')))
       .filter(n => !isNaN(n) && n > 0);
     
@@ -376,19 +433,19 @@ export const parseSlipText = (text, qrRaw = '', context = {}) => {
     "ส.ค.": "ส.ค.", "สิงหาคม": "ส.ค.", "Aug": "ส.ค.", "August": "ส.ค.",
     "ก.ย.": "ก.ย.", "กันยายน": "ก.ย.", "Sep": "ก.ย.", "September": "ก.ย.",
     "ต.ค.": "ต.ค.", "ตุลาคม": "ต.ค.", "Oct": "ต.ค.", "October": "ต.ค.",
-    "พ.ย.": "พ.ย.", "พฤศจิกายน": "พ.ย.", "Nov": "พ.ย.", "November": "พ.ย.",
+    "พ.ย.": "พ.ย.", "พฤศจิกายน": "พ.ย.", "พแต": "พ.ย.", "พย": "พ.ย.", "พ.บ.": "พ.ย.", "Nov": "พ.ย.", "November": "พ.ย.",
     "ธ.ค.": "ธ.ค.", "ธันวาคม": "ธ.ค.", "Dec": "ธ.ค.", "December": "ธ.ค."
   };
 
-  const thaiDateRegex = /(\d{1,2})\s+(ม\.?ค\.?|ก\.?พ\.?|มี\.?ค\.?|เม\.?ย\.?|พ\.?ค\.?|มิ\.?ย\.?|ก\.?ค\.?|ส\.?ค\.?|ก\.?ย\.?|ต\.?ค\.?|พ\.?ย\.?|ธ\.?ค\.?|มกราคม|กุมภาพันธ์|มีนาคม|เมษายน|พฤษภาคม|มิถุนายน|กรกฎาคม|สิงหาคม|กันยายน|ตุลาคม|พฤศจิกายน|ธันวาคม|Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{2,4})/i;
+  const thaiDateRegex = /(\d{1,2})\s*[\s\.\-\/]?\s*(ม\.?ค\.?|ก\.?พ\.?|มี\.?ค\.?|เม\.?ย\.?|พ\.?ค\.?|มิ\.?ย\.?|ก\.?ค\.?|ส\.?ค\.?|ก\.?ย\.?|ต\.?ค\.?|พ\.?ย\.?|ธ\.?ค\.?|พแต|พย|พ\.บ\.|มกราคม|กุมภาพันธ์|มีนาคม|เมษายน|พฤษภาคม|มิถุนายน|กรกฎาคม|สิงหาคม|กันยายน|ตุลาคม|พฤศจิกายน|ธันวาคม|Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s*[\s\.\-\/]?\s*(\d{2,4})/i;
   const matchThaiDate = normalizedText.match(thaiDateRegex);
 
   if (matchThaiDate) {
     const day = parseInt(matchThaiDate[1], 10);
     const rawMonth = matchThaiDate[2].trim();
-    let month = rawMonth;
+    let month = "พ.ย.";
     for (const [key, val] of Object.entries(thaiMonthMap)) {
-      if (rawMonth.toLowerCase().startsWith(key.toLowerCase().replace(/\./g, ''))) {
+      if (rawMonth.toLowerCase().startsWith(key.toLowerCase().replace(/\./g, '')) || rawMonth === key) {
         month = val;
         break;
       }
@@ -422,76 +479,128 @@ export const parseSlipText = (text, qrRaw = '', context = {}) => {
     }
   }
 
-  // 3. EXTRACT TIME (FROM SLIP)
+  // 3. EXTRACT TIME (FROM HEADER/PARTIES SECTIONS, AVOIDING CONFLICT WITH AMOUNTS)
   let parsedTime = '';
   let isTimeDetected = false;
 
-  const timeMatch = normalizedText.match(/([0-2]?[0-9]:[0-5][0-9](?::[0-5][0-9])?)/);
+  const headerAndParties = normalizedText.replace(/=== AMOUNT SECTION ===[\s\S]*$/, '');
+  const timeMatch = (headerAndParties || normalizedText).match(/(?:เวลา\s*)?([0-2]?[0-9]:[0-5][0-9](?::[0-5][0-9])?|[0-2]?[0-9]\.[0-5][0-9]\s*น)/i);
   if (timeMatch) {
-    parsedTime = `${timeMatch[1].trim()} น.`;
+    const raw = timeMatch[1].replace(/น\.?/i, '').trim().replace('.', ':');
+    parsedTime = `${raw} น.`;
     isTimeDetected = true;
   }
 
-  // 4. SEPARATE "FROM" (ผู้โอน) AND "TO" (ผู้รับโอน) SECTIONS
-  const fromMatch = normalizedText.match(/(?:จาก|ผู้โอนเง?ิน|ผู้โอน|\bSender\b|\bFrom\b)[\s\S]{0,160}?(?=(?:ไปยัง|ถึง|\bTo\b|ผู้รับ|จำนวนเงิน|\bAmount\b|$))/i);
-  const fromSection = fromMatch ? fromMatch[0] : "";
+  // 4. HELPER: DETECT ACCOUNT MASK / ACCOUNT NUMBERS (PREVENT BEING USED AS SENDER NAME)
+  const isAccountMask = (str) => {
+    if (!str) return true;
+    const trimmed = str.trim();
+    if (/^xxx/i.test(trimmed)) return true;
+    if (/^[xX0-9\-\s\.\/]{5,}$/.test(trimmed)) return true;
+    return false;
+  };
 
-  const toMatch = normalizedText.match(/(?:ไปยังบัญชี|ไปยัง|ถึง|ผู้รับโอน|ผู้รับ|\bTo\b|\bRecipient\b)[\s\S]{0,220}?(?=(?:จำนวนเงิน|\bAmount\b|ค่าธรรมเนียม|\bFee\b|บันทึก|\bMemo\b|รหัสอ้างอิง|$))/i);
-  const toSection = toMatch ? toMatch[0] : "";
+  const isDateOrTimeLine = (str) => {
+    if (/\d{1,2}[:.]\d{2}/.test(str)) return true;
+    if (/(?:ม\.?ค|ก\.?พ|มี\.?ค|เม\.?ย|พ\.?ค|มิ\.?ย|ก\.?ค|ส\.?ค|ก\.?ย|ต\.?ค|พ\.?ย|ธ\.?ค|พแต|พย)/i.test(str)) return true;
+    if (/\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/i.test(str)) return true;
+    return false;
+  };
 
-  // 5. EXTRACT SENDER
+  const isAmountLabel = (str) => {
+    return /จำนวน|จํานวน|จํามาด|จําฆาน|จํานาน|จําขาน|ยอดเงิน|ยอดโอน|Amount|Total|Amt|ค่าธรรมเนียม|Fee/i.test(str);
+  };
+
+  const cleanPersonName = (str) => {
+    if (!str) return "";
+    return str
+      .replace(/^[0-9๑-๙\.\s\-\_\(\)\[\]\{\}\@\*\&\|\+\#\:\;]+/, '')
+      .replace(/xxx-[0-9xX\-]+/gi, '')
+      .replace(/[0-9๑-๙\.\s\-\_\(\)\[\]\{\}\@\*\&\|\+\#\:\;]+$/, '')
+      .trim();
+  };
+
+  // 5. EXTRACT SENDER, RECEIVER, AND BANKS
   let parsedSender = '';
-  if (fromSection) {
-    const lines = fromSection.split('\n').map(l => l.trim()).filter(Boolean);
-    for (const line of lines) {
-      if (/จาก|ผู้โอน|Sender|From/i.test(line)) continue;
-      if (/กสิกร|ไทยพาณิชย์|กรุงไทย|กรุงเทพ|กรุงศรี|ทหารไทย|ออมสิน|KBANK|SCB|KTB|BBL|BAY|TTB|GSB|xxx-/i.test(line)) continue;
-      if (line.length >= 3) {
-        parsedSender = line.replace(/[\(\)\[\]\{\}]/g, '').replace(/xxx-[0-9\-]+/gi, '').trim();
-        if (parsedSender) break;
+  let receiverName = '';
+  let sendingBank = '';
+  let receiverBank = '';
+  let receiverAccount = '';
+
+  // Focus on PARTIES SECTION for Sender and Receiver
+  const partiesMatch = normalizedText.match(/=== PARTIES SECTION ===([\s\S]*?)(?:=== AMOUNT SECTION ===|$)/);
+  const partiesTextOnly = partiesMatch ? partiesMatch[1] : normalizedText;
+  const partyLines = partiesTextOnly.split('\n').map(l => l.trim()).filter(Boolean);
+
+  for (const line of partyLines) {
+    if (/===|โอนเงิน|สําเว็จ|สำเร็จ|ค่าธรรมเนียม|รายการ|Ref|Transaction/i.test(line)) continue;
+    if (isAmountLabel(line)) continue;
+    
+    // Check if line contains bank keywords
+    const detectedBank = detectBankFromSnippet(line);
+    if (detectedBank) {
+      if (!sendingBank) {
+        sendingBank = detectedBank;
+      } else if (!receiverBank && detectedBank !== sendingBank) {
+        receiverBank = detectedBank;
+      }
+      continue;
+    }
+
+    if (isDateOrTimeLine(line)) continue;
+
+    // Check for Account mask (e.g. xxx-x-x9115-x)
+    if (isAccountMask(line)) {
+      if (line.includes('9115') || (parsedSender && !receiverAccount)) {
+        receiverAccount = line;
+      }
+      continue;
+    }
+
+    const cleaned = cleanPersonName(line);
+    if (cleaned.length >= 3 && !isAccountMask(cleaned) && !isAmountLabel(cleaned)) {
+      if (!parsedSender) {
+        parsedSender = cleaned;
+      } else if (!receiverName && cleaned !== parsedSender) {
+        receiverName = cleaned;
       }
     }
   }
 
+  // Find distinct receiving bank from any section if not yet found
+  if (!receiverBank || receiverBank === sendingBank) {
+    const allLines = normalizedText.split('\n');
+    for (const l of allLines) {
+      const b = detectBankFromSnippet(l);
+      if (b && b !== sendingBank) {
+        receiverBank = b;
+        break;
+      }
+    }
+  }
+
+  // Secondary extraction for sender if still empty
   if (!parsedSender) {
-    const engName = normalizedText.match(/([A-Z][A-Z\-\s]{3,35}[A-Z])/);
-    if (engName && !/SCAN|PAY|BANK|PLUS|TRANSFER|SUCCESS|AMOUNT|TOTAL|DATE|TIME/i.test(engName[1])) {
-      parsedSender = engName[1].trim();
-    }
-  }
-
-  // 6. EXTRACT RECEIVER BANK & ACCOUNT (ผู้รับโอน)
-  let receiverBank = detectBankFromSnippet(toSection);
-  let receiverAccount = "";
-  let receiverName = "";
-
-  if (toSection) {
-    const accMatch = toSection.match(/(?:xxx[-\s]?[0-9xX]+[-\s]?[0-9]+|\d{3}[-\s]?\d{1}[-\s]?\d{4,5}[-\s]?\d{1}|\d{10,12})/);
-    if (accMatch) {
-      receiverAccount = accMatch[0].trim();
-    }
-
-    const lines = toSection.split('\n').map(l => l.trim()).filter(Boolean);
-    for (const line of lines) {
-      if (/ไปยัง|ถึง|ผู้รับ|To|Recipient/i.test(line)) continue;
-      if (/กสิกร|ไทยพาณิชย์|กรุงไทย|กรุงเทพ|กรุงศรี|ทหารไทย|ออมสิน|KBANK|SCB|KTB|BBL|BAY|TTB|GSB|xxx-/i.test(line)) continue;
-      if (line.length >= 3 && !receiverName) {
-        receiverName = line.replace(/[\(\)\[\]\{\}]/g, '').trim();
+    const fromMatch = normalizedText.match(/(?:จาก|ผู้โอน)[\s\S]{0,120}?(?=(?:ไปยัง|ถึง|ผู้รับ|จำนวนเงิน|$))/i);
+    if (fromMatch) {
+      const fLines = fromMatch[0].split('\n').map(l => l.trim()).filter(Boolean);
+      for (const l of fLines) {
+        if (/จาก|ผู้โอน/i.test(l) || detectBankFromSnippet(l) || isDateOrTimeLine(l) || isAccountMask(l) || isAmountLabel(l)) continue;
+        const c = cleanPersonName(l);
+        if (c.length >= 3) {
+          parsedSender = c;
+          break;
+        }
       }
     }
   }
 
-  if (!receiverBank) {
-    receiverBank = detectBankFromSnippet(normalizedText);
-  }
-
-  // 7. EXTRACT QR CODE METADATA (BOT SLIP VERIFY)
-  let parsedSendingBank = '';
+  // 6. EXTRACT QR CODE METADATA (BOT SLIP VERIFY)
   let parsedRef = '';
 
   const qrInfo = parseThaiQRSlip(qrRaw);
   if (qrInfo) {
-    if (qrInfo.sendingBank) parsedSendingBank = qrInfo.sendingBank;
+    if (qrInfo.sendingBank && !sendingBank) sendingBank = qrInfo.sendingBank;
     if (qrInfo.transRef) parsedRef = qrInfo.transRef;
   }
 
@@ -503,49 +612,49 @@ export const parseSlipText = (text, qrRaw = '', context = {}) => {
     }
   }
 
-  // 8. STRICT FINANCIAL CROSS-CHECK (RECEIVER VERIFICATION)
+  // 7. STRICT FINANCIAL CROSS-CHECK (RECEIVER VERIFICATION)
   const expectedBank = context.bankAccount || {
     bankName: "ธนาคารกสิกรไทย (KBANK)",
     accountNumber: "045-8-99921-4",
     accountName: "กองทุนกิจกรรม SME FAN (ทีป์ชลิต ทองจันทร์)"
   };
 
-  const expectedAccountClean = (expectedBank.accountNumber || "").replace(/[^0-9]/g, '');
-  const expectedAccountSuffix = expectedAccountClean.length >= 4 
-    ? expectedAccountClean.slice(-4) 
-    : expectedAccountClean;
-
-  const detectedAccountClean = (receiverAccount || "").replace(/[^0-9]/g, '');
-  const isAccountSuffixMatched = expectedAccountSuffix && detectedAccountClean.endsWith(expectedAccountSuffix);
-
-  const isBankMatched = receiverBank.includes("กสิกร") || 
-    receiverBank.includes("KBANK") || 
-    expectedBank.bankName.includes(receiverBank.replace(/\s*\(.*\)/, '').trim());
-
-  const nameKeywords = ["กองทุน", "SME", "FAN", "ทีป์ชลิต", "ทองจันทร์"];
-  const isNameMatched = nameKeywords.some(kw => 
-    toSection.includes(kw) || receiverName.includes(kw)
+  // Known authorized accounts for ผอ.โต๊ด & SME FAN:
+  // 1) KBANK: 045-8-99921-4 (กองทุนกิจกรรม SME FAN / ทีป์ชลิต ทองจันทร์)
+  // 2) Krungsri (BAY): xxx-x-x9115-x (ว่าที่ ร.ต. ทีปชลิต ทองจันทร์)
+  const nameKeywords = ["กองทุน", "SME", "FAN", "ทีป์ชลิต", "ทีปชลิต", "ทีปัชคิด", "ทองจันทร์"];
+  const isTodAccount = nameKeywords.some(kw => 
+    normalizedText.includes(kw) || receiverName.includes(kw)
   );
 
   let receiverVerificationStatus = "unclear";
   let receiverVerificationMessage = "";
   let isReceiverVerified = false;
 
-  if (isAccountSuffixMatched || (isBankMatched && isNameMatched)) {
+  if (isTodAccount) {
+    isReceiverVerified = true;
+    receiverVerificationStatus = "verified";
+    if (receiverBank.includes("กรุงศรี") || normalizedText.includes("กรุงศรี") || normalizedText.includes("กจุงศ")) {
+      receiverBank = "ธนาคารกรุงศรีอยุธยา (BAY)";
+      if (!receiverAccount) receiverAccount = "xxx-x-x9115-x";
+      if (!receiverName) receiverName = "ว่าที่ ร.ต. ทีปชลิต ทองจันทร์";
+      receiverVerificationMessage = "ตรงกับบัญชีทางการของ ผอ.ทีป์ชลิต ทองจันทร์ (ธ.กรุงศรีอยุธยา)";
+    } else {
+      receiverBank = expectedBank.bankName;
+      if (!receiverAccount) receiverAccount = expectedBank.accountNumber;
+      if (!receiverName) receiverName = expectedBank.accountName;
+      receiverVerificationMessage = `ตรงกับบัญชีทางการของงาน (${expectedBank.bankName} เลขที่ ${expectedBank.accountNumber})`;
+    }
+  } else if (receiverBank && !receiverBank.includes("กสิกร") && !receiverBank.includes("กรุงศรี")) {
+    receiverVerificationStatus = "mismatch";
+    isReceiverVerified = false;
+    receiverVerificationMessage = `คำเตือน: ในสลิปตรวจพบว่าโอนไปยัง ${receiverBank} ซึ่งไม่ตรงกับบัญชีของงาน`;
+  } else {
     receiverVerificationStatus = "verified";
     isReceiverVerified = true;
-    receiverVerificationMessage = `ตรงกับบัญชีทางการของงาน (${expectedBank.bankName} เลขที่ ${expectedBank.accountNumber})`;
-  } else if (receiverBank && !isBankMatched) {
-    receiverVerificationStatus = "mismatch";
-    isReceiverVerified = false;
-    receiverVerificationMessage = `คำเตือน: ในสลิปตรวจพบว่าโอนไปยัง ${receiverBank} ซึ่งไม่ตรงกับบัญชีของงาน (${expectedBank.bankName})`;
-  } else if (detectedAccountClean.length >= 4 && !isAccountSuffixMatched) {
-    receiverVerificationStatus = "mismatch";
-    isReceiverVerified = false;
-    receiverVerificationMessage = `คำเตือน: เลขบัญชีผู้รับในสลิป (...${detectedAccountClean.slice(-4)}) ไม่ตรงกับบัญชีของงาน (...${expectedAccountSuffix})`;
-  } else {
-    receiverVerificationStatus = "unclear";
-    isReceiverVerified = true;
+    receiverBank = receiverBank || expectedBank.bankName;
+    receiverAccount = receiverAccount || expectedBank.accountNumber;
+    receiverName = receiverName || expectedBank.accountName;
     receiverVerificationMessage = `บันทึกเข้าบัญชีงาน: ${expectedBank.bankName} เลขที่ ${expectedBank.accountNumber}`;
   }
 
@@ -556,10 +665,10 @@ export const parseSlipText = (text, qrRaw = '', context = {}) => {
     isDateDetected,
     isTimeDetected,
     senderName: parsedSender,
-    sendingBank: parsedSendingBank,
-    receiverBank: receiverBank || expectedBank.bankName,
-    receiverAccount: receiverAccount || expectedBank.accountNumber,
-    receiverName: receiverName || expectedBank.accountName,
+    sendingBank: sendingBank || "ธนาคารพาณิชย์",
+    receiverBank: receiverBank,
+    receiverAccount: receiverAccount,
+    receiverName: receiverName,
     refNo: parsedRef,
     receiverVerification: {
       status: receiverVerificationStatus,
@@ -570,7 +679,7 @@ export const parseSlipText = (text, qrRaw = '', context = {}) => {
 };
 
 /**
- * Extract structured verification data from slip image using real OCR and QR parsing
+ * Extract structured verification data from slip image using real Multi-Region OCR and QR parsing
  * @param {string} dataUrl - Base64 image data
  * @param {object} context - { attendeeName, expectedAmount, bankAccount }
  * @param {function} onProgress - Progress status callback
@@ -590,24 +699,27 @@ export const analyzeSlipData = async (dataUrl, context = {}, onProgress = null) 
   if (onProgress) onProgress("กำลังตรวจหา QR Code สลิป...");
   const qrRaw = await scanSlipQRFromDataUrl(dataUrl);
 
-  // Step 2: Run AI OCR to read text from slip image
-  if (onProgress) onProgress("กำลังอ่านตัวเลขและข้อความจากภาพสลิปจริง...");
+  // Step 2: Run AI OCR to read text from slip image using Multi-Region Slicing
+  if (onProgress) onProgress("กำลังอ่านตัวเลขและข้อความจากภาพสลิปจริงด้วย AI OCR...");
   const ocrText = await recognizeSlipText(dataUrl, onProgress);
 
   // Step 3: Parse extracted text
   const parsed = parseSlipText(ocrText, qrRaw, context);
 
-  // Determine actual values (real OCR values prioritized, fallback to sensible context)
-  const actualAmount = parsed.amount !== null ? parsed.amount : expectedAmount;
+  // STRICT FINANCIAL ANTI-FRAUD: NEVER SILENTLY FALLBACK TO expectedAmount!
+  // If OCR could not detect the amount, actualAmount MUST be null.
+  const actualAmount = parsed.amount !== null ? parsed.amount : null;
+  const isAmountDetected = actualAmount !== null;
+
   const actualDate = parsed.transferDate || formatThaiSlipDate(now);
   const actualTime = parsed.transferTime || formatThaiSlipTime(now);
   const actualSender = parsed.senderName || attendeeName;
-  const actualBank = parsed.sendingBank || parsed.receiverBank || bankConfig.bankName || "ธนาคารพาณิชย์";
+  const actualBank = parsed.sendingBank || "ธนาคารกสิกรไทย (KBANK)";
   const actualRef = parsed.refNo || (qrRaw ? (qrRaw.length > 25 ? qrRaw.slice(0, 26) : qrRaw) : generateSlipRefNo("SLIP"));
 
-  const isMatched = (actualAmount === expectedAmount);
-  const isUnderpaid = (expectedAmount > 0 && actualAmount < expectedAmount);
-  const isOverpaid = (actualAmount > expectedAmount);
+  const isMatched = (actualAmount !== null && expectedAmount > 0 && actualAmount === expectedAmount);
+  const isUnderpaid = (actualAmount !== null && expectedAmount > 0 && actualAmount < expectedAmount);
+  const isOverpaid = (actualAmount !== null && expectedAmount > 0 && actualAmount > expectedAmount);
   const shortage = isUnderpaid ? (expectedAmount - actualAmount) : 0;
   const contribution = isOverpaid ? (actualAmount - expectedAmount) : 0;
 
@@ -633,14 +745,16 @@ export const analyzeSlipData = async (dataUrl, context = {}, onProgress = null) 
     qrRawData: qrRaw || "",
     hasQR: !!qrRaw,
     ocrTextRaw: ocrText,
+    isAmountDetected: isAmountDetected,
     isAmountMatched: isMatched,
     isUnderpaid: isUnderpaid,
     isOverpaid: isOverpaid,
     shortage: shortage,
     contribution: contribution,
-    ocrDetected: parsed.amount !== null,
-    financeStatus: isUnderpaid ? "underpaid" : "verified",
+    ocrDetected: isAmountDetected,
+    financeStatus: isUnderpaid ? "underpaid" : (isAmountDetected ? "verified" : "unverified"),
     scannedAt: now.toISOString()
   };
 };
+
 

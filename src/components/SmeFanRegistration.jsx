@@ -731,10 +731,16 @@ export default function SmeFanRegistration({
     if (calculatedFee > 0 && !slipPreview) {
       errs.slip = "กรุณาแนบภาพสลิปการโอนเงินเพื่อยืนยันการลงทะเบียน";
     }
-    const transferAmount = Number(slipDetails?.amount !== undefined ? slipDetails.amount : calculatedFee);
-    if (calculatedFee > 0 && slipPreview && transferAmount < calculatedFee) {
-      errs.slip = `ยอดเงินโอน (${transferAmount.toLocaleString()} บาท) น้อยกว่าราคาที่กำหนดไว้ (${calculatedFee.toLocaleString()} บาท)`;
-      setUnderpaidModalOpen(true);
+    const rawAmt = slipDetails?.amount;
+    const transferAmount = Number(rawAmt !== undefined && rawAmt !== null ? rawAmt : 0);
+    if (calculatedFee > 0 && slipPreview) {
+      if (rawAmt === null || rawAmt === undefined || transferAmount <= 0) {
+        errs.slip = "กรุณาตรวจสอบและระบุยอดเงินที่โอนจริงตามสลิป";
+      } else if (transferAmount < calculatedFee) {
+        const shortage = calculatedFee - transferAmount;
+        errs.slip = `ยอดเงินโอน (${transferAmount.toLocaleString()} บาท) ไม่ครบตามจำนวนค่าลงทะเบียนที่กำหนด (${calculatedFee.toLocaleString()} บาท, ขาดอีก ${shortage.toLocaleString()} บาท)`;
+        setUnderpaidModalOpen(true);
+      }
     }
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -763,9 +769,12 @@ export default function SmeFanRegistration({
       finalName = `${activePrefix} ${finalName}`;
     }
 
-    const transferAmount = Number(slipDetails?.amount !== undefined ? slipDetails.amount : calculatedFee);
+    const rawAmt = slipDetails?.amount;
+    const transferAmount = Number(rawAmt !== undefined && rawAmt !== null ? rawAmt : calculatedFee);
     const isOverpaid = transferAmount > calculatedFee;
+    const isUnderpaid = calculatedFee > 0 && transferAmount < calculatedFee;
     const contributionAmount = isOverpaid ? (transferAmount - calculatedFee) : 0;
+    const shortageAmount = isUnderpaid ? (calculatedFee - transferAmount) : 0;
 
     const newTicket = {
       ticketNo: ticketNumber,
@@ -784,6 +793,7 @@ export default function SmeFanRegistration({
       amount: calculatedFee,
       paidAmount: transferAmount,
       contributionAmount: contributionAmount,
+      shortage: shortageAmount,
       hasShirt: isEligibleForShirt,
       shirtGender: isEligibleForShirt ? shirtGender : "",
       shirtSize: isEligibleForShirt ? shirtSize : "",
@@ -792,7 +802,9 @@ export default function SmeFanRegistration({
         ...slipDetails,
         amount: transferAmount,
         paidAmount: transferAmount,
-        contributionAmount: contributionAmount
+        contributionAmount: contributionAmount,
+        shortage: shortageAmount,
+        financeStatus: isUnderpaid ? 'underpaid' : (slipDetails.isAmountDetected ? 'verified' : 'manual_review')
       } : {
         transferDate: new Date().toLocaleDateString('th-TH'),
         transferTime: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
@@ -801,8 +813,9 @@ export default function SmeFanRegistration({
         amount: transferAmount,
         paidAmount: transferAmount,
         contributionAmount: contributionAmount,
+        shortage: shortageAmount,
         refNo: `REF-${Date.now().toString().slice(-8)}`,
-        financeStatus: 'verified'
+        financeStatus: isUnderpaid ? 'underpaid' : 'verified'
       },
       slipUploadedAt: nowStr,
       slipExpiresAt: expiryStr,
@@ -2576,11 +2589,20 @@ export default function SmeFanRegistration({
                                   <div className="flex items-center space-x-1.5">
                                     <input
                                       type="number"
-                                      value={slipDetails.amount !== undefined ? slipDetails.amount : calculatedFee}
+                                      value={slipDetails.amount !== undefined && slipDetails.amount !== null ? slipDetails.amount : ""}
+                                      placeholder="ระบุยอดเงินโอน"
                                       onChange={(e) => {
-                                        const val = Number(e.target.value);
-                                        setSlipDetails(prev => ({ ...prev, amount: val }));
-                                        if (val < calculatedFee && calculatedFee > 0) {
+                                        const val = e.target.value === "" ? null : Number(e.target.value);
+                                        setSlipDetails(prev => ({
+                                          ...prev,
+                                          amount: val,
+                                          isAmountDetected: val !== null,
+                                          isUnderpaid: val !== null && calculatedFee > 0 && val < calculatedFee,
+                                          isOverpaid: val !== null && calculatedFee > 0 && val > calculatedFee,
+                                          shortage: (val !== null && calculatedFee > 0 && val < calculatedFee) ? (calculatedFee - val) : 0,
+                                          contribution: (val !== null && calculatedFee > 0 && val > calculatedFee) ? (val - calculatedFee) : 0
+                                        }));
+                                        if (val !== null && val < calculatedFee && calculatedFee > 0) {
                                           setUnderpaidModalOpen(true);
                                         }
                                       }}
@@ -2590,13 +2612,30 @@ export default function SmeFanRegistration({
                                   </div>
                                 </div>
 
+                                {!slipDetails.isAmountDetected && (
+                                  <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[10px] text-amber-300 flex items-center space-x-1.5">
+                                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+                                    <span>ระบบไม่สามารถอ่านยอดเงินจากสลิปนี้ได้อัตโนมัติ กรุณาระบุยอดเงินโอนจริงเพื่อส่งให้ฝ่ายการเงินตรวจสอบ</span>
+                                  </div>
+                                )}
+
                                 {/* Financial Reconciliation Breakdown */}
                                 {(() => {
-                                  const transferAmount = Number(slipDetails.amount !== undefined ? slipDetails.amount : calculatedFee);
-                                  const isOverpaid = transferAmount > calculatedFee;
-                                  const isUnderpaid = calculatedFee > 0 && transferAmount < calculatedFee;
+                                  const rawAmt = slipDetails.amount;
+                                  const transferAmount = Number(rawAmt !== undefined && rawAmt !== null ? rawAmt : 0);
+                                  const isOverpaid = rawAmt !== null && transferAmount > calculatedFee;
+                                  const isUnderpaid = calculatedFee > 0 && (rawAmt === null || transferAmount < calculatedFee);
                                   const contribution = isOverpaid ? (transferAmount - calculatedFee) : 0;
                                   const shortage = isUnderpaid ? (calculatedFee - transferAmount) : 0;
+
+                                  if (rawAmt === null || transferAmount === 0) {
+                                    return (
+                                      <div className="mt-2 bg-amber-500/10 border border-amber-500/30 rounded-xl p-2.5 text-xs text-amber-300 flex items-center space-x-2">
+                                        <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                                        <span>กรุณาระบุยอดเงินโอนจริงตามสลิปในช่องด้านบน</span>
+                                      </div>
+                                    );
+                                  }
 
                                   if (isOverpaid) {
                                     return (
@@ -3137,13 +3176,13 @@ export default function SmeFanRegistration({
               <div className="flex justify-between items-center text-rose-300">
                 <span>ยอดเงินที่โอนในสลิป:</span>
                 <span className="font-mono font-bold text-rose-400">
-                  {Number(slipDetails?.amount !== undefined ? slipDetails.amount : calculatedFee).toLocaleString()} บาท
+                  {Number(slipDetails?.amount !== undefined && slipDetails?.amount !== null ? slipDetails.amount : 0).toLocaleString()} บาท
                 </span>
               </div>
               <div className="flex justify-between items-center pt-2 border-t border-rose-500/30 font-bold">
                 <span className="text-white">ยอดเงินที่ยังขาดอยู่:</span>
                 <span className="font-mono text-base text-rose-400 font-extrabold">
-                  ขาดอีก {Math.max(0, calculatedFee - Number(slipDetails?.amount !== undefined ? slipDetails.amount : calculatedFee)).toLocaleString()} บาท
+                  ขาดอีก {Math.max(0, calculatedFee - Number(slipDetails?.amount !== undefined && slipDetails?.amount !== null ? slipDetails.amount : 0)).toLocaleString()} บาท
                 </span>
               </div>
             </div>
