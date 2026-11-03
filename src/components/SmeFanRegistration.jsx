@@ -704,12 +704,12 @@ export default function SmeFanRegistration({
     } else if (cleanPhone.length < 9 || cleanPhone.length > 10) {
       errs.phone = "กรุณาระบุเบอร์โทรศัพท์ 9-10 หลักให้ถูกต้อง";
     }
-    if (regType === 'guest') {
-      if (!titlePrefix) {
-        errs.titlePrefix = "กรุณาเลือกคำนำหน้า / ยศ / ตำแหน่ง";
-      } else if (titlePrefix === 'other' && !customPrefix.trim()) {
-        errs.customPrefix = "กรุณาระบุคำนำหน้าหรือยศตำแหน่ง";
+    if (regType === 'member') {
+      if (!selectedMember) {
+        errs.name = "กรุณาพิมพ์ค้นหาและเลือกชื่อสมาชิกของท่าน";
       }
+    }
+    if (regType === 'guest') {
       if (!birthDate) errs.birthDate = "กรุณาระบุวันเดือนปีเกิดเพื่อคำนวณอัตราค่าเข้างาน";
       if (!recommender) errs.recommender = "กรุณาเลือกสมาชิกผู้แนะนำ";
     }
@@ -1473,9 +1473,26 @@ export default function SmeFanRegistration({
                           }
                         }}
                         placeholder="พิมพ์รหัส เช่น SME-001 หรือชื่อ 'ทีป์ชลิต ทองจันทร์'..."
-                        className="w-full pl-10 pr-4 py-3 rounded-2xl text-xs bg-slate-950 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                        className="w-full pl-10 pr-10 py-3 rounded-2xl text-xs sm:text-sm bg-slate-950 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 shadow-inner"
                       />
+                      {selectedMember && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedMember(null);
+                            setSearchQuery("");
+                            setName("");
+                            setPhone("");
+                            setEmail("");
+                          }}
+                          className="absolute right-3 top-3 p-1 rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                          title="ล้างค่าและเลือกใหม่"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
+                    {errors.name && <span className="text-rose-400 text-[11px] mt-1 block font-semibold">{errors.name}</span>}
 
                     {/* Autocomplete Dropdown List */}
                     {searchQuery.trim() && !selectedMember && filteredMembers.length > 0 && (
@@ -1503,77 +1520,113 @@ export default function SmeFanRegistration({
                     )}
                   </div>
 
-                  {/* Auto-filled details for member */}
-                  <div className="space-y-3 pt-2">
-                    {selectedMember && (
-                      <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs text-amber-300">
-                        {selectedMember.memberCode && (
-                          <span className="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded-md bg-amber-500/20 border border-amber-500/40 text-amber-200 font-mono font-bold">
-                            <span>รหัสสมาชิก:</span>
-                            <span className="text-amber-100">{selectedMember.memberCode}</span>
-                          </span>
-                        )}
-                        <span className="text-slate-300">
-                          สังกัดสนาม: <strong className="text-white">{selectedClub}</strong>
-                        </span>
-                        {selectedMember.nickname && (
-                          <span className="text-slate-400">
-                            (ชื่อเล่น: <strong className="text-amber-300">{selectedMember.nickname}</strong>)
-                          </span>
-                        )}
+                  {/* Member Selection Dependent Section */}
+                  {!selectedMember ? (
+                    <div className="p-4 sm:p-5 rounded-2xl bg-amber-500/10 border-2 border-dashed border-amber-500/30 text-center space-y-1.5 my-2 animate-in fade-in">
+                      <div className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-amber-500/20 text-amber-300 mb-1">
+                        <Search className="w-4 h-4 text-amber-400" />
                       </div>
-                    )}
-
-                    {/* PROMINENT PHONE & EMAIL SECTION (MEMBER) */}
-                    <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-yellow-500/10 to-amber-500/5 border-2 border-amber-500/40 shadow-lg space-y-3">
-                      {/* 1. Phone Row */}
-                      <div className="space-y-1.5">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                          <label className="text-xs sm:text-sm font-bold text-amber-300 flex items-center space-x-1.5">
-                            <Phone className="w-4 h-4 text-amber-400 shrink-0" />
-                            <span>เบอร์โทรศัพท์มือถือ * (ตรวจสอบให้ถูกต้อง)</span>
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold shrink-0">
-                              สำคัญมาก
+                      <p className="text-xs sm:text-sm font-bold text-amber-300">
+                        👆 กรุณาพิมพ์ค้นหาและกดเลือก "ชื่อสมาชิก" ของท่านด้านบน
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        เมื่อกดเลือกชื่อแล้ว ข้อมูลเบอร์โทรศัพท์มือถือจะขึ้นมาให้อัตโนมัติ (และท่านสามารถแก้ไขได้ครับ)
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 pt-1 animate-in fade-in duration-300">
+                      {/* Selected Member Details Card */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 p-3.5 rounded-2xl bg-amber-500/15 border-2 border-amber-500/40 text-xs text-amber-300 shadow-md">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {selectedMember.memberCode && (
+                            <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-200 font-mono font-bold">
+                              <span>รหัส:</span>
+                              <span className="text-amber-100">{selectedMember.memberCode}</span>
                             </span>
-                          </label>
-                          <span className="text-[11px] text-amber-200/90 font-medium">
-                            ⭐ ใช้ยืนยันตัวตนร่วมกิจกรรม & เป็นกรรมการตัดสิน
+                          )}
+                          <span className="text-white font-bold text-sm">
+                            {selectedMember.name}
+                          </span>
+                          {selectedMember.nickname && (
+                            <span className="text-amber-300 font-semibold">
+                              ({selectedMember.nickname})
+                            </span>
+                          )}
+                          <span className="text-slate-300 text-[11px]">
+                            • สนาม {selectedClub}
                           </span>
                         </div>
-                        <input
-                          type="text"
-                          value={phone}
-                          onChange={(e) => setPhone(formatPhoneNumber(e.target.value))}
-                          placeholder="08x-xxx-xxxx"
-                          className="w-full px-3.5 py-2.5 rounded-xl text-sm sm:text-base bg-slate-950 border-2 border-amber-400/60 text-amber-300 font-mono font-bold tracking-wider placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 shadow-inner"
-                        />
-                        {errors.phone && <span className="text-rose-400 text-[11px] mt-1 block font-semibold">{errors.phone}</span>}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedMember(null);
+                            setSearchQuery("");
+                            setName("");
+                            setPhone("");
+                            setEmail("");
+                          }}
+                          className="text-[11px] px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white transition-all"
+                        >
+                          เปลี่ยนสมาชิก
+                        </button>
                       </div>
 
-                      {/* 2. Email Row (Separate Line) */}
-                      <div className="space-y-1.5 pt-2.5 border-t border-amber-500/20">
-                        <div className="flex items-center justify-between">
-                          <label className="text-xs font-semibold text-slate-300 flex items-center space-x-1.5">
-                            <Mail className="w-3.5 h-3.5 text-amber-400/90 shrink-0" />
-                            <span>อีเมล (Email) สำหรับรับบัตรเข้างาน E-Ticket</span>
-                          </label>
-                          <span className="text-[10px] text-slate-400">(ไม่บังคับ)</span>
+                      {/* PROMINENT PHONE & EMAIL SECTION (MEMBER) */}
+                      <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-yellow-500/10 to-amber-500/5 border-2 border-amber-500/40 shadow-lg space-y-3">
+                        {/* 1. Phone Row */}
+                        <div className="space-y-1.5">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                            <label className="text-xs sm:text-sm font-bold text-amber-300 flex items-center space-x-1.5">
+                              <Phone className="w-4 h-4 text-amber-400 shrink-0" />
+                              <span>เบอร์โทรศัพท์มือถือ * (ตรวจสอบให้ถูกต้อง)</span>
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold shrink-0">
+                                สำคัญมาก
+                              </span>
+                            </label>
+                            <span className="text-[11px] text-amber-200/90 font-medium">
+                              ⭐ ใช้ยืนยันตัวตนร่วมกิจกรรม & เป็นกรรมการตัดสิน
+                            </span>
+                          </div>
+                          <input
+                            type="text"
+                            value={phone}
+                            onChange={(e) => setPhone(formatPhoneNumber(e.target.value))}
+                            placeholder="08x-xxx-xxxx"
+                            className="w-full px-3.5 py-2.5 rounded-xl text-sm sm:text-base bg-slate-950 border-2 border-amber-400/60 text-amber-300 font-mono font-bold tracking-wider placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 shadow-inner"
+                          />
+                          {selectedMember.phone && (
+                            <p className="text-[11px] text-emerald-400 flex items-center space-x-1">
+                              <span>✅ ดึงเบอร์จากฐานข้อมูลสมาชิกอัตโนมัติ (แก้ไขได้หากเปลี่ยนเบอร์)</span>
+                            </p>
+                          )}
+                          {errors.phone && <span className="text-rose-400 text-[11px] mt-1 block font-semibold">{errors.phone}</span>}
                         </div>
-                        <input
-                          type="email"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          placeholder="อีเมล (สำหรับรับบัตร E-Ticket เช่น name@example.com)"
-                          className="w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm bg-slate-950/80 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 shadow-inner"
-                        />
-                      </div>
 
-                      {/* Important Warning Note */}
-                      <div className="text-[11px] text-amber-200/80 bg-amber-950/40 p-2.5 rounded-xl border border-amber-500/20 leading-relaxed">
-                        ⚠️ <strong>หมายเหตุสำคัญ:</strong> กรุณาตรวจสอบเบอร์โทรศัพท์มือถือให้ถูกต้องและจำเบอร์นี้ไว้ เนื่องจากระบบจะใช้เบอร์โทรศัพท์นี้ในการยืนยันตัวตนเข้าร่วมกิจกรรมในงาน และสแกน QR Code เพื่อให้คะแนนการประกวดแต่งกาย (1 เบอร์ / 1 สิทธิ์การตัดสิน)
+                        {/* 2. Email Row (Separate Line) */}
+                        <div className="space-y-1.5 pt-2.5 border-t border-amber-500/20">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-semibold text-slate-300 flex items-center space-x-1.5">
+                              <Mail className="w-3.5 h-3.5 text-amber-400/90 shrink-0" />
+                              <span>อีเมล (Email) สำหรับรับบัตรเข้างาน E-Ticket</span>
+                            </label>
+                            <span className="text-[10px] text-slate-400">(ไม่บังคับ)</span>
+                          </div>
+                          <input
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            placeholder="อีเมล (สำหรับรับบัตร E-Ticket เช่น name@example.com)"
+                            className="w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm bg-slate-950/80 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 shadow-inner"
+                          />
+                        </div>
+
+                        {/* Important Warning Note */}
+                        <div className="text-[11px] text-amber-200/80 bg-amber-950/40 p-2.5 rounded-xl border border-amber-500/20 leading-relaxed">
+                          ⚠️ <strong>หมายเหตุสำคัญ:</strong> กรุณาตรวจสอบเบอร์โทรศัพท์มือถือให้ถูกต้องและจำเบอร์นี้ไว้ เนื่องจากระบบจะใช้เบอร์โทรศัพท์นี้ในการยืนยันตัวตนเข้าร่วมกิจกรรมในงาน และสแกน QR Code เพื่อให้คะแนนการประกวดแต่งกาย (1 เบอร์ / 1 สิทธิ์การตัดสิน)
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
 
                 </div>
               )}
@@ -1584,133 +1637,17 @@ export default function SmeFanRegistration({
               {regType === 'guest' && (
                 <div className="space-y-4">
                   
-                  {/* Prefix / Salutation Selector */}
-                  <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-3.5 sm:p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <label className="block text-xs font-semibold text-slate-200">
-                        คำนำหน้า / ยศ / ตำแหน่ง (สำหรับแขกผู้มีเกียรติและผู้ใหญ่) <span className="text-rose-400">*</span>
-                      </label>
-                    </div>
-
-                    {/* Quick 1-tap chip shortcuts */}
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-[11px] text-slate-400 mr-1 shrink-0">เลือกด่วน:</span>
-                      {["นาย", "นาง", "นางสาว", "เด็กชาย", "เด็กหญิง"].map((chip) => {
-                        const isSelected = titlePrefix === chip;
-                        return (
-                          <button
-                            key={chip}
-                            type="button"
-                            onClick={() => {
-                              setTitlePrefix(chip);
-                              setCustomPrefix("");
-                              setErrors(prev => ({ ...prev, titlePrefix: null }));
-                              if (chip === 'นาง' || chip === 'นางสาว' || chip === 'เด็กหญิง') {
-                                setShirtGender("หญิง");
-                              } else if (chip === 'นาย' || chip === 'เด็กชาย') {
-                                setShirtGender("ชาย");
-                              }
-                            }}
-                            className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
-                              isSelected
-                                ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/30 ring-1 ring-white/50'
-                                : isWhiteCard
-                                  ? 'bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200'
-                                  : 'bg-slate-950/80 border border-white/10 text-slate-300 hover:bg-white/10 hover:text-white'
-                            }`}
-                          >
-                            {chip}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Full Categorized Dropdown Selector (ลูกศรชี้ลง) */}
-                    <div className="relative">
-                      <select
-                        value={titlePrefix}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setTitlePrefix(val);
-                          if (val !== 'other') setCustomPrefix("");
-                          setErrors(prev => ({ ...prev, titlePrefix: null, customPrefix: null }));
-                        }}
-                        className={`w-full px-3 py-2.5 rounded-xl text-xs border focus:outline-none focus:border-amber-500 cursor-pointer ${
-                          errors.titlePrefix ? 'border-rose-500' : ''
-                        } ${
-                          isWhiteCard
-                            ? 'bg-white border-slate-300 text-slate-900'
-                            : 'bg-slate-950 border-white/10 text-white'
-                        }`}
-                      >
-                        <option value="" className={isWhiteCard ? "bg-white text-slate-400" : "bg-slate-900 text-slate-400"}>
-                          ▼ ตัวเลือกคำนำหน้า / ยศ / ตำแหน่ง อื่น ๆ (คลิกเพื่อเลือกจากรายการ)...
-                        </option>
-                        {PREFIX_GROUPS.map((group) => (
-                          <optgroup 
-                            key={group.category} 
-                            label={`━━━ ${group.category} ━━━`} 
-                            className={isWhiteCard ? "bg-white font-semibold text-amber-700" : "bg-slate-900 font-semibold text-amber-400"}
-                          >
-                            {group.options.map((opt) => (
-                              <option 
-                                key={opt} 
-                                value={opt} 
-                                className={isWhiteCard ? "bg-white text-slate-900 font-normal pl-4" : "bg-slate-900 text-white font-normal pl-4"}
-                              >
-                                {opt}
-                              </option>
-                            ))}
-                          </optgroup>
-                        ))}
-                        <optgroup 
-                          label="━━━ กำหนดเอง ━━━" 
-                          className={isWhiteCard ? "bg-white font-semibold text-amber-700" : "bg-slate-900 font-semibold text-amber-400"}
-                        >
-                          <option 
-                            value="other" 
-                            className={isWhiteCard ? "bg-white text-slate-900 font-medium" : "bg-slate-900 text-white font-medium"}
-                          >
-                            ✏️ อื่น ๆ (พิมพ์ระบุคำนำหน้า/ยศเอง...)
-                          </option>
-                        </optgroup>
-                      </select>
-                    </div>
-
-                    {errors.titlePrefix && (
-                      <span className="text-rose-400 text-[11px] block mt-1">{errors.titlePrefix}</span>
-                    )}
-
-                    {/* Custom Prefix Input if 'other' */}
-                    {titlePrefix === 'other' && (
-                      <div className="pt-1">
-                        <label className="block text-[11px] font-medium text-amber-300 mb-1">
-                          พิมพ์คำนำหน้าหรือยศตำแหน่งที่ต้องการ <span className="text-rose-400">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={customPrefix}
-                          onChange={(e) => setCustomPrefix(e.target.value)}
-                          placeholder="เช่น ท่านผู้หญิง, พ.อ.(พิเศษ), รศ.ดร., กำนัน"
-                          className="w-full px-3 py-2.5 rounded-xl text-xs bg-slate-950 border border-amber-500/50 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
-                        />
-                        {errors.customPrefix && (
-                          <span className="text-rose-400 text-[11px] mt-1 block">{errors.customPrefix}</span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
+                  {/* Guest Name & Nickname */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-medium text-slate-300 mb-1">
-                        ชื่อ - นามสกุลจริง {titlePrefix ? `(${titlePrefix === 'other' ? (customPrefix || 'ยศ/ตำแหน่ง') : titlePrefix} ...)` : ''} <span className="text-rose-400">*</span>
+                        ชื่อ - นามสกุลจริง <span className="text-rose-400">*</span>
                       </label>
                       <input
                         type="text"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
-                        placeholder="พิมพ์ชื่อจริงและนามสกุล (ไม่ต้องพิมพ์คำนำหน้าซ้ำ)"
+                        placeholder="พิมพ์ชื่อจริงและนามสกุล..."
                         className="w-full px-3 py-2.5 rounded-xl text-xs bg-slate-950 border border-white/10 text-white focus:outline-none focus:border-amber-500"
                       />
                       {errors.name && <span className="text-rose-400 text-[11px] mt-1 block">{errors.name}</span>}
@@ -1956,282 +1893,299 @@ export default function SmeFanRegistration({
                     </div>
                   </div>
 
-                  {/* PROMINENT PHONE & EMAIL SECTION (GUEST) */}
-                  <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-yellow-500/10 to-amber-500/5 border-2 border-amber-500/40 shadow-lg space-y-3">
-                    {/* 1. Phone Row */}
-                    <div className="space-y-1.5">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                        <label className="text-xs sm:text-sm font-bold text-amber-300 flex items-center space-x-1.5">
-                          <Phone className="w-4 h-4 text-amber-400 shrink-0" />
-                          <span>เบอร์โทรศัพท์มือถือ * (ตรวจสอบให้ถูกต้อง)</span>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold shrink-0">
-                            สำคัญมาก
-                          </span>
-                        </label>
-                        <span className="text-[11px] text-amber-200/90 font-medium">
-                          ⭐ ใช้ยืนยันตัวตนร่วมกิจกรรม & เป็นกรรมการตัดสิน
-                        </span>
+                  {/* Guest Info Dependent Section (Phone & Recommender) */}
+                  {!(name.trim() && birthDate) ? (
+                    <div className="p-4 sm:p-5 rounded-2xl bg-amber-500/10 border-2 border-dashed border-amber-500/30 text-center space-y-1.5 my-2 animate-in fade-in">
+                      <div className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-amber-500/20 text-amber-300 mb-1">
+                        <UserCheck className="w-4 h-4 text-amber-400" />
                       </div>
-                      <input
-                        type="text"
-                        value={phone}
-                        onChange={(e) => setPhone(formatPhoneNumber(e.target.value))}
-                        placeholder="08x-xxx-xxxx"
-                        className="w-full px-3.5 py-2.5 rounded-xl text-sm sm:text-base bg-slate-950 border-2 border-amber-400/60 text-amber-300 font-mono font-bold tracking-wider placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 shadow-inner"
-                      />
-                      {errors.phone && <span className="text-rose-400 text-[11px] mt-1 block font-semibold">{errors.phone}</span>}
+                      <p className="text-xs sm:text-sm font-bold text-amber-300">
+                        👆 กรุณากรอก "ชื่อ - นามสกุลจริง" และเลือก "วันเดือนปีเกิด" ด้านบนให้เรียบร้อย
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        เมื่อกรอกชื่อและวันเกิดแล้ว ช่องกรอกเบอร์โทรศัพท์มือถือและเลือกสมาชิกผู้แนะนำจะแสดงขึ้นมาโดยอัตโนมัติครับ
+                      </p>
                     </div>
-
-                    {/* 2. Email Row (Separate Line) */}
-                    <div className="space-y-1.5 pt-2.5 border-t border-amber-500/20">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-semibold text-slate-300 flex items-center space-x-1.5">
-                          <Mail className="w-3.5 h-3.5 text-amber-400/90 shrink-0" />
-                          <span>อีเมล (Email) สำหรับรับบัตรเข้างาน E-Ticket</span>
-                        </label>
-                        <span className="text-[10px] text-slate-400">(ไม่บังคับ)</span>
-                      </div>
-                      <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="อีเมล (สำหรับรับบัตร E-Ticket เช่น name@example.com)"
-                        className="w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm bg-slate-950/80 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 shadow-inner"
-                      />
-                    </div>
-
-                    {/* Important Warning Note */}
-                    <div className="text-[11px] text-amber-200/80 bg-amber-950/40 p-2.5 rounded-xl border border-amber-500/20 leading-relaxed">
-                      ⚠️ <strong>หมายเหตุสำคัญ:</strong> กรุณาตรวจสอบเบอร์โทรศัพท์มือถือให้ถูกต้องและจำเบอร์นี้ไว้ เนื่องจากระบบจะใช้เบอร์โทรศัพท์นี้ในการยืนยันตัวตนเข้าร่วมกิจกรรมในงาน และสแกน QR Code เพื่อให้คะแนนการประกวดแต่งกาย (1 เบอร์ / 1 สิทธิ์การตัดสิน)
-                    </div>
-                  </div>
-
-                  {/* Club & Recommender */}
-                  <div className="pt-2 border-t border-white/10 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <label className="block text-xs font-semibold text-slate-300">
-                        {isInlineEditing ? (
-                          <div className="flex items-center space-x-2">
-                            <span className="text-[10px] text-amber-400 font-mono">✏️ แก้ไขหัวข้อ:</span>
-                            <input
-                              type="text"
-                              value={eventConfig.guestRecommenderLabel || "สังกัดสนามและสมาชิกที่เป็นผู้แนะนำ:"}
-                              onChange={(e) => handleUpdateConfig('guestRecommenderLabel', e.target.value)}
-                              className="bg-slate-950 border border-dashed border-amber-400 rounded-lg px-2 py-0.5 text-xs text-white focus:outline-none"
-                            />
+                  ) : (
+                    <div className="space-y-4 pt-1 animate-in fade-in duration-300">
+                      {/* PROMINENT PHONE & EMAIL SECTION (GUEST) */}
+                      <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-yellow-500/10 to-amber-500/5 border-2 border-amber-500/40 shadow-lg space-y-3">
+                        {/* 1. Phone Row */}
+                        <div className="space-y-1.5">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                            <label className="text-xs sm:text-sm font-bold text-amber-300 flex items-center space-x-1.5">
+                              <Phone className="w-4 h-4 text-amber-400 shrink-0" />
+                              <span>เบอร์โทรศัพท์มือถือ * (ตรวจสอบให้ถูกต้อง)</span>
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold shrink-0">
+                                สำคัญมาก
+                              </span>
+                            </label>
+                            <span className="text-[11px] text-amber-200/90 font-medium">
+                              ⭐ ใช้ยืนยันตัวตนร่วมกิจกรรม & เป็นกรรมการตัดสิน
+                            </span>
                           </div>
-                        ) : (
-                          <span>{eventConfig.guestRecommenderLabel || "สังกัดสนามและสมาชิกที่เป็นผู้แนะนำ:"} <span className="text-rose-400">*</span></span>
-                        )}
-                      </label>
-                      <span className="text-[11px] text-slate-400 hidden sm:inline">
-                        🔍 พิมพ์ค้นหาชื่อ หรือเลือกจากสนาม
-                      </span>
-                    </div>
+                          <input
+                            type="text"
+                            value={phone}
+                            onChange={(e) => setPhone(formatPhoneNumber(e.target.value))}
+                            placeholder="08x-xxx-xxxx"
+                            className="w-full px-3.5 py-2.5 rounded-xl text-sm sm:text-base bg-slate-950 border-2 border-amber-400/60 text-amber-300 font-mono font-bold tracking-wider placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 shadow-inner"
+                          />
+                          {errors.phone && <span className="text-rose-400 text-[11px] mt-1 block font-semibold">{errors.phone}</span>}
+                        </div>
 
-                    {/* Club Selector Pills */}
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedClub('all')}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                          selectedClub === 'all'
-                            ? 'bg-emerald-500 text-slate-950 shadow-md scale-105'
-                            : 'bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10'
-                        }`}
-                      >
-                        ทุกสนาม ({eventConfig.members?.length || 0})
-                      </button>
-                      {eventConfig.clubs.map((c) => {
-                        const countInClub = (eventConfig.members || []).filter(m => m.club === c).length;
-                        return (
+                        {/* 2. Email Row (Separate Line) */}
+                        <div className="space-y-1.5 pt-2.5 border-t border-amber-500/20">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-semibold text-slate-300 flex items-center space-x-1.5">
+                              <Mail className="w-3.5 h-3.5 text-amber-400/90 shrink-0" />
+                              <span>อีเมล (Email) สำหรับรับบัตรเข้างาน E-Ticket</span>
+                            </label>
+                            <span className="text-[10px] text-slate-400">(ไม่บังคับ)</span>
+                          </div>
+                          <input
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            placeholder="อีเมล (สำหรับรับบัตร E-Ticket เช่น name@example.com)"
+                            className="w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm bg-slate-950/80 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 shadow-inner"
+                          />
+                        </div>
+
+                        {/* Important Warning Note */}
+                        <div className="text-[11px] text-amber-200/80 bg-amber-950/40 p-2.5 rounded-xl border border-amber-500/20 leading-relaxed">
+                          ⚠️ <strong>หมายเหตุสำคัญ:</strong> กรุณาตรวจสอบเบอร์โทรศัพท์มือถือให้ถูกต้องและจำเบอร์นี้ไว้ เนื่องจากระบบจะใช้เบอร์โทรศัพท์นี้ในการยืนยันตัวตนเข้าร่วมกิจกรรมในงาน และสแกน QR Code เพื่อให้คะแนนการประกวดแต่งกาย (1 เบอร์ / 1 สิทธิ์การตัดสิน)
+                        </div>
+                      </div>
+
+                      {/* Club & Recommender */}
+                      <div className="pt-2 border-t border-white/10 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <label className="block text-xs font-semibold text-slate-300">
+                            {isInlineEditing ? (
+                              <div className="flex items-center space-x-2">
+                                <span className="text-[10px] text-amber-400 font-mono">✏️ แก้ไขหัวข้อ:</span>
+                                <input
+                                  type="text"
+                                  value={eventConfig.guestRecommenderLabel || "สังกัดสนามและสมาชิกที่เป็นผู้แนะนำ:"}
+                                  onChange={(e) => handleUpdateConfig('guestRecommenderLabel', e.target.value)}
+                                  className="bg-slate-950 border border-dashed border-amber-400 rounded-lg px-2 py-0.5 text-xs text-white focus:outline-none"
+                                />
+                              </div>
+                            ) : (
+                              <span>{eventConfig.guestRecommenderLabel || "สังกัดสนามและสมาชิกที่เป็นผู้แนะนำ:"} <span className="text-rose-400">*</span></span>
+                            )}
+                          </label>
+                          <span className="text-[11px] text-slate-400 hidden sm:inline">
+                            🔍 พิมพ์ค้นหาชื่อ หรือเลือกจากสนาม
+                          </span>
+                        </div>
+
+                        {/* Club Selector Pills */}
+                        <div className="flex flex-wrap items-center gap-2">
                           <button
-                            key={c}
                             type="button"
-                            onClick={() => {
-                              setSelectedClub(c);
-                            }}
+                            onClick={() => setSelectedClub('all')}
                             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                              selectedClub === c
+                              selectedClub === 'all'
                                 ? 'bg-emerald-500 text-slate-950 shadow-md scale-105'
                                 : 'bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10'
                             }`}
                           >
-                            สนาม {c} {countInClub > 0 && <span className="text-[10px] opacity-80">({countInClub})</span>}
+                            ทุกสนาม ({eventConfig.members?.length || 0})
                           </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Searchable Recommender Input with Autocomplete */}
-                    <div ref={recommenderContainerRef} className="relative">
-                      {/* Search Bar Input */}
-                      <div className="relative">
-                        <Search className="w-4 h-4 text-emerald-400 absolute left-3.5 top-3.5" />
-                        <input
-                          type="text"
-                          value={recommenderSearch}
-                          onFocus={() => setIsRecommenderOpen(true)}
-                          onChange={(e) => {
-                            setRecommenderSearch(e.target.value);
-                            setIsRecommenderOpen(true);
-                            if (recommender && e.target.value !== recommender) {
-                              setRecommender("");
-                            }
-                          }}
-                          placeholder={
-                            selectedClub && selectedClub !== 'all'
-                              ? `พิมพ์ค้นหาชื่อ หรือชื่อเล่นสมาชิกในสนาม ${selectedClub} (เช่น 'ทีป์', 'ทิพย์', 'สมชาย')...`
-                              : `พิมพ์ค้นหาชื่อสมาชิกผู้แนะนำ หรือชื่อเล่น...`
-                          }
-                          className="w-full pl-10 pr-20 py-3 rounded-2xl text-xs bg-slate-950 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-all shadow-inner"
-                        />
-                        <div className="absolute right-2.5 top-2.5 flex items-center space-x-1">
-                          {recommenderSearch && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setRecommenderSearch("");
-                                setRecommender("");
-                                setIsRecommenderOpen(true);
-                              }}
-                              className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors"
-                              title="ล้างข้อความค้นหา"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => setIsRecommenderOpen(!isRecommenderOpen)}
-                            className="p-1 text-slate-400 hover:text-emerald-400 rounded-lg hover:bg-white/10 transition-colors"
-                            title="เปิด/ปิด รายชื่อสมาชิก"
-                          >
-                            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isRecommenderOpen ? 'rotate-180 text-emerald-400' : ''}`} />
-                          </button>
+                          {eventConfig.clubs.map((c) => {
+                            const countInClub = (eventConfig.members || []).filter(m => m.club === c).length;
+                            return (
+                              <button
+                                key={c}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedClub(c);
+                                }}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                                  selectedClub === c
+                                    ? 'bg-emerald-500 text-slate-950 shadow-md scale-105'
+                                    : 'bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10'
+                                }`}
+                              >
+                                สนาม {c} {countInClub > 0 && <span className="text-[10px] opacity-80">({countInClub})</span>}
+                              </button>
+                            );
+                          })}
                         </div>
-                      </div>
 
-                      {/* Autocomplete Dropdown List */}
-                      {isRecommenderOpen && (
-                        <div className="absolute top-full left-0 right-0 mt-1.5 bg-slate-900 border border-white/15 rounded-2xl shadow-2xl z-40 max-h-60 overflow-y-auto divide-y divide-white/5 animate-in fade-in duration-150">
-                          {/* Helper Header */}
-                          <div className="p-2.5 bg-slate-950/90 text-[11px] text-slate-400 flex items-center justify-between sticky top-0 z-10 backdrop-blur-md">
-                            <span>
-                              {selectedClub && selectedClub !== 'all' ? `สมาชิกในสนาม ${selectedClub}` : 'สมาชิกทุกสนาม'} ({filteredRecommenderMembers.length} ท่าน)
-                            </span>
-                            <span className="text-[10px] text-emerald-400 font-semibold">คลิกเพื่อเลือกทันที</span>
+                        {/* Searchable Recommender Input with Autocomplete */}
+                        <div ref={recommenderContainerRef} className="relative">
+                          {/* Search Bar Input */}
+                          <div className="relative">
+                            <Search className="w-4 h-4 text-emerald-400 absolute left-3.5 top-3.5" />
+                            <input
+                              type="text"
+                              value={recommenderSearch}
+                              onFocus={() => setIsRecommenderOpen(true)}
+                              onChange={(e) => {
+                                setRecommenderSearch(e.target.value);
+                                setIsRecommenderOpen(true);
+                                if (recommender && e.target.value !== recommender) {
+                                  setRecommender("");
+                                }
+                              }}
+                              placeholder={
+                                selectedClub && selectedClub !== 'all'
+                                  ? `พิมพ์ค้นหาชื่อ หรือชื่อเล่นสมาชิกในสนาม ${selectedClub} (เช่น 'ทีป์', 'ทิพย์', 'สมชาย')...`
+                                  : `พิมพ์ค้นหาชื่อสมาชิกผู้แนะนำ หรือชื่อเล่น...`
+                              }
+                              className="w-full pl-10 pr-20 py-3 rounded-2xl text-xs bg-slate-950 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-all shadow-inner"
+                            />
+                            <div className="absolute right-2.5 top-2.5 flex items-center space-x-1">
+                              {recommenderSearch && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setRecommenderSearch("");
+                                    setRecommender("");
+                                    setIsRecommenderOpen(true);
+                                  }}
+                                  className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors"
+                                  title="ล้างข้อความค้นหา"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setIsRecommenderOpen(!isRecommenderOpen)}
+                                className="p-1 text-slate-400 hover:text-emerald-400 rounded-lg hover:bg-white/10 transition-colors"
+                                title="เปิด/ปิด รายชื่อสมาชิก"
+                              >
+                                <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isRecommenderOpen ? 'rotate-180 text-emerald-400' : ''}`} />
+                              </button>
+                            </div>
                           </div>
 
-                          {/* Member Suggestions */}
-                          {filteredRecommenderMembers.length > 0 ? (
-                            filteredRecommenderMembers.map((m) => {
-                              const isCurrent = recommender === m.name;
-                              return (
-                                <button
-                                  key={m.id}
-                                  type="button"
-                                  onClick={() => handleSelectRecommender(m)}
-                                  className={`w-full p-3 text-left transition-all flex items-center justify-between text-xs group ${
-                                    isCurrent ? 'bg-emerald-500/20' : 'hover:bg-emerald-500/15'
-                                  }`}
-                                >
-                                  <div className="flex items-center space-x-2.5">
-                                    <div className="w-7 h-7 rounded-xl bg-white/5 group-hover:bg-emerald-500/20 text-slate-300 group-hover:text-emerald-300 flex items-center justify-center shrink-0">
-                                      <UserCheck className="w-3.5 h-3.5" />
-                                    </div>
-                                    <div>
-                                      <div className="flex items-center space-x-1.5 flex-wrap">
-                                        {m.memberCode && (
-                                          <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold border border-emerald-500/30">
-                                            {m.memberCode}
-                                          </span>
-                                        )}
-                                        <span className="font-bold text-white group-hover:text-emerald-300 transition-colors">
-                                          {m.name}
-                                        </span>
+                          {/* Autocomplete Dropdown List */}
+                          {isRecommenderOpen && (
+                            <div className="absolute top-full left-0 right-0 mt-1.5 bg-slate-900 border border-white/15 rounded-2xl shadow-2xl z-40 max-h-60 overflow-y-auto divide-y divide-white/5 animate-in fade-in duration-150">
+                              {/* Helper Header */}
+                              <div className="p-2.5 bg-slate-950/90 text-[11px] text-slate-400 flex items-center justify-between sticky top-0 z-10 backdrop-blur-md">
+                                <span>
+                                  {selectedClub && selectedClub !== 'all' ? `สมาชิกในสนาม ${selectedClub}` : 'สมาชิกทุกสนาม'} ({filteredRecommenderMembers.length} ท่าน)
+                                </span>
+                                <span className="text-[10px] text-emerald-400 font-semibold">คลิกเพื่อเลือกทันที</span>
+                              </div>
+
+                              {/* Member Suggestions */}
+                              {filteredRecommenderMembers.length > 0 ? (
+                                filteredRecommenderMembers.map((m) => {
+                                  const isCurrent = recommender === m.name;
+                                  return (
+                                    <button
+                                      key={m.id}
+                                      type="button"
+                                      onClick={() => handleSelectRecommender(m)}
+                                      className={`w-full p-3 text-left transition-all flex items-center justify-between text-xs group ${
+                                        isCurrent ? 'bg-emerald-500/20' : 'hover:bg-emerald-500/15'
+                                      }`}
+                                    >
+                                      <div className="flex items-center space-x-2.5">
+                                        <div className="w-7 h-7 rounded-xl bg-white/5 group-hover:bg-emerald-500/20 text-slate-300 group-hover:text-emerald-300 flex items-center justify-center shrink-0">
+                                          <UserCheck className="w-3.5 h-3.5" />
+                                        </div>
+                                        <div>
+                                          <div className="flex items-center space-x-1.5 flex-wrap">
+                                            {m.memberCode && (
+                                              <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold border border-emerald-500/30">
+                                                {m.memberCode}
+                                              </span>
+                                            )}
+                                            <span className="font-bold text-white group-hover:text-emerald-300 transition-colors">
+                                              {m.name}
+                                            </span>
+                                          </div>
+                                          {m.nickname && (
+                                            <span className="text-emerald-400 font-semibold text-[11px]">
+                                              ({m.nickname})
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
-                                      {m.nickname && (
-                                        <span className="text-emerald-400 font-semibold text-[11px]">
-                                          ({m.nickname})
+                                      <div className="flex items-center space-x-2 shrink-0">
+                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-slate-300 border border-white/10">
+                                          สนาม {m.club}
                                         </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center space-x-2 shrink-0">
-                                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-slate-300 border border-white/10">
-                                      สนาม {m.club}
-                                    </span>
-                                    {isCurrent && <Check className="w-4 h-4 text-emerald-400 shrink-0" />}
+                                        {isCurrent && <Check className="w-4 h-4 text-emerald-400 shrink-0" />}
+                                      </div>
+                                    </button>
+                                  );
+                                })
+                              ) : (
+                                <div className="p-4 text-center text-xs text-slate-400 space-y-1">
+                                  <div>ไม่พบชื่อสมาชิกที่ตรงกับ "<strong>{recommenderSearch}</strong>"</div>
+                                  <div className="text-[11px] text-slate-500">ท่านสามารถใช้ชื่อนี้เป็นผู้แนะนำได้โดยตรงด้านล่าง</div>
+                                </div>
+                              )}
+
+                              {/* Allow Custom Free-text Recommender */}
+                              {recommenderSearch.trim() && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleCustomRecommender(recommenderSearch.trim())}
+                                  className="w-full p-3 text-left bg-emerald-950/70 hover:bg-emerald-900/70 text-emerald-300 text-xs flex items-center space-x-2 font-medium border-t border-emerald-500/20 transition-colors"
+                                >
+                                  <Plus className="w-4 h-4 text-emerald-400 shrink-0" />
+                                  <div className="truncate">
+                                    <span>ระบุชื่อนี้เป็นผู้แนะนำ: </span>
+                                    <strong className="text-white underline underline-offset-2">"{recommenderSearch.trim()}"</strong>
                                   </div>
                                 </button>
-                              );
-                            })
-                          ) : (
-                            <div className="p-4 text-center text-xs text-slate-400 space-y-1">
-                              <div>ไม่พบชื่อสมาชิกที่ตรงกับ "<strong>{recommenderSearch}</strong>"</div>
-                              <div className="text-[11px] text-slate-500">ท่านสามารถใช้ชื่อนี้เป็นผู้แนะนำได้โดยตรงด้านล่าง</div>
+                              )}
                             </div>
                           )}
 
-                          {/* Allow Custom Free-text Recommender */}
-                          {recommenderSearch.trim() && (
-                            <button
-                              type="button"
-                              onClick={() => handleCustomRecommender(recommenderSearch.trim())}
-                              className="w-full p-3 text-left bg-emerald-950/70 hover:bg-emerald-900/70 text-emerald-300 text-xs flex items-center space-x-2 font-medium border-t border-emerald-500/20 transition-colors"
-                            >
-                              <Plus className="w-4 h-4 text-emerald-400 shrink-0" />
-                              <div className="truncate">
-                                <span>ระบุชื่อนี้เป็นผู้แนะนำ: </span>
-                                <strong className="text-white underline underline-offset-2">"{recommenderSearch.trim()}"</strong>
+                          {/* Confirmed Selection Badge */}
+                          {recommender && (
+                            <div className="mt-2.5 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/40 text-xs flex items-center justify-between">
+                              <div className="flex items-center space-x-2.5">
+                                <div className="w-7 h-7 rounded-xl bg-emerald-500 text-slate-950 flex items-center justify-center font-bold">
+                                  <Check className="w-4 h-4" />
+                                </div>
+                                <div>
+                                  <div className="text-[10px] text-emerald-400 font-semibold">สมาชิกผู้แนะนำที่เลือก:</div>
+                                  <div className="font-bold text-white text-xs sm:text-sm">
+                                    {recommender}
+                                    {selectedClub && selectedClub !== 'all' && (
+                                      <span className="ml-2 text-[10px] font-normal text-emerald-300 px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/30">
+                                        สนาม {selectedClub}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
-                            </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setRecommender("");
+                                  setRecommenderSearch("");
+                                  setIsRecommenderOpen(true);
+                                }}
+                                className="text-[11px] text-slate-300 hover:text-white px-2.5 py-1 rounded-xl bg-white/10 hover:bg-white/15 transition-all flex items-center space-x-1"
+                              >
+                                <RotateCcw className="w-3 h-3" />
+                                <span>เปลี่ยน</span>
+                              </button>
+                            </div>
+                          )}
+
+                          {errors.recommender && (
+                            <span className="text-rose-400 text-[11px] mt-1.5 block font-medium">
+                              {errors.recommender}
+                            </span>
                           )}
                         </div>
-                      )}
-
-                      {/* Confirmed Selection Badge */}
-                      {recommender && (
-                        <div className="mt-2.5 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/40 text-xs flex items-center justify-between">
-                          <div className="flex items-center space-x-2.5">
-                            <div className="w-7 h-7 rounded-xl bg-emerald-500 text-slate-950 flex items-center justify-center font-bold">
-                              <Check className="w-4 h-4" />
-                            </div>
-                            <div>
-                              <div className="text-[10px] text-emerald-400 font-semibold">สมาชิกผู้แนะนำที่เลือก:</div>
-                              <div className="font-bold text-white text-xs sm:text-sm">
-                                {recommender}
-                                {selectedClub && selectedClub !== 'all' && (
-                                  <span className="ml-2 text-[10px] font-normal text-emerald-300 px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/30">
-                                    สนาม {selectedClub}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setRecommender("");
-                              setRecommenderSearch("");
-                              setIsRecommenderOpen(true);
-                            }}
-                            className="text-[11px] text-slate-300 hover:text-white px-2.5 py-1 rounded-xl bg-white/10 hover:bg-white/15 transition-all flex items-center space-x-1"
-                          >
-                            <RotateCcw className="w-3 h-3" />
-                            <span>เปลี่ยน</span>
-                          </button>
-                        </div>
-                      )}
-
-                      {errors.recommender && (
-                        <span className="text-rose-400 text-[11px] mt-1.5 block font-medium">
-                          {errors.recommender}
-                        </span>
-                      )}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                 </div>
               )}
