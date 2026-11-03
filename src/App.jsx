@@ -28,7 +28,7 @@ import {
 } from './utils/supabaseClient';
 
 const CONFIG_STORAGE_KEY = 'sme_fan_config_v3';
-const REGISTRATIONS_STORAGE_KEY = 'sme_fan_registrations_v3';
+const REGISTRATIONS_STORAGE_KEY = 'sme_fan_registrations_v4';
 const USER_STORAGE_KEY = 'sme_fan_admin_user_v5';
 const ACTIVE_TAB_STORAGE_KEY = 'sme_fan_active_tab_v3';
 
@@ -163,6 +163,14 @@ export default function App() {
   // 2. Registrations List State (Preserves real registered attendees across reloads)
   const [registrations, setRegistrations] = useState(() => {
     try {
+      // Auto-purge test registrations & contest data from previous test runs across all devices
+      [
+        'sme_fan_registrations', 'sme_fan_registrations_v1', 'sme_fan_registrations_v2', 'sme_fan_registrations_v3',
+        'sme_fan_contest_teams', 'sme_fan_contest_teams_v1',
+        'sme_fan_contest_votes', 'sme_fan_contest_all_votes', 'sme_fan_contest_all_votes_v1'
+      ].forEach(k => {
+        try { localStorage.removeItem(k); } catch (e) {}
+      });
       const saved = localStorage.getItem(REGISTRATIONS_STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
@@ -802,6 +810,8 @@ export default function App() {
       localStorage.removeItem(REGISTRATIONS_STORAGE_KEY);
       localStorage.removeItem(FORMS_STORAGE_KEY);
       localStorage.removeItem(USER_STORAGE_KEY);
+      localStorage.removeItem("sme_fan_contest_teams_v2");
+      localStorage.removeItem("sme_fan_contest_all_votes_v2");
       alert("รีเซ็ตข้อมูลเรียบร้อยแล้ว");
     }
   };
@@ -899,7 +909,7 @@ export default function App() {
               attendees={registrations}
               onSaveVotes={(voteData) => {
                 try {
-                  const saved = localStorage.getItem("sme_fan_contest_all_votes_v1");
+                  const saved = localStorage.getItem("sme_fan_contest_all_votes_v2");
                   let list = saved ? JSON.parse(saved) : [];
                   const cleanVPhone = cleanPhoneNumber(voteData.judgePhone);
                   const existingIdx = list.findIndex(v => 
@@ -924,7 +934,7 @@ export default function App() {
                       auditTrail: voteData.auditLogs || []
                     });
                   }
-                  localStorage.setItem("sme_fan_contest_all_votes_v1", JSON.stringify(list));
+                  localStorage.setItem("sme_fan_contest_all_votes_v2", JSON.stringify(list));
                 } catch (e) {}
               }}
             />

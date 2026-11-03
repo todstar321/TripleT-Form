@@ -143,7 +143,8 @@ export default function ContestJudgeModal({
   // Effective teams fallback to localStorage if not provided or empty
   const effectiveTeams = (teams && teams.length > 0) ? teams : (() => {
     try {
-      const saved = localStorage.getItem("sme_fan_contest_teams_v1");
+      localStorage.removeItem("sme_fan_contest_teams_v1");
+      const saved = localStorage.getItem("sme_fan_contest_teams_v2");
       return saved ? JSON.parse(saved) : [];
     } catch (e) {
       return [];
@@ -154,7 +155,8 @@ export default function ContestJudgeModal({
   const getAllSubmittedVotes = () => {
     try {
       if (existingVotes && existingVotes.length > 0) return existingVotes;
-      const saved = localStorage.getItem("sme_fan_contest_all_votes_v1");
+      localStorage.removeItem("sme_fan_contest_all_votes_v1");
+      const saved = localStorage.getItem("sme_fan_contest_all_votes_v2");
       return saved ? JSON.parse(saved) : [];
     } catch (e) {
       return [];

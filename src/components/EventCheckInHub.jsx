@@ -64,6 +64,9 @@ const getSharedAudioContext = () => {
   return sharedAudioCtx;
 };
 
+const CONTEST_TEAMS_STORAGE_KEY = "sme_fan_contest_teams_v2";
+const CONTEST_VOTES_STORAGE_KEY = "sme_fan_contest_all_votes_v2";
+
 export default function EventCheckInHub({
   eventConfig,
   currentUser,
@@ -127,7 +130,8 @@ export default function EventCheckInHub({
   // Teams in Contest (Persisted in localStorage)
   const [contestTeams, setContestTeams] = useState(() => {
     try {
-      const saved = localStorage.getItem("sme_fan_contest_teams_v1");
+      localStorage.removeItem("sme_fan_contest_teams_v1");
+      const saved = localStorage.getItem(CONTEST_TEAMS_STORAGE_KEY);
       return saved ? JSON.parse(saved) : [];
     } catch (e) {
       return [];
@@ -142,7 +146,8 @@ export default function EventCheckInHub({
   // All Judge Votes (Persisted in localStorage)
   const [allJudgeVotes, setAllJudgeVotes] = useState(() => {
     try {
-      const saved = localStorage.getItem("sme_fan_contest_all_votes_v1");
+      localStorage.removeItem("sme_fan_contest_all_votes_v1");
+      const saved = localStorage.getItem(CONTEST_VOTES_STORAGE_KEY);
       return saved ? JSON.parse(saved) : [];
     } catch (e) {
       return [];
@@ -152,7 +157,7 @@ export default function EventCheckInHub({
   // Sync contest teams to localStorage
   useEffect(() => {
     try {
-      localStorage.setItem("sme_fan_contest_teams_v1", JSON.stringify(contestTeams));
+      localStorage.setItem(CONTEST_TEAMS_STORAGE_KEY, JSON.stringify(contestTeams));
     } catch (e) {}
   }, [contestTeams]);
 
@@ -168,7 +173,7 @@ export default function EventCheckInHub({
   useEffect(() => {
     const interval = setInterval(() => {
       try {
-        const saved = localStorage.getItem("sme_fan_contest_all_votes_v1");
+        const saved = localStorage.getItem(CONTEST_VOTES_STORAGE_KEY);
         if (saved) {
           const parsed = JSON.parse(saved);
           if (JSON.stringify(parsed) !== JSON.stringify(allJudgeVotes)) {
@@ -1696,7 +1701,7 @@ export default function EventCheckInHub({
               type="button"
               onClick={() => {
                 try {
-                  const saved = localStorage.getItem("sme_fan_contest_all_votes_v1");
+                  const saved = localStorage.getItem(CONTEST_VOTES_STORAGE_KEY);
                   setAllJudgeVotes(saved ? JSON.parse(saved) : []);
                   playAudioEffect("beep");
                 } catch (e) {}
@@ -2269,7 +2274,7 @@ export default function EventCheckInHub({
                         if (window.confirm("ต้องการรีเซ็ตผลคะแนนจากกรรมการทั้งหมดเป็น 0 ใช่หรือไม่?")) {
                           setAllJudgeVotes([]);
                           try {
-                            localStorage.removeItem("sme_fan_contest_all_votes_v1");
+                            localStorage.removeItem(CONTEST_VOTES_STORAGE_KEY);
                           } catch (e) {}
                         }
                       }}
@@ -3434,7 +3439,7 @@ export default function EventCheckInHub({
         existingVotes={allJudgeVotes}
         onSaveVotes={(voteData) => {
           try {
-            const saved = localStorage.getItem("sme_fan_contest_all_votes_v1");
+            const saved = localStorage.getItem(CONTEST_VOTES_STORAGE_KEY);
             let list = saved ? JSON.parse(saved) : [];
             const cleanVPhone = cleanPhoneNumber(voteData.judgePhone);
             const existingIdx = list.findIndex(v => 
@@ -3459,7 +3464,7 @@ export default function EventCheckInHub({
                 auditTrail: voteData.auditLogs || []
               });
             }
-            localStorage.setItem("sme_fan_contest_all_votes_v1", JSON.stringify(list));
+            localStorage.setItem(CONTEST_VOTES_STORAGE_KEY, JSON.stringify(list));
             setAllJudgeVotes([...list]);
             playAudioEffect("fanfare");
             triggerConfetti();
