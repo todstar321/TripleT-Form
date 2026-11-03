@@ -29,11 +29,11 @@ import {
 
 const CONFIG_STORAGE_KEY = 'sme_fan_config_v3';
 const REGISTRATIONS_STORAGE_KEY = 'sme_fan_registrations_v3';
-const USER_STORAGE_KEY = 'sme_fan_admin_user_v4';
+const USER_STORAGE_KEY = 'sme_fan_admin_user_v5';
 const ACTIVE_TAB_STORAGE_KEY = 'sme_fan_active_tab_v3';
 
 // Global Session Cutoff Timestamp (Revokes any session created before this exact millisecond)
-export const GLOBAL_AUTH_EPOCH = 1793661600000; // 2026-11-03 06:20:00+07:00
+export const GLOBAL_AUTH_EPOCH = 1793668600000; // 2026-11-03 08:16:40+07:00
 
 // Helper to strictly validate active admin sessions
 export const isValidAdminSession = (user, config) => {
@@ -199,7 +199,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(() => {
     try {
       // Purge all legacy storage keys across all devices
-      ['sme_fan_admin_user', 'sme_fan_admin_user_v1', 'sme_fan_admin_user_v2', 'sme_fan_admin_user_v3'].forEach(k => {
+      ['sme_fan_admin_user', 'sme_fan_admin_user_v1', 'sme_fan_admin_user_v2', 'sme_fan_admin_user_v3', 'sme_fan_admin_user_v4'].forEach(k => {
         localStorage.removeItem(k);
       });
       const saved = localStorage.getItem(USER_STORAGE_KEY);
@@ -790,7 +790,7 @@ export default function App() {
       setEventConfig(initialSmeFanConfig);
       setRegistrations(initialRegistrations);
       setFormsList(initialFormsList);
-      setCurrentUser(initialSmeFanConfig.adminUsers[0]);
+      setCurrentUser(null);
       localStorage.removeItem(CONFIG_STORAGE_KEY);
       localStorage.removeItem(REGISTRATIONS_STORAGE_KEY);
       localStorage.removeItem(FORMS_STORAGE_KEY);
@@ -934,6 +934,7 @@ export default function App() {
             onUpdateRegistration={handleUpdateRegistration}
             currentUser={currentUser}
             onAdminClick={handleAdminClick}
+            onLogout={handleLogout}
             onRecordDownload={handleRecordDownload}
           />
         )}

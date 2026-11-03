@@ -41,7 +41,8 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  LogOut
 } from 'lucide-react';
 import TicketModal from './TicketModal';
 import ImageCropperModal from './ImageCropperModal';
@@ -148,6 +149,7 @@ export default function SmeFanRegistration({
   onUpdateRegistration,
   currentUser,
   onAdminClick,
+  onLogout,
   onRecordDownload
 }) {
   // Step state: 0 = Landing, 1 = Type Select, 2 = Details, 3 = Payment & Slip, 4 = Shirt (if eligible)
@@ -264,6 +266,13 @@ export default function SmeFanRegistration({
   const [cropperTarget, setCropperTarget] = useState('banner'); // 'banner' | 'background' | 'subBanner'
   const [newClubInput, setNewClubInput] = useState("");
   const [newSizeInput, setNewSizeInput] = useState("");
+
+  // Safety guard: Inline editing is strictly forbidden unless currentUser is an active admin
+  useEffect(() => {
+    if (!currentUser && isInlineEditing) {
+      setIsInlineEditing(false);
+    }
+  }, [currentUser, isInlineEditing]);
 
   // Render 50% Sub-Banner for subsequent steps (Step 1, 2, 3)
   const renderSubBanner = (stepNumber) => {
@@ -2927,6 +2936,24 @@ export default function SmeFanRegistration({
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300">
                   {currentUser.role === 'owner' ? 'Owner' : currentUser.role === 'manager' ? 'Manager' : 'Staff'}
                 </span>
+              </button>
+            )}
+
+            {/* Logout Admin Button (Quick Return to Clean Public View) */}
+            {onLogout && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm("คุณต้องการออกจากระบบแอดมิน เพื่อกลับเป็นหน้าลงทะเบียนสำหรับสมาชิกทั่วไปใช่หรือไม่?")) {
+                    setIsInlineEditing(false);
+                    onLogout();
+                  }
+                }}
+                className="flex items-center space-x-1.5 px-4 py-2 rounded-full bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-300 hover:text-rose-100 shadow-lg text-xs font-semibold transition-all hover:scale-105"
+                title="ออกจากระบบแอดมิน เพื่อดูหน้าฟอร์มเหมือนสมาชิกทั่วไป"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>ออกจากระบบแอดมิน</span>
               </button>
             )}
           </div>
