@@ -956,6 +956,7 @@ export default function App() {
             onPurgeComplete={(cleaned) => setRegistrations(cleaned)}
             onForceSyncCloud={handleForceSyncCloud}
             onResetAllRegistrations={handleResetRegistrationsAndScores}
+            onViewTicket={(ticket) => setVerifiedTicket(ticket)}
             lastCloudSync={lastCloudSync}
           />
         )}

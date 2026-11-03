@@ -38,7 +38,10 @@ import {
   Copy,
   CheckCheck,
   UserCheck,
-  Download
+  Download,
+  Eye,
+  FileImage,
+  Calendar
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import QRCode from "qrcode";
@@ -48,6 +51,8 @@ import ShirtPresentationModal from "./ShirtPresentationModal";
 import ContestJudgeModal from "./ContestJudgeModal";
 import StoragePurgeModal from "./StoragePurgeModal";
 import ResetRegistrationsModal from "./ResetRegistrationsModal";
+import AttendeeInspectionModal from "./AttendeeInspectionModal";
+import { formatThaiDisplayDateTime } from "../utils/supabaseClient";
 import { cleanPhoneNumber } from "../utils/phoneFormatter";
 
 // Shared singleton AudioContext to prevent lag, browser context exhaustion, and latency
@@ -83,6 +88,7 @@ export default function EventCheckInHub({
   onPurgeComplete,
   onForceSyncCloud,
   onResetAllRegistrations,
+  onViewTicket,
   lastCloudSync
 }) {
   // Main Tab: "checkin" | "gifts" | "shirts" | "contest" | "lucky_draw"
@@ -103,6 +109,15 @@ export default function EventCheckInHub({
     }
     setTimeout(() => setIsSyncing(false), 800);
   };
+
+  // Inspection Modal State for individual attendee & slip details
+  const [inspectingAttendee, setInspectingAttendee] = useState(null);
+
+  // Keep inspecting attendee in sync with latest registrations updates (check-in, shirt, etc.)
+  const activeInspectingAttendee = useMemo(() => {
+    if (!inspectingAttendee) return null;
+    return registrations.find(r => r.ticketNo === inspectingAttendee.ticketNo) || inspectingAttendee;
+  }, [inspectingAttendee, registrations]);
 
   // Storage Purge Modal State (Delete photos/slips after event)
   const [isPurgeModalOpen, setIsPurgeModalOpen] = useState(false);
@@ -1058,10 +1073,12 @@ export default function EventCheckInHub({
                   <tr>
                     <th className="py-2.5 px-2 sm:py-3 sm:px-3 w-12 sm:w-14 text-center border-r border-white/5 text-[11px] sm:text-xs">ลำดับ</th>
                     <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 w-20 sm:w-24 border-r border-white/5 text-[11px] sm:text-xs">เลขที่บัตร</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-white/5 min-w-[125px] sm:min-w-[145px] text-[11px] sm:text-xs">วัน-เวลาลงทะเบียน</th>
                     <th className="py-2.5 px-1.5 sm:py-3 sm:px-2 w-14 sm:w-16 text-center border-r border-white/5 text-[11px] sm:text-xs">รูปถ่าย</th>
                     <th className="py-2.5 px-3 sm:py-3 sm:px-4 border-r border-white/5 min-w-[140px] sm:min-w-[180px] text-[11px] sm:text-xs">ชื่อ - นามสกุล (ชื่อเล่น)</th>
                     <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-white/5 min-w-[100px] sm:min-w-[120px] text-[11px] sm:text-xs">ประเภท / สังกัด</th>
                     <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-white/5 text-[11px] sm:text-xs">เบอร์โทรศัพท์</th>
+                    <th className="py-2.5 px-1.5 sm:py-3 sm:px-2 w-12 sm:w-14 text-center border-r border-white/5 text-[11px] sm:text-xs">สลิป</th>
                     <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-white/5 text-[11px] sm:text-xs">เสื้อที่ระลึก</th>
                     <th className="py-2.5 px-3 sm:py-3 sm:px-4 border-r border-white/5 min-w-[130px] sm:min-w-[150px] text-[11px] sm:text-xs">สถานะเข้างาน</th>
                     <th className="py-2.5 px-2 sm:py-3 sm:px-3.5 border-r border-white/5 text-center text-[11px] sm:text-xs">ของขวัญ</th>
@@ -1074,9 +1091,11 @@ export default function EventCheckInHub({
                     return (
                       <tr 
                         key={r.ticketNo || idx}
-                        className={`hover:bg-white/[0.03] transition-colors ${
+                        onClick={() => setInspectingAttendee(r)}
+                        className={`cursor-pointer hover:bg-amber-500/10 active:bg-amber-500/15 transition-colors group ${
                           isCheckedIn ? "bg-emerald-950/15" : ""
                         }`}
+                        title="แตะเพื่อดูข้อมูลการลงทะเบียนและสลิปธนาคาร"
                       >
                         {/* 1. ลำดับ */}
                         <td className="py-2 px-2 sm:py-2.5 sm:px-3 text-center font-mono text-slate-400 border-r border-white/5 text-[11px] sm:text-xs">
@@ -1084,8 +1103,16 @@ export default function EventCheckInHub({
                         </td>
 
                         {/* 2. เลขที่บัตร */}
-                        <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 font-mono font-bold text-amber-400 border-r border-white/5 text-[11px] sm:text-xs">
+                        <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 font-mono font-bold text-amber-400 border-r border-white/5 text-[11px] sm:text-xs whitespace-nowrap">
                           {r.ticketNo || "SME-001"}
+                        </td>
+
+                        {/* 2.2 วัน-เวลาลงทะเบียน */}
+                        <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 border-r border-white/5 text-[10px] sm:text-[11px] text-slate-300 font-mono whitespace-nowrap">
+                          <div className="flex items-center space-x-1 text-slate-300">
+                            <Clock className="w-3 h-3 text-amber-400/80 shrink-0" />
+                            <span>{formatThaiDisplayDateTime(r.createdAt || r.timestamp || r.slipUploadedAt)}</span>
+                          </div>
                         </td>
 
                         {/* 2.5 รูปถ่าย (1:1) */}
@@ -1093,7 +1120,10 @@ export default function EventCheckInHub({
                           {r.photoUrl || r.costumePhoto ? (
                             <button
                               type="button"
-                              onClick={() => setPhotoViewerTarget(r)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPhotoViewerTarget(r);
+                              }}
                               className="relative inline-block cursor-pointer group hover:scale-110 active:scale-95 transition-all mx-auto"
                               title="คลิกเพื่อดูรูปถ่ายขนาดใหญ่"
                             >
@@ -1109,7 +1139,10 @@ export default function EventCheckInHub({
                           ) : (
                             <button
                               type="button"
-                              onClick={() => setPhotoModalTarget(r)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPhotoModalTarget(r);
+                              }}
                               className="p-1.5 px-2 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-300 border border-white/10 hover:border-emerald-500/30 transition-all inline-flex items-center space-x-1 cursor-pointer"
                               title="ถ่ายรูปผู้เข้าร่วมงาน (สัดส่วน 1:1)"
                             >
@@ -1121,8 +1154,8 @@ export default function EventCheckInHub({
 
                         {/* 3. ชื่อ - นามสกุล */}
                         <td className="py-2 px-3 sm:py-2.5 sm:px-4 font-semibold text-white border-r border-white/5 text-[11px] sm:text-xs">
-                          <div className="flex items-center space-x-1.5">
-                            <span>{r.name}</span>
+                          <div className="flex items-center space-x-1.5 group-hover:text-amber-300 transition-colors">
+                            <span className="underline-offset-2 group-hover:underline">{r.name}</span>
                             {r.nickname && (
                               <span className="text-amber-300 font-normal text-[10px] sm:text-[11px]">
                                 ({r.nickname})
@@ -1152,6 +1185,32 @@ export default function EventCheckInHub({
                         {/* 5. เบอร์โทร */}
                         <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 font-mono text-slate-300 border-r border-white/5 text-[11px] sm:text-xs whitespace-nowrap">
                           {r.phone || "-"}
+                        </td>
+
+                        {/* 5.5 สลิปโอนเงิน */}
+                        <td className="py-2 px-1.5 sm:py-2 sm:px-2 text-center border-r border-white/5">
+                          {r.slipUrl || r.paymentSlip ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setInspectingAttendee(r);
+                              }}
+                              className="relative inline-block cursor-pointer group/slip hover:scale-110 active:scale-95 transition-all mx-auto"
+                              title="คลิกเพื่อตรวจสลิปโอนเงิน"
+                            >
+                              <img
+                                src={r.slipUrl || r.paymentSlip}
+                                alt="Slip"
+                                className="w-8 h-8 rounded-lg object-cover border border-amber-400/60 shadow-sm mx-auto group-hover/slip:border-amber-300"
+                              />
+                              <span className="absolute -bottom-1 -right-1 px-1 py-0.2 rounded-full bg-slate-900 border border-amber-400/60 text-[8px] text-amber-300 leading-none font-bold">
+                                🧾
+                              </span>
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-slate-600">-</span>
+                          )}
                         </td>
 
                         {/* 6. เสื้อที่ระลึก */}
@@ -1191,31 +1250,50 @@ export default function EventCheckInHub({
                           )}
                         </td>
 
-                        {/* 9. การจัดการ (ปุ่มเช็คอินฉุกเฉิน) */}
+                        {/* 9. การจัดการ */}
                         <td className="py-2 px-2 sm:py-2.5 sm:px-3 text-center whitespace-nowrap">
-                          {isCheckedIn ? (
+                          <div className="flex items-center justify-center space-x-1.5">
                             <button
                               type="button"
-                              onClick={() => {
-                                if (window.confirm(`ต้องการยกเลิกสถานะเข้างานของคุณ ${r.name} ใช่หรือไม่?`)) {
-                                  onCheckIn(r.ticketNo, false);
-                                }
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setInspectingAttendee(r);
                               }}
-                              className="text-[9px] sm:text-[10px] px-2 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 transition-all"
-                              title="ยกเลิกการเช็คอิน"
+                              className="text-[9px] sm:text-[10px] px-2 py-1 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/35 text-indigo-200 border border-indigo-500/40 transition-all font-semibold inline-flex items-center space-x-1 cursor-pointer"
+                              title="เปิดดูข้อมูลที่กรอกและสลิปธนาคาร"
                             >
-                              ยกเลิก
+                              <Eye className="w-3 h-3 text-indigo-300" />
+                              <span>ตรวจข้อมูล</span>
                             </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setEmergencyTarget(r)}
-                              className="text-[9px] sm:text-[10px] px-2 sm:px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-medium transition-all"
-                              title="กดเช็คอินกรณีฉุกเฉิน (ผู้ร่วมงานไม่ได้บันทึกภาพบัตรมา)"
-                            >
-                              ⚡ เช็คอินฉุกเฉิน
-                            </button>
-                          )}
+
+                            {isCheckedIn ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (window.confirm(`ต้องการยกเลิกสถานะเข้างานของคุณ ${r.name} ใช่หรือไม่?`)) {
+                                    onCheckIn(r.ticketNo, false);
+                                  }
+                                }}
+                                className="text-[9px] sm:text-[10px] px-2 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 transition-all cursor-pointer"
+                                title="ยกเลิกการเช็คอิน"
+                              >
+                                ยกเลิก
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEmergencyTarget(r);
+                                }}
+                                className="text-[9px] sm:text-[10px] px-2 sm:px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-medium transition-all cursor-pointer"
+                                title="กดเช็คอินกรณีฉุกเฉิน (ผู้ร่วมงานไม่ได้บันทึกภาพบัตรมา)"
+                              >
+                                ⚡ เช็คอิน
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1494,7 +1572,12 @@ export default function EventCheckInHub({
                     {filteredShirtList.map((r, idx) => {
                       const isReceived = !!r.shirtReceived;
                       return (
-                        <tr key={r.ticketNo} className={`hover:bg-white/[0.03] transition-colors ${isReceived ? "bg-teal-950/15" : ""}`}>
+                        <tr 
+                          key={r.ticketNo} 
+                          onClick={() => setInspectingAttendee(r)}
+                          className={`cursor-pointer hover:bg-teal-500/10 active:bg-teal-500/15 transition-colors group ${isReceived ? "bg-teal-950/15" : ""}`}
+                          title="แตะเพื่อดูข้อมูลการลงทะเบียนและสลิปธนาคาร"
+                        >
                           
                           {/* 1. ลำดับ */}
                           <td className="py-2 px-2 sm:py-2.5 sm:px-3 text-center font-mono text-slate-400 border-r border-white/5 text-[11px] sm:text-xs">
@@ -1511,7 +1594,10 @@ export default function EventCheckInHub({
                             {r.photoUrl || r.costumePhoto ? (
                               <button
                                 type="button"
-                                onClick={() => setPhotoViewerTarget(r)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPhotoViewerTarget(r);
+                                }}
                                 className="relative inline-block cursor-pointer group hover:scale-110 active:scale-95 transition-all mx-auto"
                                 title="คลิกเพื่อดูรูปถ่ายขนาดใหญ่"
                               >
@@ -1527,7 +1613,10 @@ export default function EventCheckInHub({
                             ) : (
                               <button
                                 type="button"
-                                onClick={() => setPhotoModalTarget(r)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPhotoModalTarget(r);
+                                }}
                                 className="p-1.5 px-2 rounded-xl bg-white/5 hover:bg-teal-500/20 text-slate-400 hover:text-teal-300 border border-white/10 hover:border-teal-500/30 transition-all inline-flex items-center space-x-1 cursor-pointer"
                                 title="ถ่ายรูปผู้เข้าร่วมงาน (สัดส่วน 1:1)"
                               >
@@ -1539,8 +1628,8 @@ export default function EventCheckInHub({
 
                           {/* 4. ชื่อ - สกุล */}
                           <td className="py-2 px-3 sm:py-2.5 sm:px-4 font-semibold text-white border-r border-white/5 text-[11px] sm:text-xs">
-                            <div className="flex items-center space-x-1.5">
-                              <span>{r.name}</span>
+                            <div className="flex items-center space-x-1.5 group-hover:text-amber-300 transition-colors">
+                              <span className="underline-offset-2 group-hover:underline">{r.name}</span>
                               {r.nickname && (
                                 <span className="text-amber-300 font-normal text-[10px] sm:text-[11px]">
                                   ({r.nickname})
@@ -1599,8 +1688,11 @@ export default function EventCheckInHub({
                                 </span>
                                 <button
                                   type="button"
-                                  onClick={() => onToggleShirtReceived(r.ticketNo, false)}
-                                  className="text-[9px] sm:text-[10px] text-slate-500 hover:text-rose-400 underline transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onToggleShirtReceived(r.ticketNo, false);
+                                  }}
+                                  className="text-[9px] sm:text-[10px] text-slate-500 hover:text-rose-400 underline transition-colors cursor-pointer"
                                   title="คลิกเพื่อยกเลิกสถานะรับเสื้อหากกดผิด"
                                 >
                                   แก้ไข
@@ -1609,7 +1701,8 @@ export default function EventCheckInHub({
                             ) : (
                               <button
                                 type="button"
-                                onClick={() => {
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   onToggleShirtReceived(r.ticketNo, true);
                                   playAudioEffect("fanfare");
                                   setPhotoModalTarget(r);
@@ -3530,6 +3623,16 @@ export default function EventCheckInHub({
             localStorage.removeItem("sme_fan_judge_scores_v1");
           } catch (e) {}
         }}
+      />
+
+      {/* Attendee Details & Slip Inspection Modal */}
+      <AttendeeInspectionModal
+        isOpen={!!activeInspectingAttendee}
+        onClose={() => setInspectingAttendee(null)}
+        attendee={activeInspectingAttendee}
+        onCheckIn={onCheckIn}
+        onShirtReceive={onToggleShirtReceived}
+        onViewTicket={onViewTicket}
       />
 
       {/* Footer Accreditation */}

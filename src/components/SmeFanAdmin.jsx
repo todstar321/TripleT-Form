@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Users, 
   Shirt, 
@@ -49,8 +49,9 @@ import MemberSpreadsheet from './MemberSpreadsheet';
 import TicketScannerModal from './TicketScannerModal';
 import StoragePurgeModal from './StoragePurgeModal';
 import ResetRegistrationsModal from './ResetRegistrationsModal';
+import AttendeeInspectionModal from './AttendeeInspectionModal';
 import { themePresetsList } from '../data/smeFanData';
-import { testSupabaseConnection, saveSupabaseConfig, getSupabaseConfig, isSupabaseConfigured, upsertRegistrationToCloud, saveEventConfigToCloud } from '../utils/supabaseClient';
+import { testSupabaseConnection, saveSupabaseConfig, getSupabaseConfig, isSupabaseConfigured, upsertRegistrationToCloud, saveEventConfigToCloud, formatThaiDisplayDateTime } from '../utils/supabaseClient';
 import { testCloudinaryConnection, saveCloudinaryConfig, getCloudinaryConfig, isCloudinaryConfigured } from '../utils/cloudinary';
 
 export default function SmeFanAdmin({
@@ -78,6 +79,11 @@ export default function SmeFanAdmin({
   const [activeTab, setActiveTab] = useState(initialActiveTab); 
   // 'overview' | 'forms_hub' | 'attendees' | 'slips' | 'members' | 'themes' | 'roles' | 'design'
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [adminInspectingAttendee, setAdminInspectingAttendee] = useState(null);
+  const activeAdminInspectingAttendee = useMemo(() => {
+    if (!adminInspectingAttendee) return null;
+    return registrations.find(r => r.ticketNo === adminInspectingAttendee.ticketNo) || adminInspectingAttendee;
+  }, [adminInspectingAttendee, registrations]);
   
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -1257,6 +1263,7 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
                 <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
                   <tr>
                     <th className="p-3.5">รหัสบัตร</th>
+                    <th className="p-3.5">วัน-เวลาลงทะเบียน</th>
                     <th className="p-3.5">ชื่อ - นามสกุล</th>
                     <th className="p-3.5">สังกัดสนาม</th>
                     <th className="p-3.5">ประเภท</th>
@@ -1265,30 +1272,41 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
                     <th className="p-3.5">ยอดเงิน</th>
                     <th className="p-3.5">สลิป</th>
                     <th className="p-3.5 text-center">ดาวน์โหลดบัตร</th>
-                    {isOwner && <th className="p-3.5 text-center">จัดการ</th>}
+                    <th className="p-3.5 text-center">จัดการ</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
                   {filteredAttendees.length === 0 ? (
                     <tr>
-                      <td colSpan={isOwner ? 10 : 9} className="p-8 text-center text-slate-400">
+                      <td colSpan={11} className="p-8 text-center text-slate-400">
                         ไม่พบข้อมูลผู้ลงทะเบียนตามเงื่อนไข
                       </td>
                     </tr>
                   ) : (
                     filteredAttendees.map((r) => (
-                      <tr key={r.ticketNo} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="p-3.5 font-mono font-bold text-amber-700">
+                      <tr 
+                        key={r.ticketNo} 
+                        onClick={() => setAdminInspectingAttendee(r)}
+                        className="cursor-pointer hover:bg-slate-50/80 transition-colors group"
+                        title="คลิกเพื่อตรวจข้อมูลและสลิปธนาคาร"
+                      >
+                        <td className="p-3.5 font-mono font-bold text-amber-700 whitespace-nowrap">
                           {r.ticketNo}
                         </td>
+                        <td className="p-3.5 font-mono text-slate-500 text-[11px] whitespace-nowrap">
+                          <div className="flex items-center space-x-1">
+                            <Clock className="w-3.5 h-3.5 text-amber-600/80 shrink-0" />
+                            <span>{formatThaiDisplayDateTime(r.createdAt || r.timestamp || r.slipUploadedAt)}</span>
+                          </div>
+                        </td>
                         <td className="p-3.5 font-bold text-slate-900">
-                          <div className="flex items-center space-x-1.5 flex-wrap">
+                          <div className="flex items-center space-x-1.5 flex-wrap group-hover:text-amber-700 transition-colors">
                             {r.memberCode && (
                               <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 text-amber-800 border border-amber-200" title="รหัสสมาชิก">
                                 {r.memberCode}
                               </span>
                             )}
-                            <span>{r.name}</span>
+                            <span className="underline-offset-2 group-hover:underline">{r.name}</span>
                             {r.nickname && <span className="font-normal text-slate-500">({r.nickname})</span>}
                           </div>
                         </td>
@@ -1306,10 +1324,10 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
                             {r.regType === 'member' ? 'สมาชิก' : 'แขกผู้มีเกียรติ'}
                           </span>
                         </td>
-                        <td className="p-3.5 font-mono text-slate-600">
+                        <td className="p-3.5 font-mono text-slate-600 whitespace-nowrap">
                           {r.phone || '-'}
                         </td>
-                        <td className="p-3.5">
+                        <td className="p-3.5 whitespace-nowrap">
                           {r.hasShirt ? (
                             <span className="font-semibold text-emerald-700">
                               {r.shirtSize} ({r.shirtGender})
@@ -1318,7 +1336,7 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
                             <span className="text-slate-400">-</span>
                           )}
                         </td>
-                        <td className="p-3.5 font-mono">
+                        <td className="p-3.5 font-mono whitespace-nowrap">
                           <span className="font-bold text-slate-800">
                             ฿{(r.paidAmount || r.amount)?.toLocaleString()}
                           </span>
@@ -1330,20 +1348,23 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
                         </td>
                         <td className="p-3.5">
                           {r.slipUrl ? (
-                            <a 
-                              href={r.slipUrl} 
-                              target="_blank" 
-                              rel="noreferrer"
-                              className="w-8 h-8 rounded-lg overflow-hidden border border-slate-200 block hover:scale-110 transition-transform"
+                            <button 
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setAdminInspectingAttendee(r);
+                              }}
+                              className="w-8 h-8 rounded-lg overflow-hidden border border-slate-200 block hover:scale-110 transition-transform cursor-pointer"
+                              title="คลิกเพื่อตรวจสลิป"
                             >
                               <img src={r.slipUrl} alt="Slip" className="w-full h-full object-cover" />
-                            </a>
+                            </button>
                           ) : (
                             <span className="text-slate-300">-</span>
                           )}
                         </td>
                         {/* Download Tracking Status */}
-                        <td className="p-3.5 text-center">
+                        <td className="p-3.5 text-center whitespace-nowrap">
                           {r.downloadCount > 0 ? (
                             <div className="inline-flex flex-col items-center">
                               <span 
@@ -1364,22 +1385,38 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
                             </span>
                           )}
                         </td>
-                        {isOwner && (
-                          <td className="p-3.5 text-center">
+                        <td className="p-3.5 text-center whitespace-nowrap">
+                          <div className="flex items-center justify-center space-x-1.5">
                             <button
                               type="button"
-                              onClick={() => {
-                                if (window.confirm(`ยืนยันการลบผู้ลงทะเบียน ${r.name} (${r.ticketNo}) ใช่หรือไม่?`)) {
-                                  onDeleteRegistration(r.ticketNo);
-                                }
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setAdminInspectingAttendee(r);
                               }}
-                              className="p-1.5 rounded-lg hover:bg-rose-50 text-rose-500 hover:text-rose-600 transition-colors"
-                              title="ลบข้อมูล"
+                              className="p-1.5 px-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition-colors inline-flex items-center space-x-1 cursor-pointer font-bold text-[10px]"
+                              title="เปิดดูข้อมูลที่กรอกและสลิปธนาคาร"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>ตรวจข้อมูล</span>
                             </button>
-                          </td>
-                        )}
+
+                            {isOwner && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (window.confirm(`ยืนยันการลบผู้ลงทะเบียน ${r.name} (${r.ticketNo}) ใช่หรือไม่?`)) {
+                                    onDeleteRegistration(r.ticketNo);
+                                  }
+                                }}
+                                className="p-1.5 rounded-lg hover:bg-rose-50 text-rose-500 hover:text-rose-600 transition-colors cursor-pointer"
+                                title="ลบข้อมูล"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -2655,6 +2692,13 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
             await onResetAllRegistrations();
           }
         }}
+      />
+
+      {/* Attendee Details & Slip Inspection Modal */}
+      <AttendeeInspectionModal
+        isOpen={!!activeAdminInspectingAttendee}
+        onClose={() => setAdminInspectingAttendee(null)}
+        attendee={activeAdminInspectingAttendee}
       />
 
     </div>

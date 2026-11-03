@@ -796,6 +796,7 @@ export default function SmeFanRegistration({
     const newTicket = {
       ticketNo: ticketNumber,
       timestamp: nowStr,
+      createdAt: existingAttendee?.createdAt || new Date().toISOString(),
       regType: regType,
       memberCode: regType === 'member' && selectedMember?.memberCode ? selectedMember.memberCode : "",
       club: selectedClub === 'all' ? (eventConfig.clubs[0] || "สงสพัท") : selectedClub,

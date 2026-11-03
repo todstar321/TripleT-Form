@@ -198,6 +198,30 @@ export function formatThaiDisplayTime(val) {
   return str;
 }
 
+/**
+ * Formats an ISO timestamp or date string into user-friendly Thai Date and Time
+ * e.g. "3 พ.ย. 69 18:06 น."
+ */
+export function formatThaiDisplayDateTime(val) {
+  if (!val) return '-';
+  const str = String(val).trim();
+  if (str.includes('น.') && (str.includes('พ.ย.') || str.includes('/') || str.includes(' '))) return str;
+  const d = new Date(str);
+  if (!isNaN(d.getTime())) {
+    const datePart = d.toLocaleDateString('th-TH', {
+      day: 'numeric',
+      month: 'short',
+      year: '2-digit'
+    });
+    const timePart = d.toLocaleTimeString('th-TH', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    return `${datePart} ${timePart} น.`;
+  }
+  return str;
+}
+
 // Convert DB snake_case to frontend camelCase
 export function mapCloudToRegistration(r) {
   if (!r) return null;
@@ -231,6 +255,7 @@ export function mapCloudToRegistration(r) {
     guestTitle: r.guest_title || '',
     prefix: r.guest_title || '',
     createdAt: r.created_at,
+    timestamp: r.created_at ? formatThaiDisplayDateTime(r.created_at) : null,
     updatedAt: r.updated_at
   };
 }
