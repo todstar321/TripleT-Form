@@ -47,6 +47,7 @@ import AttendeePhotoModal from "./AttendeePhotoModal";
 import ShirtPresentationModal from "./ShirtPresentationModal";
 import ContestJudgeModal from "./ContestJudgeModal";
 import StoragePurgeModal from "./StoragePurgeModal";
+import ResetRegistrationsModal from "./ResetRegistrationsModal";
 import { cleanPhoneNumber } from "../utils/phoneFormatter";
 
 // Shared singleton AudioContext to prevent lag, browser context exhaustion, and latency
@@ -81,6 +82,7 @@ export default function EventCheckInHub({
   onSwitchToPublicForm,
   onPurgeComplete,
   onForceSyncCloud,
+  onResetAllRegistrations,
   lastCloudSync
 }) {
   // Main Tab: "checkin" | "gifts" | "shirts" | "contest" | "lucky_draw"
@@ -104,6 +106,8 @@ export default function EventCheckInHub({
 
   // Storage Purge Modal State (Delete photos/slips after event)
   const [isPurgeModalOpen, setIsPurgeModalOpen] = useState(false);
+  // Dedicated Reset Registrations & Scores Modal State
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
 
   // Camera QR Scanner Modal State
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -184,6 +188,19 @@ export default function EventCheckInHub({
     }, 2000);
     return () => clearInterval(interval);
   }, [allJudgeVotes]);
+
+  // Auto-clear judge votes and contest teams if registrations is emptied
+  useEffect(() => {
+    if (registrations.length === 0 && (allJudgeVotes.length > 0 || contestTeams.length > 0)) {
+      setAllJudgeVotes([]);
+      setContestTeams([]);
+      try {
+        localStorage.removeItem(CONTEST_VOTES_STORAGE_KEY);
+        localStorage.removeItem(CONTEST_TEAMS_STORAGE_KEY);
+        localStorage.removeItem("sme_fan_judge_scores_v1");
+      } catch (e) {}
+    }
+  }, [registrations.length]);
 
   // Tab 1: Check-in search & filter
   const [searchCheckIn, setSearchCheckIn] = useState("");
@@ -799,6 +816,18 @@ export default function EventCheckInHub({
             <Trash2 className="w-3.5 h-3.5 text-rose-400" />
             <span className="hidden sm:inline">ลบรูปหลังจบงาน</span>
           </button>
+
+          {onResetAllRegistrations && (
+            <button
+              type="button"
+              onClick={() => setIsResetModalOpen(true)}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-rose-600/30 hover:bg-rose-600/50 border border-rose-500/50 text-xs font-bold text-rose-200 hover:text-white transition-all shadow-sm"
+              title="ล้างข้อมูลการลงทะเบียนและคะแนนการประกวดทั้งหมด (รายชื่อ 95 สมาชิกและสังกัดปลอดภัย 100%)"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-rose-400" />
+              <span>ล้างข้อมูลลงทะเบียน</span>
+            </button>
+          )}
 
           {onForceSyncCloud && (
             <button
@@ -3481,6 +3510,25 @@ export default function EventCheckInHub({
           if (onPurgeComplete) {
             onPurgeComplete(cleanedRegistrations);
           }
+        }}
+      />
+
+      {/* Dedicated Reset All Registrations & Scores Modal */}
+      <ResetRegistrationsModal
+        isOpen={isResetModalOpen}
+        onClose={() => setIsResetModalOpen(false)}
+        totalRegistrations={registrations.length}
+        onConfirmReset={async () => {
+          if (onResetAllRegistrations) {
+            await onResetAllRegistrations();
+          }
+          setAllJudgeVotes([]);
+          setContestTeams([]);
+          try {
+            localStorage.removeItem(CONTEST_VOTES_STORAGE_KEY);
+            localStorage.removeItem(CONTEST_TEAMS_STORAGE_KEY);
+            localStorage.removeItem("sme_fan_judge_scores_v1");
+          } catch (e) {}
         }}
       />
 

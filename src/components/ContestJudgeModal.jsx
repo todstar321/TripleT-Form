@@ -115,6 +115,36 @@ export default function ContestJudgeModal({
     } catch (e) {}
   }, [scores, isReadOnlyMode]);
 
+  // If attendees is empty or changes, prune/clear scores for deleted attendees
+  useEffect(() => {
+    if (!attendees || attendees.length === 0) {
+      setScores({
+        individual: { beauty: {}, creativity: {} },
+        team: { beauty: {}, creativity: {} }
+      });
+      try {
+        localStorage.removeItem("sme_fan_judge_scores_v1");
+      } catch (e) {}
+    } else {
+      const currentTicketNos = new Set(attendees.map(a => a.ticketNo));
+      setScores(prev => {
+        let changed = false;
+        const next = JSON.parse(JSON.stringify(prev));
+        ['beauty', 'creativity'].forEach(award => {
+          if (next.individual?.[award]) {
+            Object.keys(next.individual[award]).forEach(tNo => {
+              if (!currentTicketNos.has(tNo)) {
+                delete next.individual[award][tNo];
+                changed = true;
+              }
+            });
+          }
+        });
+        return changed ? next : prev;
+      });
+    }
+  }, [attendees]);
+
   // Auto-submit on Escape key
   useEffect(() => {
     if (!isOpen) return;
@@ -154,10 +184,32 @@ export default function ContestJudgeModal({
   // Helper: Retrieve all submitted votes to check duplicate voting
   const getAllSubmittedVotes = () => {
     try {
-      if (existingVotes && existingVotes.length > 0) return existingVotes;
-      localStorage.removeItem("sme_fan_contest_all_votes_v1");
-      const saved = localStorage.getItem("sme_fan_contest_all_votes_v2");
-      return saved ? JSON.parse(saved) : [];
+      const rawVotes = (existingVotes && existingVotes.length > 0)
+        ? existingVotes
+        : (() => {
+            localStorage.removeItem("sme_fan_contest_all_votes_v1");
+            const saved = localStorage.getItem("sme_fan_contest_all_votes_v2");
+            return saved ? JSON.parse(saved) : [];
+          })();
+
+      if (!attendees || attendees.length === 0) return [];
+      const currentTicketNos = new Set(attendees.map(a => a.ticketNo));
+
+      // Clean votes so deleted attendees don't keep scores
+      return rawVotes.map(vote => {
+        if (!vote) return vote;
+        const cleaned = JSON.parse(JSON.stringify(vote));
+        ['beauty', 'creativity'].forEach(award => {
+          if (cleaned.scores?.individual?.[award]) {
+            Object.keys(cleaned.scores.individual[award]).forEach(tNo => {
+              if (!currentTicketNos.has(tNo)) {
+                delete cleaned.scores.individual[award][tNo];
+              }
+            });
+          }
+        });
+        return cleaned;
+      });
     } catch (e) {
       return [];
     }

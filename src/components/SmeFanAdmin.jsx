@@ -41,12 +41,14 @@ import {
   X,
   Server,
   HardDrive,
-  RefreshCw
+  RefreshCw,
+  RotateCcw
 } from 'lucide-react';
 import ImageCropperModal from './ImageCropperModal';
 import MemberSpreadsheet from './MemberSpreadsheet';
 import TicketScannerModal from './TicketScannerModal';
 import StoragePurgeModal from './StoragePurgeModal';
+import ResetRegistrationsModal from './ResetRegistrationsModal';
 import { themePresetsList } from '../data/smeFanData';
 import { testSupabaseConnection, saveSupabaseConfig, getSupabaseConfig, isSupabaseConfigured, upsertRegistrationToCloud, saveEventConfigToCloud } from '../utils/supabaseClient';
 import { testCloudinaryConnection, saveCloudinaryConfig, getCloudinaryConfig, isCloudinaryConfigured } from '../utils/cloudinary';
@@ -70,10 +72,12 @@ export default function SmeFanAdmin({
   onViewForm,
   onPurgeComplete,
   onForceSyncCloud,
+  onResetAllRegistrations,
   initialActiveTab = 'overview'
 }) {
   const [activeTab, setActiveTab] = useState(initialActiveTab); 
   // 'overview' | 'forms_hub' | 'attendees' | 'slips' | 'members' | 'themes' | 'roles' | 'design'
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -192,6 +196,9 @@ export default function SmeFanAdmin({
     } else if (target === 'subBanner') {
       setCropperTitle('ปรับขนาดและตัดรูปภาพหัวฟอร์มหน้าถัดไป (Sub-Banner ย่อ 50%)');
       setCropperAspect(16 / 4);
+    } else if (target === 'shirtMockup') {
+      setCropperTitle('ปรับขนาดและตัดรูปภาพตัวอย่างลายเสื้อ (T-Shirt Mockup)');
+      setCropperAspect(1);
     } else {
       setCropperTitle('ปรับขนาดและตัดรูปภาพพื้นหลังฉากหลัง (Background Wallpaper)');
       setCropperAspect(16 / 9);
@@ -204,6 +211,8 @@ export default function SmeFanAdmin({
       setEventConfig(prev => ({ ...prev, bannerImage: croppedUrl }));
     } else if (cropperTarget === 'subBanner') {
       setEventConfig(prev => ({ ...prev, subBannerImage: croppedUrl, subBannerMode: 'custom' }));
+    } else if (cropperTarget === 'shirtMockup') {
+      setEventConfig(prev => ({ ...prev, shirtMockupImage: croppedUrl }));
     } else if (cropperTarget === 'background') {
       setEventConfig(prev => ({ ...prev, backgroundImage: croppedUrl }));
       handleUpdateFormTheme(themeStudioTargetFormId, { backgroundImage: croppedUrl });
@@ -733,6 +742,18 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 <span>🔄 ซิงค์ Cloud</span>
+              </button>
+            )}
+
+            {onResetAllRegistrations && (
+              <button
+                type="button"
+                onClick={() => setIsResetModalOpen(true)}
+                className="flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-rose-600/30 hover:bg-rose-600/50 text-rose-200 hover:text-white border border-rose-500/40 shadow-sm transition-all hover:scale-105"
+                title="ล้างข้อมูลการลงทะเบียนและคะแนนการประกวดทั้งหมด (รายชื่อ 95 สมาชิกและสังกัดปลอดภัย 100%)"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-rose-400" />
+                <span>🗑️ ล้างข้อมูลลงทะเบียน</span>
               </button>
             )}
 
@@ -2560,6 +2581,32 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
                     placeholder="URL รูปภาพพื้นหลัง..."
                   />
                 </div>
+
+                {/* T-Shirt Mockup Image */}
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+                  <div className="flex justify-between items-center text-xs font-bold text-slate-700">
+                    <span>👕 รูปภาพตัวอย่างลายเสื้อปีใหม่ (T-Shirt Mockup):</span>
+                    <button
+                      type="button"
+                      onClick={() => openCropper('shirtMockup')}
+                      className="text-amber-600 hover:text-amber-700 font-bold"
+                    >
+                      ✂️ ครอป / เปลี่ยนภาพ
+                    </button>
+                  </div>
+                  {eventConfig.shirtMockupImage && (
+                    <div className="h-32 rounded-lg overflow-hidden border border-slate-200 bg-slate-200">
+                      <img src={eventConfig.shirtMockupImage} alt="Shirt Mockup" className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                  <input
+                    type="url"
+                    value={eventConfig.shirtMockupImage || ''}
+                    onChange={(e) => setEventConfig(prev => ({ ...prev, shirtMockupImage: e.target.value }))}
+                    className="w-full px-3 py-1.5 rounded-lg text-xs bg-white border border-slate-300 text-slate-900"
+                    placeholder="URL รูปภาพตัวอย่างลายเสื้อ..."
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -2594,6 +2641,18 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
         onPurgeComplete={(cleanedRegistrations) => {
           if (onPurgeComplete) {
             onPurgeComplete(cleanedRegistrations);
+          }
+        }}
+      />
+
+      {/* Reset All Registrations Modal */}
+      <ResetRegistrationsModal
+        isOpen={isResetModalOpen}
+        onClose={() => setIsResetModalOpen(false)}
+        totalRegistrations={registrations.length}
+        onConfirmReset={async () => {
+          if (onResetAllRegistrations) {
+            await onResetAllRegistrations();
           }
         }}
       />

@@ -297,7 +297,9 @@ export default function App() {
       }
     }
 
-    if (isSupabaseConfigured()) {
+    // CRITICAL FIX: Only authenticated Admin users (owner, manager, admin) are permitted to sync eventConfig to Supabase Cloud!
+    // Regular public visitors / guests must NEVER overwrite eventConfig on Supabase!
+    if (isSupabaseConfigured() && currentUser && ['owner', 'manager', 'admin'].includes(currentUser.role)) {
       const timer = setTimeout(() => {
         saveEventConfigToCloud(eventConfig).catch(err => {
           console.warn("Cloud config sync warning:", err);
@@ -305,7 +307,7 @@ export default function App() {
       }, 600);
       return () => clearTimeout(timer);
     }
-  }, [eventConfig]);
+  }, [eventConfig, currentUser]);
 
   // Auto-save registrations (Debounced by 400ms to keep button taps instant and lag-free)
   useEffect(() => {
@@ -816,6 +818,63 @@ export default function App() {
     }
   };
 
+  // Dedicated Reset All Registrations & Scores (Preserves 95 members, clubs, and all images 100%)
+  const handleResetRegistrationsAndScores = async () => {
+    try {
+      // 1. Delete all records from Supabase registrations table
+      if (isSupabaseConfigured()) {
+        const client = getSupabase();
+        if (client) {
+          const { error } = await client.from('registrations').delete().neq('ticket_no', 'NEVER_MATCH');
+          if (error) console.warn("Supabase wipe registrations warning:", error);
+        }
+      }
+
+      // 2. Clear registrations state
+      setRegistrations([]);
+      try {
+        localStorage.removeItem(REGISTRATIONS_STORAGE_KEY);
+        [
+          'sme_fan_registrations', 'sme_fan_registrations_v1', 'sme_fan_registrations_v2', 'sme_fan_registrations_v3', 'sme_fan_registrations_v4',
+          'sme_fan_contest_teams_v1', 'sme_fan_contest_teams_v2', 'sme_fan_contest_teams',
+          'sme_fan_contest_all_votes_v1', 'sme_fan_contest_all_votes_v2', 'sme_fan_contest_votes',
+          'sme_fan_judge_scores_v1', 'sme_fan_verified_judge_v1', 'sme_fan_judge_id_v1',
+          'sme_fan_grand_winners_v1', 'sme_fan_gift_queue_v1', 'sme_fan_general_draw_counts_v1'
+        ].forEach(k => localStorage.removeItem(k));
+      } catch (e) {}
+
+      // 3. Clear contestVotes and contestTeams in eventConfig on Cloud
+      if (isSupabaseConfigured() && currentUser && ['owner', 'manager', 'admin'].includes(currentUser.role)) {
+        try {
+          const currentCfg = await fetchEventConfigFromCloud();
+          if (currentCfg) {
+            const updatedCfg = {
+              ...currentCfg,
+              contestVotes: [],
+              contestTeams: []
+            };
+            await saveEventConfigToCloud(updatedCfg);
+            setEventConfig(updatedCfg);
+          }
+        } catch (cfgErr) {
+          console.warn("Could not clear contest in cloud config:", cfgErr);
+        }
+      }
+
+      // 4. Trigger storage event to notify other open tabs
+      try {
+        window.dispatchEvent(new Event('storage'));
+      } catch (e) {}
+
+      alert("ล้างข้อมูลการลงทะเบียนและคะแนนการประกวดทั้งหมดเรียบร้อยแล้วครับ! (สังกัดและสมาชิก 95 ท่านคงอยู่ครบถ้วน 100%)");
+      return true;
+    } catch (err) {
+      console.error("handleResetRegistrationsAndScores error:", err);
+      alert("เกิดข้อผิดพลาดในการล้างข้อมูล: " + (err?.message || err));
+      throw err;
+    }
+  };
+
   // Force sync from Supabase Cloud and purge stale local cache
   const handleForceSyncCloud = async () => {
     try {
@@ -896,6 +955,7 @@ export default function App() {
             onSwitchToPublicForm={() => setCurrentTab('sme_register')}
             onPurgeComplete={(cleaned) => setRegistrations(cleaned)}
             onForceSyncCloud={handleForceSyncCloud}
+            onResetAllRegistrations={handleResetRegistrationsAndScores}
             lastCloudSync={lastCloudSync}
           />
         )}
@@ -977,6 +1037,7 @@ export default function App() {
             onViewForm={handleViewForm}
             onPurgeComplete={(cleaned) => setRegistrations(cleaned)}
             onForceSyncCloud={handleForceSyncCloud}
+            onResetAllRegistrations={handleResetRegistrationsAndScores}
           />
         )}
 
