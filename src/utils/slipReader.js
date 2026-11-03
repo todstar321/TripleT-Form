@@ -301,28 +301,25 @@ export const recognizeSlipText = async (dataUrl, onProgress) => {
         try {
           const worker = await getTesseractWorker(onProgress);
 
-          // Region 1: Amount Slice (y: 48% - 80%, x: 0 - 85% to exclude mascot)
+          // Region 1: Amount Slice (y: 30% - 85%, full width 100% to capture right-aligned amounts like Krungsri/BBL)
           if (onProgress) onProgress("กำลังอ่านยอดเงินโอนจริงจากสลิป (Amount Region)...");
-          const amountSliceUrl = cropAndPreprocessSlice(img, 0, 0.46, 0.85, 0.36, { contrast: 60 });
+          const amountSliceUrl = cropAndPreprocessSlice(img, 0, 0.30, 1.0, 0.55, { contrast: 55 });
           const resAmount = await worker.recognize(amountSliceUrl);
           const amountText = resAmount?.data?.text || "";
 
-          // Region 2: Parties Slice (y: 14% - 60%, x: 0 - 75% to exclude mascot)
+          // Region 2: Parties Slice (y: 12% - 60%, full width 100% to capture full sender & receiver names)
           if (onProgress) onProgress("กำลังอ่านชื่อผู้โอนและบัญชีผู้รับ (Parties Region)...");
-          const partiesSliceUrl = cropAndPreprocessSlice(img, 0, 0.14, 0.75, 0.46, { contrast: 50 });
+          const partiesSliceUrl = cropAndPreprocessSlice(img, 0, 0.12, 1.0, 0.48, { contrast: 50 });
           const resParties = await worker.recognize(partiesSliceUrl);
           const partiesText = resParties?.data?.text || "";
 
-          // Region 3: Header / Date Slice (y: 4% - 28%, full width)
+          // Region 3: Header / Date Slice (y: 2% - 30%, full width)
           if (onProgress) onProgress("กำลังอ่านวันที่และเวลาโอน (Header Region)...");
-          const headerSliceUrl = cropAndPreprocessSlice(img, 0, 0.04, 1.0, 0.26, { contrast: 45 });
+          const headerSliceUrl = cropAndPreprocessSlice(img, 0, 0.02, 1.0, 0.28, { contrast: 45 });
           const resHeader = await worker.recognize(headerSliceUrl);
           const headerText = resHeader?.data?.text || "";
 
           // Combine region texts with section headers in natural visual order:
-          // 1. Header (Date / Time)
-          // 2. Parties (Sender -> Receiver)
-          // 3. Amount & Ref
           const combinedText = [
             "=== HEADER SECTION ===",
             headerText,
@@ -376,38 +373,88 @@ export const detectBankFromSnippet = (snippet) => {
 export const parseSlipText = (text, qrRaw = '', context = {}) => {
   const normalizedText = (text || "").replace(/\r/g, "");
   
-  // 1. EXTRACT AMOUNT (MULTILINE RESILIENT & FEE AVOIDANCE)
+  // 1. EXTRACT AMOUNT (MULTILINE RESILIENT, THOUSANDS SEPARATOR TOLERANT, FEE AVOIDANCE)
   let parsedAmount = null;
 
-  // Filter out explicit fee lines first (ค่าธรรมเนียม / Fee: 0.00)
-  const nonFeeLines = normalizedText
-    .split('\n')
-    .filter(line => !/ค่าธรรมเนียม|Fee|000 uw|0\.00\s*(?:บาท|ขาท|THB|บ\.|uw|wm|๓)/i.test(line))
-    .join('\n');
+  // Remove ONLY fee snippets (e.g., "ค่าธรรมเนียม 0.00 THB") without deleting the rest of the line
+  const textWithoutFees = normalizedText
+    .replace(/(?:ค่าธรรมเนียม|ค่าบริการ|Fee|fee|000\s*uw)[\s\S]{0,20}?(?:0(?:\.00)?|ฟรี|Free)\s*(?:THB|บาท|ขาท|บ\.|uw|wm|๓)?/gi, ' ')
+    .replace(/\b0\.00\s*(?:THB|บาท|ขาท|บ\.|uw|wm|๓|Baht)\b/gi, ' ');
 
-  // Regex 1: Labeled with Thai / Eng keywords (handling OCR misread of 'จำนวน')
-  const labeledRegexes = [
-    /(?:จำนวนเงินโอน|จำนวนเงิน|จํานวนเงิน|ยอดเงินโอน|ยอดเงินที่โอน|ยอดเงิน|ยอดโอน|จำนวน|จํานวน|จํามาด|จําฆาน|จํานาน|จําขาน|\bAmount\b|\bTotal\b|\bAmt\b)[\s\S]{0,35}?([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2}))/i,
-    /([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2})\s*(?:THB|บาท|ขาท|บ\.|Unn|บาn|wm|wu|๓|Baht)/i,
-    /(?:THB|บาท|ขาท)\s*([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2})/i
-  ];
+  // Helper to parse numbers with commas, dots, spaces, apostrophes as thousands separators
+  const parseNum = (str) => {
+    if (!str) return null;
+    const clean = str.trim();
+    // Case 1: Dot as thousands with decimal at the end (e.g. 1.179.00)
+    const dotThousands = clean.match(/([0-9]{1,3}(?:[,\.\s\'][0-9]{3})+\.[0-9]{2})/);
+    if (dotThousands) {
+      const raw = dotThousands[1];
+      const lastDot = raw.lastIndexOf('.');
+      const intP = raw.slice(0, lastDot).replace(/[^0-9]/g, '');
+      const decP = raw.slice(lastDot + 1);
+      const val = parseFloat(intP + '.' + decP);
+      if (!isNaN(val) && val > 0) return val;
+    }
+    // Case 2: Standard comma thousands (e.g. 1,179.00 or 500.00)
+    const stdMatch = clean.match(/([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2})/);
+    if (stdMatch) {
+      const val = parseFloat(stdMatch[1].replace(/,/g, ''));
+      if (!isNaN(val) && val > 0) return val;
+    }
+    // Case 3: Space or apostrophe thousands (e.g. 1 179.00 or 1'179.00)
+    const altMatch = clean.match(/([0-9]{1,3}(?:[\s\'][0-9]{3})+\.[0-9]{2})/);
+    if (altMatch) {
+      const val = parseFloat(altMatch[1].replace(/[\s\']/g, ''));
+      if (!isNaN(val) && val > 0) return val;
+    }
+    // Case 4: Integer with thousands or 3+ digits integer
+    const intMatch = clean.match(/([0-9]{1,3}(?:[,\.][0-9]{3})+|\b[0-9]{3,6}\b)/);
+    if (intMatch) {
+      const val = parseFloat(intMatch[1].replace(/,/g, ''));
+      if (!isNaN(val) && val > 0) return val;
+    }
+    return null;
+  };
 
-  for (const regex of labeledRegexes) {
-    const match = nonFeeLines.match(regex);
-    if (match) {
-      const val = parseFloat(match[1].replace(/,/g, ''));
-      if (!isNaN(val) && val > 0) {
+  // Rule 1: Labeled with Thai / Eng amount keywords
+  const labelMatches = textWithoutFees.matchAll(/(?:จำนวนเงินโอน|จำนวนเงิน|จํานวนเงิน|ยอดเงินโอน|ยอดเงินที่โอน|ยอดเงิน|ยอดโอน|จำนวน|จํานวน|จํามาด|จําฆาน|จํานาน|จําขาน|\bAmount\b|\bTotal\b|\bAmt\b)[\s\S]{0,45}?([0-9]{1,3}(?:[,\.\s\'][0-9]{3})*(?:\.[0-9]{1,2})?|\b[0-9]{3,6}\b)/gi);
+  for (const m of labelMatches) {
+    const val = parseNum(m[1]);
+    if (val !== null && val > 0) {
+      parsedAmount = val;
+      break;
+    }
+  }
+
+  // Rule 2: Followed by currency keywords (THB, บาท, Baht, บ.)
+  if (parsedAmount === null) {
+    const currMatches = textWithoutFees.matchAll(/([0-9]{1,3}(?:[,\.\s\'][0-9]{3})*(?:\.[0-9]{1,2})?|\b[0-9]{3,6}\b)\s*(?:THB|บาท|ขาท|บ\.|Unn|บาn|wm|wu|๓|Baht)/gi);
+    for (const m of currMatches) {
+      const val = parseNum(m[1]);
+      if (val !== null && val > 0) {
         parsedAmount = val;
         break;
       }
     }
   }
 
-  // Fallback: extract all non-zero decimal numbers with 2 decimal places
+  // Rule 3: Preceded by currency keywords (THB 1,179.00)
   if (parsedAmount === null) {
-    const allDecimals = Array.from(nonFeeLines.matchAll(/([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2})/g))
-      .map(m => parseFloat(m[1].replace(/,/g, '')))
-      .filter(n => !isNaN(n) && n > 0);
+    const prefixMatches = textWithoutFees.matchAll(/(?:THB|บาท|ขาท)\s*([0-9]{1,3}(?:[,\.\s\'][0-9]{3})*(?:\.[0-9]{1,2})?|\b[0-9]{3,6}\b)/gi);
+    for (const m of prefixMatches) {
+      const val = parseNum(m[1]);
+      if (val !== null && val > 0) {
+        parsedAmount = val;
+        break;
+      }
+    }
+  }
+
+  // Rule 4: Fallback extract any non-zero decimal numbers with 2 decimal places
+  if (parsedAmount === null) {
+    const allDecimals = Array.from(textWithoutFees.matchAll(/([0-9]{1,3}(?:[,\.\s\'][0-9]{3})*\.[0-9]{2})/g))
+      .map(m => parseNum(m[1]))
+      .filter(n => n !== null && n > 0);
     
     if (allDecimals.length > 0) {
       if (context.expectedAmount && allDecimals.includes(Number(context.expectedAmount))) {

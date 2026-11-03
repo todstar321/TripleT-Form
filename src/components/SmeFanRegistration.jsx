@@ -678,8 +678,27 @@ export default function SmeFanRegistration({
           },
           (progressText) => setSlipStatusMessage(progressText)
         );
-        setSlipDetails(details);
-        if (details.amount !== undefined && details.amount < calculatedFee && calculatedFee > 0) {
+
+        // Smart Resolution:
+        // If OCR detected amount (e.g. 1179 or 500), use it!
+        // If OCR could not detect amount, default to calculatedFee so user is not trapped, while allowing edit
+        const hasDetectedAmount = (details.amount !== null && details.amount !== undefined && Number(details.amount) > 0);
+        const resolvedAmount = hasDetectedAmount 
+          ? Number(details.amount) 
+          : (calculatedFee > 0 ? calculatedFee : null);
+
+        const updatedDetails = {
+          ...details,
+          amount: resolvedAmount,
+          isAmountDetected: hasDetectedAmount,
+          isOverpaid: resolvedAmount !== null && calculatedFee > 0 && resolvedAmount > calculatedFee,
+          isUnderpaid: resolvedAmount !== null && calculatedFee > 0 && resolvedAmount < calculatedFee,
+          contribution: (resolvedAmount !== null && calculatedFee > 0 && resolvedAmount > calculatedFee) ? (resolvedAmount - calculatedFee) : 0,
+          shortage: (resolvedAmount !== null && calculatedFee > 0 && resolvedAmount < calculatedFee) ? (calculatedFee - resolvedAmount) : 0
+        };
+
+        setSlipDetails(updatedDetails);
+        if (updatedDetails.amount !== null && updatedDetails.amount < calculatedFee && calculatedFee > 0) {
           setUnderpaidModalOpen(true);
         }
       } catch (err) {
@@ -732,11 +751,9 @@ export default function SmeFanRegistration({
       errs.slip = "กรุณาแนบภาพสลิปการโอนเงินเพื่อยืนยันการลงทะเบียน";
     }
     const rawAmt = slipDetails?.amount;
-    const transferAmount = Number(rawAmt !== undefined && rawAmt !== null ? rawAmt : 0);
+    const transferAmount = Number(rawAmt !== undefined && rawAmt !== null && Number(rawAmt) > 0 ? rawAmt : calculatedFee);
     if (calculatedFee > 0 && slipPreview) {
-      if (rawAmt === null || rawAmt === undefined || transferAmount <= 0) {
-        errs.slip = "กรุณาตรวจสอบและระบุยอดเงินที่โอนจริงตามสลิป";
-      } else if (transferAmount < calculatedFee) {
+      if (transferAmount < calculatedFee) {
         const shortage = calculatedFee - transferAmount;
         errs.slip = `ยอดเงินโอน (${transferAmount.toLocaleString()} บาท) ไม่ครบตามจำนวนค่าลงทะเบียนที่กำหนด (${calculatedFee.toLocaleString()} บาท, ขาดอีก ${shortage.toLocaleString()} บาท)`;
         setUnderpaidModalOpen(true);
@@ -2579,16 +2596,80 @@ export default function SmeFanRegistration({
                                           setUnderpaidModalOpen(true);
                                         }
                                       }}
-                                      className="w-28 bg-slate-900/90 px-2.5 py-1 rounded-lg text-white font-mono font-bold text-xs border border-white/20 focus:outline-none focus:border-amber-400 text-right"
+                                      className="w-32 bg-slate-900/90 px-3 py-1.5 rounded-xl text-white font-mono font-extrabold text-sm border border-amber-500/40 focus:outline-none focus:border-amber-400 text-right shadow-inner"
                                     />
-                                    <span className="text-slate-400 text-xs font-medium">บาท</span>
+                                    <span className="text-slate-300 text-xs font-semibold">บาท</span>
                                   </div>
                                 </div>
 
+                                {/* Quick Amount Shortcuts */}
+                                <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                                  <span className="text-[10px] text-slate-400 mr-0.5">ปุ่มลัดยอดเงิน:</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const val = calculatedFee;
+                                      setSlipDetails(prev => ({
+                                        ...prev,
+                                        amount: val,
+                                        isAmountDetected: true,
+                                        isUnderpaid: false,
+                                        isOverpaid: false,
+                                        shortage: 0,
+                                        contribution: 0
+                                      }));
+                                    }}
+                                    className="text-[10px] px-2 py-0.5 rounded-lg bg-white/10 hover:bg-white/20 text-slate-200 border border-white/10 transition-all font-mono"
+                                  >
+                                    {calculatedFee.toLocaleString()} บ. (ค่าบัตร)
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const val = 1000;
+                                      setSlipDetails(prev => ({
+                                        ...prev,
+                                        amount: val,
+                                        isAmountDetected: true,
+                                        isUnderpaid: val < calculatedFee,
+                                        isOverpaid: val > calculatedFee,
+                                        shortage: val < calculatedFee ? calculatedFee - val : 0,
+                                        contribution: val > calculatedFee ? val - calculatedFee : 0
+                                      }));
+                                    }}
+                                    className="text-[10px] px-2 py-0.5 rounded-lg bg-white/10 hover:bg-white/20 text-slate-200 border border-white/10 transition-all font-mono"
+                                  >
+                                    1,000 บ.
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const val = 1179;
+                                      setSlipDetails(prev => ({
+                                        ...prev,
+                                        amount: val,
+                                        isAmountDetected: true,
+                                        isUnderpaid: val < calculatedFee,
+                                        isOverpaid: val > calculatedFee,
+                                        shortage: val < calculatedFee ? calculatedFee - val : 0,
+                                        contribution: val > calculatedFee ? val - calculatedFee : 0
+                                      }));
+                                    }}
+                                    className="text-[10px] px-2 py-0.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition-all font-mono font-bold"
+                                  >
+                                    1,179 บ.
+                                  </button>
+                                </div>
+
                                 {!slipDetails.isAmountDetected && (
-                                  <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[10px] text-amber-300 flex items-center space-x-1.5">
-                                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-400" />
-                                    <span>ระบบไม่สามารถอ่านยอดเงินจากสลิปนี้ได้อัตโนมัติ กรุณาระบุยอดเงินโอนจริงเพื่อส่งให้ฝ่ายการเงินตรวจสอบ</span>
+                                  <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300 space-y-0.5">
+                                    <div className="flex items-center space-x-1.5 font-bold text-white text-[11px]">
+                                      <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                                      <span>ใส่ยอดตามค่าบัตร ({calculatedFee.toLocaleString()} บาท) ให้อัตโนมัติ</span>
+                                    </div>
+                                    <p className="text-[10px] text-slate-300">
+                                      หากท่านโอนยอดอื่น (เช่น โอนเกินเพื่อร่วมสมทบกิจกรรม) สามารถแตะแก้ไขตัวเลขหรือกดปุ่มลัดด้านบนได้เลยครับ
+                                    </p>
                                   </div>
                                 )}
 
