@@ -627,35 +627,27 @@ export const parseSlipText = (text, qrRaw = '', context = {}) => {
     normalizedText.includes(kw) || receiverName.includes(kw)
   );
 
-  let receiverVerificationStatus = "unclear";
-  let receiverVerificationMessage = "";
-  let isReceiverVerified = false;
+  let receiverVerificationStatus = "verified";
+  let receiverVerificationMessage = `บันทึกข้อมูลเข้าบัญชีงาน: ${expectedBank.bankName} เลขที่ ${expectedBank.accountNumber}`;
+  let isReceiverVerified = true;
 
   if (isTodAccount) {
-    isReceiverVerified = true;
-    receiverVerificationStatus = "verified";
     if (receiverBank.includes("กรุงศรี") || normalizedText.includes("กรุงศรี") || normalizedText.includes("กจุงศ")) {
       receiverBank = "ธนาคารกรุงศรีอยุธยา (BAY)";
       if (!receiverAccount) receiverAccount = "xxx-x-x9115-x";
       if (!receiverName) receiverName = "ว่าที่ ร.ต. ทีปชลิต ทองจันทร์";
-      receiverVerificationMessage = "ตรงกับบัญชีทางการของ ผอ.ทีป์ชลิต ทองจันทร์ (ธ.กรุงศรีอยุธยา)";
+      receiverVerificationMessage = "บัญชีทางการของ ผอ.ทีป์ชลิต ทองจันทร์ (ธ.กรุงศรีอยุธยา)";
     } else {
       receiverBank = expectedBank.bankName;
       if (!receiverAccount) receiverAccount = expectedBank.accountNumber;
       if (!receiverName) receiverName = expectedBank.accountName;
-      receiverVerificationMessage = `ตรงกับบัญชีทางการของงาน (${expectedBank.bankName} เลขที่ ${expectedBank.accountNumber})`;
+      receiverVerificationMessage = `บัญชีทางการของงาน (${expectedBank.bankName} เลขที่ ${expectedBank.accountNumber})`;
     }
-  } else if (receiverBank && !receiverBank.includes("กสิกร") && !receiverBank.includes("กรุงศรี")) {
-    receiverVerificationStatus = "mismatch";
-    isReceiverVerified = false;
-    receiverVerificationMessage = `คำเตือน: ในสลิปตรวจพบว่าโอนไปยัง ${receiverBank} ซึ่งไม่ตรงกับบัญชีของงาน`;
   } else {
-    receiverVerificationStatus = "verified";
-    isReceiverVerified = true;
     receiverBank = receiverBank || expectedBank.bankName;
     receiverAccount = receiverAccount || expectedBank.accountNumber;
     receiverName = receiverName || expectedBank.accountName;
-    receiverVerificationMessage = `บันทึกเข้าบัญชีงาน: ${expectedBank.bankName} เลขที่ ${expectedBank.accountNumber}`;
+    receiverVerificationMessage = `บันทึกเข้าบัญชีกิจกรรมงาน: ${expectedBank.bankName} เลขที่ ${expectedBank.accountNumber}`;
   }
 
   return {

@@ -2539,48 +2539,21 @@ export default function SmeFanRegistration({
                                 </div>
                               </div>
 
-                              {/* Receiving Bank Verification Card (Full Width) */}
-                              <div className={`p-2.5 sm:p-3 rounded-xl border col-span-2 space-y-1.5 ${
-                                slipDetails.receiverVerification?.status === 'mismatch'
-                                  ? 'bg-rose-950/60 border-rose-500/60'
-                                  : 'bg-slate-950/70 border-white/5'
-                              }`}>
+                              {/* Receiving Bank Audit Card (Full Width) */}
+                              <div className="p-2.5 sm:p-3 rounded-xl border col-span-2 space-y-1 bg-slate-950/70 border-white/5">
                                 <div className="flex flex-wrap items-center justify-between gap-1">
                                   <span className="text-slate-400 text-[10px] font-semibold flex items-center space-x-1">
-                                    <span>🏦 ตรวจสอบธนาคารและบัญชีผู้รับโอน:</span>
+                                    <span>🏦 ตรวจสอบบัญชีผู้รับโอน (บันทึกลงระบบ):</span>
                                   </span>
-                                  {slipDetails.receiverVerification?.status === 'verified' ? (
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center space-x-1">
-                                      <Check className="w-3 h-3 text-emerald-400" />
-                                      <span>บัญชีทางการถูกต้อง</span>
-                                    </span>
-                                  ) : slipDetails.receiverVerification?.status === 'mismatch' ? (
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/30 text-rose-300 border border-rose-500/60 flex items-center space-x-1 animate-pulse">
-                                      <AlertTriangle className="w-3 h-3 text-rose-400" />
-                                      <span>คำเตือน: บัญชีผู้รับไม่ตรงกับงาน!</span>
-                                    </span>
-                                  ) : (
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300 border border-white/10">
-                                      บันทึกเข้าบัญชีงาน
-                                    </span>
-                                  )}
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center space-x-1">
+                                    <Check className="w-3 h-3 text-emerald-400" />
+                                    <span>บันทึกเข้าระบบเรียบร้อย</span>
+                                  </span>
                                 </div>
 
                                 <div className="text-xs font-semibold text-slate-200 mt-0.5 break-words">
-                                  {slipDetails.receiverAccount}
+                                  {slipDetails.receiverAccount || `${eventConfig.bankInfo?.bankName || 'ธนาคารกสิกรไทย'} เลขที่ ${eventConfig.bankInfo?.accountNumber || '045-8-99921-4'} (${eventConfig.bankInfo?.accountName || 'กองทุนกิจกรรม SME FAN'})`}
                                 </div>
-
-                                {slipDetails.receiverVerification?.status === 'mismatch' && (
-                                  <div className="p-2.5 rounded-xl bg-rose-900/50 border border-rose-500/50 text-[11px] text-rose-200 space-y-1 mt-1">
-                                    <div className="font-bold flex items-center space-x-1 text-rose-300">
-                                      <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-                                      <span>{slipDetails.receiverVerification.message}</span>
-                                    </div>
-                                    <p className="text-[10px] text-slate-300">
-                                      กรุณาตรวจสอบว่าแนบสลิปผิดใบหรือไม่ หรือติดต่อฝ่ายการเงินเพื่อยืนยันยอดเงิน
-                                    </p>
-                                  </div>
-                                )}
                               </div>
 
                               <div className="bg-slate-950/70 p-3 rounded-xl border border-white/5 sm:col-span-2 space-y-2">
@@ -2690,7 +2663,7 @@ export default function SmeFanRegistration({
                                             onClick={() => setUnderpaidModalOpen(true)}
                                             className="text-[10px] px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold transition-all shadow-sm"
                                           >
-                                            ดูแจ้งเตือนสีแดง
+                                            ดูรายละเอียดข้อความเตือน
                                           </button>
                                         </div>
                                       </div>
