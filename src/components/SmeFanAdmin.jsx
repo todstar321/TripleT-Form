@@ -53,6 +53,7 @@ import AttendeeInspectionModal from './AttendeeInspectionModal';
 import { themePresetsList } from '../data/smeFanData';
 import { testSupabaseConnection, saveSupabaseConfig, getSupabaseConfig, isSupabaseConfigured, upsertRegistrationToCloud, saveEventConfigToCloud, formatThaiDisplayDateTime } from '../utils/supabaseClient';
 import { testCloudinaryConnection, saveCloudinaryConfig, getCloudinaryConfig, isCloudinaryConfigured } from '../utils/cloudinary';
+import { getScheduleStatus, formatThaiScheduleDateTime } from '../utils/scheduleHelper';
 
 export default function SmeFanAdmin({
   eventConfig,
@@ -895,6 +896,208 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
+
+            {/* Registration Schedule Manager Card */}
+            {(() => {
+              const currentSchedule = eventConfig?.registrationSchedule || {
+                mode: 'auto',
+                openDateTime: '2026-11-05T09:09',
+                closeDateTime: '2026-12-15T22:00',
+                upcomingMessage: 'ระบบจะเปิดรับลงทะเบียนในวันที่ 5 พฤศจิกายน 2569 เวลา 09:09 น.',
+                closedMessage: 'ระบบปิดรับลงทะเบียนเรียบร้อยแล้ว ขอขอบคุณทุกท่านที่ให้ความสนใจ'
+              };
+              const currentStatus = getScheduleStatus(currentSchedule);
+
+              const handleUpdateSchedule = (key, value) => {
+                setEventConfig(prev => ({
+                  ...prev,
+                  registrationSchedule: {
+                    ...(prev.registrationSchedule || currentSchedule),
+                    [key]: value
+                  }
+                }));
+              };
+
+              return (
+                <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 flex items-center justify-center">
+                        <Clock className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          <h3 className="text-base font-extrabold text-slate-900">
+                            ⏰ ตั้งค่ากำหนดการเปิด-ปิดรับลงทะเบียนออนไลน์
+                          </h3>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${currentStatus.badgeClass}`}>
+                            {currentStatus.label}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500">
+                          กำหนดวันเวลาเปิด-ปิดรับสมัคร พร้อมระบบนาฬิกานับถอยหลัง Real-time บนหน้าแบบฟอร์ม
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (onSwitchToForm) onSwitchToForm();
+                      }}
+                      className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center space-x-1.5 transition-all self-start sm:self-auto"
+                    >
+                      <Eye className="w-3.5 h-3.5 text-amber-500" />
+                      <span>ดูตัวอย่างหน้าฟอร์ม</span>
+                    </button>
+                  </div>
+
+                  {/* Mode Selector */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-700 block">
+                      เลือกโหมดการเปิด-ปิดรับลงทะเบียน:
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      {/* Option 1: Auto */}
+                      <div
+                        onClick={() => handleUpdateSchedule('mode', 'auto')}
+                        className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
+                          (currentSchedule.mode || 'auto') === 'auto'
+                            ? 'bg-amber-500/10 border-amber-500 text-slate-900 shadow-sm'
+                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-xs flex items-center space-x-1.5">
+                            <span>⏱️ อัตโนมัติตามวันเวลา</span>
+                          </span>
+                          <input
+                            type="radio"
+                            name="scheduleMode"
+                            checked={(currentSchedule.mode || 'auto') === 'auto'}
+                            onChange={() => handleUpdateSchedule('mode', 'auto')}
+                            className="text-amber-500"
+                          />
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-1">
+                          เปิดและปิดตามวัน-เวลาที่กำหนด พร้อมนาฬิกานับถอยหลัง
+                        </p>
+                      </div>
+
+                      {/* Option 2: Always Open */}
+                      <div
+                        onClick={() => handleUpdateSchedule('mode', 'always_open')}
+                        className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
+                          currentSchedule.mode === 'always_open'
+                            ? 'bg-emerald-500/10 border-emerald-500 text-slate-900 shadow-sm'
+                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-xs flex items-center space-x-1.5 text-emerald-700">
+                            <span>🟢 เปิดตลอดเวลา</span>
+                          </span>
+                          <input
+                            type="radio"
+                            name="scheduleMode"
+                            checked={currentSchedule.mode === 'always_open'}
+                            onChange={() => handleUpdateSchedule('mode', 'always_open')}
+                            className="text-emerald-500"
+                          />
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-1">
+                          เปิดรับลงทะเบียนทันที ไม่จำกัดเวลา
+                        </p>
+                      </div>
+
+                      {/* Option 3: Closed */}
+                      <div
+                        onClick={() => handleUpdateSchedule('mode', 'closed')}
+                        className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
+                          currentSchedule.mode === 'closed'
+                            ? 'bg-rose-500/10 border-rose-500 text-slate-900 shadow-sm'
+                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-xs flex items-center space-x-1.5 text-rose-700">
+                            <span>🔒 ปิดรับชั่วคราว</span>
+                          </span>
+                          <input
+                            type="radio"
+                            name="scheduleMode"
+                            checked={currentSchedule.mode === 'closed'}
+                            onChange={() => handleUpdateSchedule('mode', 'closed')}
+                            className="text-rose-500"
+                          />
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-1">
+                          ปิดระบบรับสมัครทันที ป้องกันการกรอกข้อมูล
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Datetime Pickers (Only in Auto mode) */}
+                  {(currentSchedule.mode || 'auto') === 'auto' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                      {/* Open DateTime */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-800 flex items-center space-x-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                          <span>วันและเวลาเริ่มเปิดรับลงทะเบียน:</span>
+                        </label>
+                        <input
+                          type="datetime-local"
+                          value={currentSchedule.openDateTime || '2026-11-05T09:09'}
+                          onChange={(e) => handleUpdateSchedule('openDateTime', e.target.value)}
+                          className="w-full text-xs font-semibold px-3 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+                        />
+                        <div className="text-[11px] text-slate-500 font-medium pt-0.5">
+                          📅 {formatThaiScheduleDateTime(currentSchedule.openDateTime || '2026-11-05T09:09')}
+                        </div>
+                      </div>
+
+                      {/* Close DateTime */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-800 flex items-center space-x-1.5">
+                          <span className="w-2 h-2 rounded-full bg-rose-500" />
+                          <span>วันและเวลาปิดรับลงทะเบียน:</span>
+                        </label>
+                        <input
+                          type="datetime-local"
+                          value={currentSchedule.closeDateTime || '2026-12-15T22:00'}
+                          onChange={(e) => handleUpdateSchedule('closeDateTime', e.target.value)}
+                          className="w-full text-xs font-semibold px-3 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+                        />
+                        <div className="text-[11px] text-slate-500 font-medium pt-0.5">
+                          📅 {formatThaiScheduleDateTime(currentSchedule.closeDateTime || '2026-12-15T22:00')}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Status Summary Banner */}
+                  <div className="p-3.5 rounded-xl bg-slate-900 text-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center space-x-2.5 text-center sm:text-left">
+                      <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                      <div>
+                        <span className="font-bold text-white">สิ่งที่ผู้ใช้เห็นขณะนี้: </span>
+                        <span className="text-slate-300">
+                          {currentStatus.status === 'UPCOMING' && `⏳ หน้านับถอยหลังรอเปิดระบบ (จะเปิดในวันที่ ${formatThaiScheduleDateTime(currentSchedule.openDateTime)})`}
+                          {currentStatus.status === 'OPEN' && `🟢 หน้าแบบฟอร์มเปิดให้ลงทะเบียนปกติ ${currentStatus.formattedCloseDate ? `(ปิดรับ ${currentStatus.formattedCloseDate})` : ''}`}
+                          {currentStatus.status === 'CLOSED' && `🔒 หน้าแจ้งเตือนปิดรับลงทะเบียนแล้ว`}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-[11px] px-2 py-1 rounded bg-slate-800 border border-slate-700 text-amber-300 font-mono shrink-0">
+                      ☁️ ซิงค์ Cloud ทันที
+                    </span>
+                  </div>
+
+                </div>
+              );
+            })()}
 
             {/* Club Distribution & Status Cards */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

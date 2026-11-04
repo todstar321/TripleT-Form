@@ -152,6 +152,9 @@ export default function App() {
         if (!parsed.members || !Array.isArray(parsed.members) || parsed.members.length < initialSmeFanConfig.members.length) {
           parsed.members = initialSmeFanConfig.members;
         }
+        if (!parsed.registrationSchedule) {
+          parsed.registrationSchedule = initialSmeFanConfig.registrationSchedule;
+        }
         return parsed;
       }
     } catch (e) {

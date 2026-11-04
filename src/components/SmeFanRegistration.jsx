@@ -42,14 +42,19 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  LogOut
+  LogOut,
+  Clock,
+  Hourglass,
+  Flame
 } from 'lucide-react';
 import TicketModal from './TicketModal';
 import ImageCropperModal from './ImageCropperModal';
+import RegistrationCountdown from './RegistrationCountdown';
 import { themePresetsList } from '../data/smeFanData';
 import { uploadToCloudinary } from '../utils/cloudinary';
 import { analyzeSlipData } from '../utils/slipReader';
 import { formatPhoneNumber, cleanPhoneNumber } from '../utils/phoneFormatter';
+import { getScheduleStatus, formatThaiScheduleDateTime, formatThaiShortDateTime } from '../utils/scheduleHelper';
 
 const THAI_MONTHS_FULL = [
   "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
@@ -154,6 +159,29 @@ export default function SmeFanRegistration({
 }) {
   // Step state: 0 = Landing, 1 = Type Select, 2 = Details, 3 = Payment & Slip, 4 = Shirt (if eligible)
   const [step, setStep] = useState(0);
+
+  // Live Clock & Registration Schedule Status
+  const [currentTime, setCurrentTime] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const scheduleStatus = useMemo(() => {
+    return getScheduleStatus(eventConfig?.registrationSchedule, currentTime);
+  }, [eventConfig?.registrationSchedule, currentTime]);
+
+  const isAdmin = Boolean(currentUser && ['owner', 'manager', 'admin'].includes(currentUser.role));
+  const canRegister = scheduleStatus.isOpen || isAdmin;
+
+  // Guard: If step > 0 and registration is NOT open, redirect back to landing (step 0)
+  useEffect(() => {
+    if (step > 0 && !canRegister) {
+      setStep(0);
+    }
+  }, [step, canRegister]);
 
   // Form State
   const [regType, setRegType] = useState('member'); // 'member' | 'guest'
@@ -1140,38 +1168,94 @@ export default function SmeFanRegistration({
                   </div>
                 </div>
 
-                {/* T-Shirt Quota Notice - Horizontal on both mobile and desktop */}
-                <div className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-gradient-to-r from-amber-500/20 via-yellow-500/10 to-amber-500/20 border border-amber-500/40 text-amber-200 text-xs sm:text-sm flex flex-row items-center justify-between gap-2">
-                  <div className="flex items-center space-x-2 sm:space-x-2.5 text-left min-w-0">
-                    <Shirt className="w-5 h-5 sm:w-6 sm:h-6 text-amber-400 shrink-0" />
-                    <div className="min-w-0">
-                      <span className="font-bold text-white text-xs sm:text-sm block truncate">แจกเสื้อฟรีสำหรับ {maxShirtQuota} ท่านแรก!</span>
-                      <div className="text-[10px] sm:text-[11px] text-amber-300/80 truncate">เมื่อลงทะเบียนและแนบสลิปชำระเงินสำเร็จ</div>
+                {/* ==================================================== */}
+                {/* REGISTRATION SCHEDULE COUNTDOWN & STATUS BANNER       */}
+                {/* ==================================================== */}
+                {scheduleStatus.status === 'UPCOMING' && (
+                  <RegistrationCountdown
+                    mode="launch"
+                    targetDate={scheduleStatus.targetDate}
+                    formattedDateText={scheduleStatus.formattedOpenDate}
+                    remainingShirtQuota={remainingShirtQuota}
+                    maxShirtQuota={maxShirtQuota}
+                  />
+                )}
+
+                {scheduleStatus.status === 'OPEN' && scheduleStatus.targetDate && (
+                  <RegistrationCountdown
+                    mode="closing"
+                    targetDate={scheduleStatus.targetDate}
+                    formattedDateText={scheduleStatus.formattedCloseDate}
+                    remainingShirtQuota={remainingShirtQuota}
+                    maxShirtQuota={maxShirtQuota}
+                  />
+                )}
+
+                {scheduleStatus.status === 'CLOSED' && (
+                  <div className="p-4 sm:p-5 rounded-3xl bg-rose-950/40 border-2 border-rose-500/40 text-center space-y-2 shadow-xl my-4 animate-fadeIn">
+                    <div className="w-12 h-12 rounded-2xl bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center justify-center mx-auto">
+                      <Lock className="w-6 h-6" />
                     </div>
+                    <h4 className="text-base sm:text-lg font-black text-rose-300">
+                      ระบบปิดรับลงทะเบียนเรียบร้อยแล้ว
+                    </h4>
+                    <p className="text-xs sm:text-sm text-slate-300 max-w-md mx-auto leading-relaxed">
+                      {scheduleStatus.closedMessage || "ระบบปิดรับลงทะเบียนเรียบร้อยแล้ว ขอขอบคุณทุกท่านที่ให้ความสนใจ"}
+                    </p>
                   </div>
-                  <div className="flex items-center justify-end space-x-2 sm:space-x-3 shrink-0">
-                    {isInlineEditing && (
-                      <div className="flex items-center space-x-1">
-                        <span className="text-[10px] sm:text-[11px] text-amber-300">โควตา:</span>
-                        <input
-                          type="number"
-                          min="0"
-                          value={eventConfig.shirtQuota?.maxQuota || 15}
-                          onChange={(e) => handleUpdateNested('shirtQuota', 'maxQuota', parseInt(e.target.value) || 0)}
-                          className="w-12 px-1.5 py-0.5 rounded-lg bg-slate-950 border border-dashed border-amber-400 text-amber-400 font-mono font-bold text-center text-xs focus:outline-none"
-                        />
+                )}
+
+                {/* T-Shirt Quota Notice - Horizontal on both mobile and desktop (only when not upcoming) */}
+                {scheduleStatus.status !== 'UPCOMING' && (
+                  <div className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-gradient-to-r from-amber-500/20 via-yellow-500/10 to-amber-500/20 border border-amber-500/40 text-amber-200 text-xs sm:text-sm flex flex-row items-center justify-between gap-2">
+                    <div className="flex items-center space-x-2 sm:space-x-2.5 text-left min-w-0">
+                      <Shirt className="w-5 h-5 sm:w-6 sm:h-6 text-amber-400 shrink-0" />
+                      <div className="min-w-0">
+                        <span className="font-bold text-white text-xs sm:text-sm block truncate">แจกเสื้อฟรีสำหรับ {maxShirtQuota} ท่านแรก!</span>
+                        <div className="text-[10px] sm:text-[11px] text-amber-300/80 truncate">เมื่อลงทะเบียนและแนบสลิปชำระเงินสำเร็จ</div>
                       </div>
-                    )}
-                    <div className="text-right shrink-0 pl-1">
-                      <span className="text-[10px] sm:text-xs text-slate-400 block">คงเหลือ</span>
-                      <span className="font-mono text-base sm:text-lg font-bold text-amber-400">{remainingShirtQuota}</span>
-                      <span className="text-[10px] text-slate-400">/{maxShirtQuota}</span>
+                    </div>
+                    <div className="flex items-center justify-end space-x-2 sm:space-x-3 shrink-0">
+                      {isInlineEditing && (
+                        <div className="flex items-center space-x-1">
+                          <span className="text-[10px] sm:text-[11px] text-amber-300">โควตา:</span>
+                          <input
+                            type="number"
+                            min="0"
+                            value={eventConfig.shirtQuota?.maxQuota || 15}
+                            onChange={(e) => handleUpdateNested('shirtQuota', 'maxQuota', parseInt(e.target.value) || 0)}
+                            className="w-12 px-1.5 py-0.5 rounded-lg bg-slate-950 border border-dashed border-amber-400 text-amber-400 font-mono font-bold text-center text-xs focus:outline-none"
+                          />
+                        </div>
+                      )}
+                      <div className="text-right shrink-0 pl-1">
+                        <span className="text-[10px] sm:text-xs text-slate-400 block">คงเหลือ</span>
+                        <span className="font-mono text-base sm:text-lg font-bold text-amber-400">{remainingShirtQuota}</span>
+                        <span className="text-[10px] text-slate-400">/{maxShirtQuota}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
                 {/* Big Action Button */}
                 <div className="pt-4">
+                  {/* Admin Bypass Notice */}
+                  {isAdmin && !scheduleStatus.isOpen && (
+                    <div className="mb-3 p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-200 text-xs flex items-center justify-between gap-2">
+                      <span className="font-semibold flex items-center space-x-1.5">
+                        <ShieldCheck className="w-4 h-4 text-amber-400 shrink-0" />
+                        <span>👑 โหมดผู้ดูแลระบบ: ท่านสามารถทดสอบกรอกฟอร์มได้แม้ยังไม่เปิด/ปิดแล้ว</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setStep(1)}
+                        className="px-3 py-1 rounded-lg bg-amber-500 text-slate-950 font-bold text-xs shrink-0 hover:scale-105 transition-transform"
+                      >
+                        ทดสอบฟอร์ม
+                      </button>
+                    </div>
+                  )}
+
                   {isInlineEditing && (
                     <div className="mb-2 text-left">
                       <label className="text-[11px] text-amber-400 block mb-1">✏️ แก้ไขข้อความบนปุ่ม (Button Text):</label>
@@ -1183,14 +1267,37 @@ export default function SmeFanRegistration({
                       />
                     </div>
                   )}
-                  <button
-                    onClick={() => setStep(1)}
-                    style={primaryButtonStyle}
-                    className="w-full py-4 rounded-2xl text-base font-bold shadow-xl transition-all hover:scale-[1.02] hover:opacity-95 flex items-center justify-center space-x-2"
-                  >
-                    <span>{eventConfig.landingButtonText || "กดลงทะเบียนเข้างาน"}</span>
-                    <ArrowRight className="w-5 h-5" />
-                  </button>
+
+                  {/* Main Action Button States */}
+                  {scheduleStatus.isOpen ? (
+                    <button
+                      onClick={() => setStep(1)}
+                      style={primaryButtonStyle}
+                      className="w-full py-4 rounded-2xl text-base font-bold shadow-xl transition-all hover:scale-[1.02] hover:opacity-95 flex items-center justify-center space-x-2"
+                    >
+                      <span>{eventConfig.landingButtonText || "กดลงทะเบียนเข้างาน"}</span>
+                      <ArrowRight className="w-5 h-5" />
+                    </button>
+                  ) : scheduleStatus.status === 'UPCOMING' ? (
+                    <button
+                      type="button"
+                      disabled
+                      className="w-full py-4 rounded-2xl text-xs sm:text-sm font-bold bg-slate-900 border border-amber-500/40 text-amber-300/80 shadow-lg flex items-center justify-center space-x-2 cursor-not-allowed opacity-90"
+                    >
+                      <Clock className="w-4 h-4 text-amber-400 animate-spin-slow shrink-0" />
+                      <span>⏳ รอเปิดรับลงทะเบียน ({scheduleStatus.formattedShortOpenDate || 'เร็วๆ นี้'})</span>
+                      <Lock className="w-4 h-4 text-slate-500 shrink-0" />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled
+                      className="w-full py-4 rounded-2xl text-xs sm:text-sm font-bold bg-rose-950/50 border border-rose-500/30 text-rose-300/80 shadow-lg flex items-center justify-center space-x-2 cursor-not-allowed opacity-90"
+                    >
+                      <Lock className="w-4 h-4 text-rose-400 shrink-0" />
+                      <span>🔒 ปิดรับลงทะเบียนแล้ว</span>
+                    </button>
+                  )}
 
                   {/* Secondary Action: Download Ticket for Registered Attendees */}
                   <button

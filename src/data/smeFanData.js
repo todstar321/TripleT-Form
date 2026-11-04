@@ -10,6 +10,16 @@ export const initialSmeFanConfig = {
   eventVenue: "ห้องแมกโนเลีย โรงแรมลีการ์เดนส์พลาซ่า หาดใหญ่ (Lee Gardens Plaza Hotel Hat Yai)",
   forceLogoutBefore: "2026-11-03T08:16:40.000+07:00",
   
+  // Registration Schedule Rules (Flexible Auto Open/Close Window & Countdown)
+  registrationSchedule: {
+    mode: "auto", // 'auto' | 'always_open' | 'closed'
+    openDateTime: "2026-11-05T09:09",
+    closeDateTime: "2026-12-15T22:00",
+    upcomingMessage: "ระบบจะเปิดรับลงทะเบียนในวันที่ 5 พฤศจิกายน 2569 เวลา 09:09 น.",
+    closedMessage: "ระบบปิดรับลงทะเบียนเรียบร้อยแล้วเมื่อวันที่ 15 ธันวาคม 2569 เวลา 22:00 น. ขอขอบคุณทุกท่านที่ให้ความสนใจ",
+    allowExistingTicketDownload: true
+  },
+  
   // Images
   bannerImage: "https://res.cloudinary.com/dx2asgfo7/image/upload/v1793663023/triple_t_forms/sme_fan_2026/banners/official_sme_fan_banner_2026.png",
   subBannerMode: "same", // 'same' | 'custom'
