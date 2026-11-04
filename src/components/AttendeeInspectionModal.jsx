@@ -210,26 +210,56 @@ export default function AttendeeInspectionModal({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-slate-300">
-                  {/* Photo (if available) */}
-                  {(attendee.photoUrl || attendee.costumePhoto) && (
-                    <div className="sm:col-span-2 flex items-center space-x-3 p-2.5 rounded-xl bg-slate-950/40 border border-white/5">
-                      <img 
-                        src={attendee.photoUrl || attendee.costumePhoto} 
-                        alt={attendee.name}
-                        className="w-14 h-14 rounded-xl object-cover border-2 border-amber-400/60 shadow-md shrink-0" 
-                      />
-                      <div className="space-y-0.5">
-                        <span className="text-[11px] font-bold text-white block">รูปถ่ายผู้เข้าร่วมงาน (หน้างาน)</span>
-                        <a 
-                          href={attendee.photoUrl || attendee.costumePhoto} 
-                          target="_blank" 
-                          rel="noreferrer"
-                          className="text-[10px] text-amber-400 hover:underline inline-flex items-center space-x-1"
-                        >
-                          <Eye className="w-3 h-3" />
-                          <span>ดูรูปขนาดเต็ม</span>
-                        </a>
-                      </div>
+                  {/* Photos: Check-in Photo & Shirt Photo */}
+                  {(attendee.photoUrl || attendee.shirtPhoto) && (
+                    <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {/* Check-in photo */}
+                      {attendee.photoUrl && (
+                        <div className="flex items-center space-x-3 p-2.5 rounded-xl bg-slate-950/40 border border-amber-500/30">
+                          <img 
+                            src={attendee.photoUrl} 
+                            alt={attendee.name}
+                            className="w-14 h-14 rounded-xl object-cover border-2 border-amber-400/70 shadow-md shrink-0" 
+                          />
+                          <div className="space-y-0.5 min-w-0">
+                            <span className="text-[11px] font-bold text-amber-300 block truncate">📸 รูปถ่ายเข้างาน</span>
+                            <span className="text-[10px] text-slate-400 block truncate">ประกวดแต่งกาย / ยืนยันตัวตน</span>
+                            <a 
+                              href={attendee.photoUrl} 
+                              target="_blank" 
+                              rel="noreferrer"
+                              className="text-[10px] text-amber-400 hover:underline inline-flex items-center space-x-1"
+                            >
+                              <Eye className="w-3 h-3" />
+                              <span>ดูรูปเต็ม</span>
+                            </a>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Shirt photo */}
+                      {attendee.shirtPhoto && (
+                        <div className="flex items-center space-x-3 p-2.5 rounded-xl bg-slate-950/40 border border-teal-500/30">
+                          <img 
+                            src={attendee.shirtPhoto} 
+                            alt={attendee.name}
+                            className="w-14 h-14 rounded-xl object-cover border-2 border-teal-400/70 shadow-md shrink-0" 
+                          />
+                          <div className="space-y-0.5 min-w-0">
+                            <span className="text-[11px] font-bold text-teal-300 block truncate">👕 รูปถ่ายรับเสื้อ VIP</span>
+                            <span className="text-[10px] text-slate-400 block truncate">ทำเนียบผู้ได้รับเสื้อ 15 คน</span>
+                            <a 
+                              href={attendee.shirtPhoto} 
+                              target="_blank" 
+                              rel="noreferrer"
+                              className="text-[10px] text-teal-400 hover:underline inline-flex items-center space-x-1"
+                            >
+                              <Eye className="w-3 h-3" />
+                              <span>ดูรูปเต็ม</span>
+                            </a>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 

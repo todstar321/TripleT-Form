@@ -222,6 +222,9 @@ export function formatThaiDisplayDateTime(val) {
   return str;
 }
 
+// Track whether Supabase table has shirt_photo column
+let shirtPhotoColAvailable = null;
+
 // Convert DB snake_case to frontend camelCase
 export function mapCloudToRegistration(r) {
   if (!r) return null;
@@ -249,6 +252,7 @@ export function mapCloudToRegistration(r) {
     giftNumber: r.gift_number || null,
     giftRegisteredAt: r.gift_registered_at ? formatThaiDisplayTime(r.gift_registered_at) : null,
     photoUrl: r.photo_url || null,
+    shirtPhoto: r.shirt_photo || r.costume_photo || null,
     costumePhoto: r.costume_photo || null,
     recommenderName: r.recommender_name || '',
     recommender: r.recommender_name || '',
@@ -309,15 +313,30 @@ export async function upsertRegistrationToCloud(reg) {
       gift_number: reg.giftNumber || null,
       gift_registered_at: toSafeIsoTimestamp(reg.giftRegisteredAt),
       photo_url: reg.photoUrl || null,
-      costume_photo: reg.costumePhoto || null,
+      costume_photo: reg.shirtPhoto || reg.costumePhoto || null,
       recommender_name: reg.recommenderName || reg.recommender || '',
       guest_title: reg.guestTitle || reg.prefix || '',
       updated_at: new Date().toISOString()
     };
 
-    const { error } = await client
+    if (shirtPhotoColAvailable !== false && reg.shirtPhoto) {
+      payload.shirt_photo = reg.shirtPhoto;
+    }
+
+    let { error } = await client
       .from('registrations')
       .upsert(payload, { onConflict: 'ticket_no' });
+
+    if (error && error.message && error.message.includes('shirt_photo')) {
+      shirtPhotoColAvailable = false;
+      delete payload.shirt_photo;
+      const retry = await client
+        .from('registrations')
+        .upsert(payload, { onConflict: 'ticket_no' });
+      error = retry.error;
+    } else if (!error && payload.shirt_photo) {
+      shirtPhotoColAvailable = true;
+    }
 
     if (error) {
       console.error('upsertRegistrationToCloud Supabase error:', error);
@@ -418,10 +437,12 @@ export async function purgePhotosInCloud(purgeType = 'all') {
     let updatePayload = {};
     if (purgeType === 'attendees') {
       updatePayload = { photo_url: null, costume_photo: null };
+      if (shirtPhotoColAvailable) updatePayload.shirt_photo = null;
     } else if (purgeType === 'slips') {
       updatePayload = { payment_slip: null };
     } else {
       updatePayload = { photo_url: null, costume_photo: null, payment_slip: null };
+      if (shirtPhotoColAvailable) updatePayload.shirt_photo = null;
     }
 
     const { error, count } = await client

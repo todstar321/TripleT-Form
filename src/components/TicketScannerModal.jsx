@@ -377,12 +377,12 @@ export default function TicketScannerModal({
                               type="button"
                               onClick={() => {
                                 onClose();
-                                onCapturePhoto(scanResult.attendee);
+                                onCapturePhoto(scanResult.attendee, 'shirt');
                               }}
                               className="text-[10px] text-amber-300 hover:text-amber-200 underline inline-flex items-center space-x-1 cursor-pointer"
                             >
                               <Camera className="w-3 h-3" />
-                              <span>📸 ถ่ายรูปเก็บภาพ</span>
+                              <span>📸 ถ่ายรูปรับเสื้อ</span>
                             </button>
                           </div>
                         )}
@@ -401,7 +401,7 @@ export default function TicketScannerModal({
                             }));
                             if (onCapturePhoto) {
                               onClose();
-                              onCapturePhoto({ ...scanResult.attendee, shirtReceived: true });
+                              onCapturePhoto({ ...scanResult.attendee, shirtReceived: true }, 'shirt');
                             }
                           }}
                           className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 font-black text-xs shadow-lg shadow-teal-500/30 hover:scale-105 active:scale-95 transition-all inline-flex items-center space-x-1.5 cursor-pointer"
@@ -410,7 +410,7 @@ export default function TicketScannerModal({
                           <span>📦 ส่งมอบเสื้อ</span>
                         </button>
                         <p className="text-[10px] text-amber-200 font-medium mt-1">
-                          (กดเพื่อส่งมอบ & เด้งกล้อง)
+                          (กดเพื่อส่งมอบ & ถ่ายรูปรับเสื้อ)
                         </p>
                       </div>
                     )}
@@ -437,7 +437,7 @@ export default function TicketScannerModal({
                 onClick={() => {
                   if (onCapturePhoto && scanResult?.attendee) {
                     onClose();
-                    onCapturePhoto(scanResult.attendee);
+                    onCapturePhoto(scanResult.attendee, 'checkin');
                   } else {
                     onClose();
                   }
@@ -445,7 +445,7 @@ export default function TicketScannerModal({
                 className="flex-1 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center space-x-1.5 cursor-pointer"
               >
                 <Camera className="w-4 h-4" />
-                <span>เช็คอินเข้างานสำเร็จ (เปิดกล้องถ่ายรูป)</span>
+                <span>เช็คอินเข้างานสำเร็จ (ถ่ายรูปเข้างาน)</span>
               </button>
             </div>
           </div>

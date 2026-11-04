@@ -179,9 +179,9 @@ export default function ShirtPresentationModal({
                 >
                   {/* Square 1:1 Photo Frame */}
                   <div className={`relative ${grid.imgSize} rounded-2xl overflow-hidden bg-slate-900 border-2 border-amber-400/60 shadow-lg print:border-amber-600 shrink-0`}>
-                    {r.photoUrl || r.costumePhoto ? (
+                    {r.shirtPhoto || r.photoUrl || r.costumePhoto ? (
                       <img
-                        src={r.photoUrl || r.costumePhoto}
+                        src={r.shirtPhoto || r.photoUrl || r.costumePhoto}
                         alt={r.name}
                         className="w-full h-full object-cover"
                       />

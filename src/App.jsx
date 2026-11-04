@@ -719,21 +719,32 @@ export default function App() {
     });
   };
 
-  // Handle Update Attendee Photo (with option to mark checkedIn: true upon capture)
-  const handleUpdateAttendeePhoto = (ticketNo, photoUrl, alsoCheckIn = true) => {
+  // Handle Update Attendee Photo (photoType: 'checkin' | 'shirt')
+  const handleUpdateAttendeePhoto = (ticketNo, photoUrl, photoType = 'checkin', alsoCheckIn = true) => {
     if (!ticketNo) return;
     const nowTime = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
     setRegistrations(prev => {
       let updatedTicket = null;
       const nextList = prev.map(r => {
         if (r.ticketNo === ticketNo) {
-          updatedTicket = {
-            ...r,
-            photoUrl: photoUrl,
-            costumePhoto: photoUrl,
-            checkedIn: alsoCheckIn ? true : (r.checkedIn || false),
-            checkedInAt: (alsoCheckIn || r.checkedIn) ? (r.checkedInAt || nowTime) : null
-          };
+          if (photoType === 'shirt') {
+            // ONLY update shirtPhoto, preserve check-in photoUrl 100%!
+            updatedTicket = {
+              ...r,
+              shirtPhoto: photoUrl,
+              costumePhoto: photoUrl, // fallback compatibility
+              shirtReceived: true,
+              shirtReceivedAt: r.shirtReceivedAt || nowTime
+            };
+          } else {
+            // ONLY update check-in photoUrl, preserve shirtPhoto!
+            updatedTicket = {
+              ...r,
+              photoUrl: photoUrl,
+              checkedIn: alsoCheckIn ? true : (r.checkedIn || false),
+              checkedInAt: (alsoCheckIn || r.checkedIn) ? (r.checkedInAt || nowTime) : null
+            };
+          }
           return updatedTicket;
         }
         return r;
@@ -821,29 +832,56 @@ export default function App() {
   // Dedicated Reset All Registrations & Scores (Preserves 95 members, clubs, and all images 100%)
   const handleResetRegistrationsAndScores = async () => {
     try {
-      // 1. Delete all records from Supabase registrations table
+      // 1. Delete all records from Supabase tables
       if (isSupabaseConfigured()) {
         const client = getSupabase();
         if (client) {
-          const { error } = await client.from('registrations').delete().neq('ticket_no', 'NEVER_MATCH');
-          if (error) console.warn("Supabase wipe registrations warning:", error);
+          try {
+            await client.from('registrations').delete().neq('ticket_no', 'NEVER_MATCH');
+          } catch (e) {
+            console.warn("Supabase wipe registrations warning:", e);
+          }
+          try {
+            await client.from('contest_votes').delete().neq('id', 'NEVER_MATCH');
+          } catch (e) {}
+          try {
+            await client.from('contest_teams').delete().neq('id', 'NEVER_MATCH');
+          } catch (e) {}
+          try {
+            await client.from('form_responses').delete().neq('form_key', 'NEVER_MATCH');
+          } catch (e) {}
         }
       }
 
       // 2. Clear registrations state
       setRegistrations([]);
+
+      // 3. Reset all form responses in formsList (Forms 1, 2, 3, 4) back to 0
+      setFormsList(prev => {
+        const cleared = prev.map(f => ({ ...f, responses: [] }));
+        try {
+          localStorage.setItem(FORMS_STORAGE_KEY, JSON.stringify(cleared));
+        } catch (e) {}
+        return cleared;
+      });
+
+      // 4. Wipe all local & session storage keys related to testing
       try {
         localStorage.removeItem(REGISTRATIONS_STORAGE_KEY);
-        [
+        const keysToWipe = [
           'sme_fan_registrations', 'sme_fan_registrations_v1', 'sme_fan_registrations_v2', 'sme_fan_registrations_v3', 'sme_fan_registrations_v4',
           'sme_fan_contest_teams_v1', 'sme_fan_contest_teams_v2', 'sme_fan_contest_teams',
           'sme_fan_contest_all_votes_v1', 'sme_fan_contest_all_votes_v2', 'sme_fan_contest_votes',
           'sme_fan_judge_scores_v1', 'sme_fan_verified_judge_v1', 'sme_fan_judge_id_v1',
           'sme_fan_grand_winners_v1', 'sme_fan_gift_queue_v1', 'sme_fan_general_draw_counts_v1'
-        ].forEach(k => localStorage.removeItem(k));
+        ];
+        keysToWipe.forEach(k => {
+          localStorage.removeItem(k);
+          sessionStorage.removeItem(k);
+        });
       } catch (e) {}
 
-      // 3. Clear contestVotes and contestTeams in eventConfig on Cloud
+      // 5. Clear contestVotes and contestTeams in eventConfig on Cloud
       if (isSupabaseConfigured() && currentUser && ['owner', 'manager', 'admin'].includes(currentUser.role)) {
         try {
           const currentCfg = await fetchEventConfigFromCloud();
@@ -861,12 +899,13 @@ export default function App() {
         }
       }
 
-      // 4. Trigger storage event to notify other open tabs
+      // 6. Broadcast custom event to notify all components/tabs in this window and other tabs
       try {
+        window.dispatchEvent(new Event('triple_t_reset_registrations'));
         window.dispatchEvent(new Event('storage'));
       } catch (e) {}
 
-      alert("ล้างข้อมูลการลงทะเบียนและคะแนนการประกวดทั้งหมดเรียบร้อยแล้วครับ! (สังกัดและสมาชิก 95 ท่านคงอยู่ครบถ้วน 100%)");
+      alert("ล้างข้อมูลการลงทะเบียน คำตอบในแบบฟอร์ม และคะแนนการประกวดทั้งหมดเรียบร้อยแล้วครับ! (สังกัดและสมาชิก 95 ท่านคงอยู่ครบถ้วน 100%)");
       return true;
     } catch (err) {
       console.error("handleResetRegistrationsAndScores error:", err);

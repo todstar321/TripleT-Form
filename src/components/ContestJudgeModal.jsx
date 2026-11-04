@@ -106,6 +106,7 @@ export default function ContestJudgeModal({
   const [pendingScoreChange, setPendingScoreChange] = useState(null);
   const [changeReasonInput, setChangeReasonInput] = useState("");
   const [auditLogs, setAuditLogs] = useState([]);
+  const [previewPhoto, setPreviewPhoto] = useState(null);
 
   // Sync scores draft to localStorage (only if active voting)
   useEffect(() => {
@@ -115,6 +116,31 @@ export default function ContestJudgeModal({
     } catch (e) {}
   }, [scores, isReadOnlyMode]);
 
+  // Listen for reset events across tabs or admin reset
+  useEffect(() => {
+    const handleResetEvent = () => {
+      setVerifiedJudge(null);
+      setSelectedCandidateForVerify(null);
+      setPhoneInput("");
+      setVerifyError("");
+      setIsReadOnlyMode(false);
+      setScores({
+        individual: { beauty: {}, creativity: {} },
+        team: { beauty: {}, creativity: {} }
+      });
+      try {
+        sessionStorage.removeItem("sme_fan_verified_judge_v1");
+        localStorage.removeItem("sme_fan_verified_judge_v1");
+        localStorage.removeItem("sme_fan_judge_scores_v1");
+      } catch (e) {}
+    };
+
+    window.addEventListener("triple_t_reset_registrations", handleResetEvent);
+    return () => {
+      window.removeEventListener("triple_t_reset_registrations", handleResetEvent);
+    };
+  }, []);
+
   // If attendees is empty or changes, prune/clear scores for deleted attendees
   useEffect(() => {
     if (!attendees || attendees.length === 0) {
@@ -122,10 +148,32 @@ export default function ContestJudgeModal({
         individual: { beauty: {}, creativity: {} },
         team: { beauty: {}, creativity: {} }
       });
+      setVerifiedJudge(null);
+      setSelectedCandidateForVerify(null);
+      setIsReadOnlyMode(false);
       try {
         localStorage.removeItem("sme_fan_judge_scores_v1");
+        sessionStorage.removeItem("sme_fan_verified_judge_v1");
+        localStorage.removeItem("sme_fan_verified_judge_v1");
       } catch (e) {}
     } else {
+      // If currently verified judge is no longer in attendees list, clear session
+      if (verifiedJudge) {
+        const stillExists = attendees.some(
+          a => (a.ticketNo && a.ticketNo === verifiedJudge.ticketNo) ||
+               (a.name && a.name === verifiedJudge.name)
+        );
+        if (!stillExists) {
+          setVerifiedJudge(null);
+          setSelectedCandidateForVerify(null);
+          setIsReadOnlyMode(false);
+          try {
+            sessionStorage.removeItem("sme_fan_verified_judge_v1");
+            localStorage.removeItem("sme_fan_verified_judge_v1");
+          } catch (e) {}
+        }
+      }
+
       const currentTicketNos = new Set(attendees.map(a => a.ticketNo));
       setScores(prev => {
         let changed = false;
@@ -402,7 +450,7 @@ export default function ContestJudgeModal({
       judgeName: finalJudgeName,
       judgeNickname: verifiedJudge?.nickname || "",
       judgeClub: verifiedJudge?.club || "",
-      judgePhoto: verifiedJudge?.photoUrl || verifiedJudge?.costumePhoto || "",
+      judgePhoto: verifiedJudge?.photoUrl || "",
       scores: effectiveScores,
       auditLogs,
       auditTrail: auditLogs,
@@ -514,10 +562,19 @@ export default function ContestJudgeModal({
                   >
                     {/* Identity */}
                     <div className="flex items-center space-x-2.5 min-w-0">
-                      <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-900 border border-white/10 shrink-0">
-                        {r.photoUrl || r.costumePhoto ? (
+                      <div 
+                        onClick={(e) => {
+                          if (r.photoUrl) {
+                            e.stopPropagation();
+                            setPreviewPhoto({ url: r.photoUrl, title: `${r.name} (${r.ticketNo})` });
+                          }
+                        }}
+                        className={`w-10 h-10 rounded-xl overflow-hidden bg-slate-900 border border-white/10 shrink-0 ${r.photoUrl ? 'cursor-pointer hover:border-amber-400 hover:ring-2 hover:ring-amber-400/40 transition-all' : ''}`}
+                        title={r.photoUrl ? "คลิกเพื่อดูรูปขนาดใหญ่" : ""}
+                      >
+                        {r.photoUrl ? (
                           <img
-                            src={r.photoUrl || r.costumePhoto}
+                            src={r.photoUrl}
                             alt={r.name}
                             className="w-full h-full object-cover"
                           />
@@ -623,7 +680,7 @@ export default function ContestJudgeModal({
                     ...m,
                     name: attendeeMatch.name,
                     nickname: attendeeMatch.nickname,
-                    photoUrl: attendeeMatch.photoUrl || attendeeMatch.costumePhoto || m.photoUrl,
+                    photoUrl: attendeeMatch.photoUrl || m.photoUrl || "",
                     club: attendeeMatch.club || m.club
                   } : m;
                 });
@@ -721,7 +778,16 @@ export default function ContestJudgeModal({
                             key={m.ticketNo || mIdx}
                             className="flex items-center space-x-3 p-2 rounded-xl bg-slate-950/80 border border-white/5 hover:border-white/10 transition-colors"
                           >
-                            <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-900 border border-white/10 shrink-0">
+                            <div 
+                              onClick={(e) => {
+                                if (m.photoUrl) {
+                                  e.stopPropagation();
+                                  setPreviewPhoto({ url: m.photoUrl, title: `${m.name} (${m.ticketNo || ''})` });
+                                }
+                              }}
+                              className={`w-10 h-10 rounded-xl overflow-hidden bg-slate-900 border border-white/10 shrink-0 ${m.photoUrl ? 'cursor-pointer hover:border-amber-400 hover:ring-2 hover:ring-amber-400/40 transition-all' : ''}`}
+                              title={m.photoUrl ? "คลิกเพื่อดูรูปขนาดใหญ่" : ""}
+                            >
                               {m.photoUrl ? (
                                 <img
                                   src={m.photoUrl}
@@ -897,8 +963,8 @@ export default function ContestJudgeModal({
                           >
                             <div className="flex items-center space-x-2.5 min-w-0">
                               <div className="w-8 h-8 rounded-lg overflow-hidden bg-slate-900 border border-white/10 shrink-0">
-                                {a.photoUrl || a.costumePhoto ? (
-                                  <img src={a.photoUrl || a.costumePhoto} alt={a.name} className="w-full h-full object-cover" />
+                                {a.photoUrl ? (
+                                  <img src={a.photoUrl} alt={a.name} className="w-full h-full object-cover" />
                                 ) : (
                                   <div className="w-full h-full flex items-center justify-center text-slate-500">
                                     <User className="w-4 h-4" />
@@ -937,8 +1003,8 @@ export default function ContestJudgeModal({
               <div className="flex items-center justify-between p-3 rounded-2xl bg-amber-500/10 border-2 border-amber-500/40">
                 <div className="flex items-center space-x-3 min-w-0">
                   <div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-900 border border-amber-500/40 shrink-0">
-                    {selectedCandidateForVerify.photoUrl || selectedCandidateForVerify.costumePhoto ? (
-                      <img src={selectedCandidateForVerify.photoUrl || selectedCandidateForVerify.costumePhoto} alt={selectedCandidateForVerify.name} className="w-full h-full object-cover" />
+                    {selectedCandidateForVerify.photoUrl ? (
+                      <img src={selectedCandidateForVerify.photoUrl} alt={selectedCandidateForVerify.name} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-amber-400">
                         <User className="w-6 h-6" />
@@ -1207,9 +1273,9 @@ export default function ContestJudgeModal({
           {/* Verified Judge Card */}
           <div className="flex items-center space-x-3 min-w-0">
             <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-900 border border-amber-500/40 shrink-0">
-              {verifiedJudge.photoUrl || verifiedJudge.costumePhoto ? (
+              {verifiedJudge.photoUrl ? (
                 <img
-                  src={verifiedJudge.photoUrl || verifiedJudge.costumePhoto}
+                  src={verifiedJudge.photoUrl}
                   alt={verifiedJudge.name}
                   className="w-full h-full object-cover"
                 />
@@ -1440,6 +1506,39 @@ export default function ContestJudgeModal({
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Candidate Photo Preview Lightbox */}
+      {previewPhoto && (
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md animate-fadeIn"
+          onClick={() => setPreviewPhoto(null)}
+        >
+          <div 
+            className="bg-slate-900 border border-amber-500/40 rounded-3xl p-4 sm:p-5 max-w-lg w-full text-center space-y-3 shadow-2xl relative"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-2 border-b border-white/10">
+              <div className="text-left min-w-0 pr-2">
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold inline-block mb-1">
+                  📸 รูปถ่ายลงทะเบียนเข้างาน (สำหรับประกวด)
+                </span>
+                <h4 className="text-sm font-bold text-white truncate">{previewPhoto.title || 'รูปถ่ายผู้เข้าประกวด'}</h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewPhoto(null)}
+                className="p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-all shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="rounded-2xl overflow-hidden bg-black/80 max-h-[65vh] flex items-center justify-center border border-white/10 p-1">
+              <img src={previewPhoto.url} alt={previewPhoto.title} className="max-h-[63vh] w-auto max-w-full object-contain rounded-xl" />
+            </div>
+            <p className="text-[11px] text-slate-400">คลิกที่ใดก็ได้เพื่อปิดหน้าต่างรูปภาพ</p>
           </div>
         </div>
       )}

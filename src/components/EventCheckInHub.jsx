@@ -130,8 +130,14 @@ export default function EventCheckInHub({
 
   // Photo Capture Modal State (1:1 Ratio)
   const [photoModalTarget, setPhotoModalTarget] = useState(null);
+  const [photoModalType, setPhotoModalType] = useState('checkin'); // 'checkin' | 'shirt'
+  const openPhotoModal = (attendee, type = 'checkin') => {
+    setPhotoModalType(type);
+    setPhotoModalTarget(attendee);
+  };
   // High-Resolution Photo Viewer Lightbox State
   const [photoViewerTarget, setPhotoViewerTarget] = useState(null);
+  const [photoViewerTab, setPhotoViewerTab] = useState('checkin'); // 'checkin' | 'shirt'
 
   // Shirt Presentation & Management State
   const [isShirtSlideOpen, setIsShirtSlideOpen] = useState(false);
@@ -216,6 +222,21 @@ export default function EventCheckInHub({
       } catch (e) {}
     }
   }, [registrations.length]);
+
+  // Listen for global reset registrations event to immediately clear local component state
+  useEffect(() => {
+    const handleGlobalReset = () => {
+      setAllJudgeVotes([]);
+      setContestTeams([]);
+      setGrandPrizeWinners([]);
+      setGiftQueueWinners([]);
+      setLastCheckInAttendee(null);
+      setPhotoModalTarget(null);
+      setPhotoViewerTarget(null);
+    };
+    window.addEventListener('triple_t_reset_registrations', handleGlobalReset);
+    return () => window.removeEventListener('triple_t_reset_registrations', handleGlobalReset);
+  }, []);
 
   // Tab 1: Check-in search & filter
   const [searchCheckIn, setSearchCheckIn] = useState("");
@@ -416,7 +437,7 @@ export default function EventCheckInHub({
         name: r.name,
         nickname: r.nickname || "",
         club: r.club || "",
-        photoUrl: r.photoUrl || r.costumePhoto || ""
+        photoUrl: r.photoUrl || ""
       }));
 
     const newTeam = {
@@ -461,7 +482,7 @@ export default function EventCheckInHub({
         name: attendee.name,
         nickname: attendee.nickname,
         club: attendee.club,
-        photoUrl: attendee.photoUrl || attendee.costumePhoto,
+        photoUrl: attendee.photoUrl || null,
         checkedIn: attendee.checkedIn,
         beautyTotal,
         creativityTotal,
@@ -1117,18 +1138,19 @@ export default function EventCheckInHub({
 
                         {/* 2.5 รูปถ่าย (1:1) */}
                         <td className="py-2 px-1.5 sm:py-2 sm:px-2 text-center border-r border-white/5">
-                          {r.photoUrl || r.costumePhoto ? (
+                          {r.photoUrl ? (
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
+                                setPhotoViewerTab('checkin');
                                 setPhotoViewerTarget(r);
                               }}
                               className="relative inline-block cursor-pointer group hover:scale-110 active:scale-95 transition-all mx-auto"
-                              title="คลิกเพื่อดูรูปถ่ายขนาดใหญ่"
+                              title="คลิกเพื่อดูรูปถ่ายเข้างานขนาดใหญ่"
                             >
                               <img
-                                src={r.photoUrl || r.costumePhoto}
+                                src={r.photoUrl}
                                 alt={r.name}
                                 className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover border-2 border-amber-400/70 shadow-md mx-auto group-hover:border-amber-300"
                               />
@@ -1141,7 +1163,7 @@ export default function EventCheckInHub({
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setPhotoModalTarget(r);
+                                openPhotoModal(r, 'checkin');
                               }}
                               className="p-1.5 px-2 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-300 border border-white/10 hover:border-emerald-500/30 transition-all inline-flex items-center space-x-1 cursor-pointer"
                               title="ถ่ายรูปผู้เข้าร่วมงาน (สัดส่วน 1:1)"
@@ -1589,25 +1611,26 @@ export default function EventCheckInHub({
                             {r.ticketNo}
                           </td>
 
-                          {/* 3. รูปถ่าย 1:1 */}
+                          {/* 3. รูปถ่ายรับเสื้อ 1:1 */}
                           <td className="py-2 px-1.5 sm:py-2 sm:px-2 text-center border-r border-white/5">
-                            {r.photoUrl || r.costumePhoto ? (
+                            {r.shirtPhoto ? (
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  setPhotoViewerTab('shirt');
                                   setPhotoViewerTarget(r);
                                 }}
                                 className="relative inline-block cursor-pointer group hover:scale-110 active:scale-95 transition-all mx-auto"
-                                title="คลิกเพื่อดูรูปถ่ายขนาดใหญ่"
+                                title="คลิกเพื่อดูรูปถ่ายรับเสื้อขนาดใหญ่"
                               >
                                 <img
-                                  src={r.photoUrl || r.costumePhoto}
+                                  src={r.shirtPhoto}
                                   alt={r.name}
-                                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover border-2 border-teal-400/70 shadow-md mx-auto group-hover:border-teal-300"
+                                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover border-2 border-teal-400 shadow-md mx-auto group-hover:border-teal-300"
                                 />
                                 <span className="absolute -bottom-1 -right-1 px-1 py-0.5 rounded-full bg-slate-900 border border-teal-400/60 text-[9px] text-teal-300 shadow leading-none font-bold">
-                                  🔍
+                                  👕
                                 </span>
                               </button>
                             ) : (
@@ -1615,13 +1638,13 @@ export default function EventCheckInHub({
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setPhotoModalTarget(r);
+                                  openPhotoModal(r, 'shirt');
                                 }}
-                                className="p-1.5 px-2 rounded-xl bg-white/5 hover:bg-teal-500/20 text-slate-400 hover:text-teal-300 border border-white/10 hover:border-teal-500/30 transition-all inline-flex items-center space-x-1 cursor-pointer"
-                                title="ถ่ายรูปผู้เข้าร่วมงาน (สัดส่วน 1:1)"
+                                className="p-1.5 px-2 rounded-xl bg-teal-500/10 hover:bg-teal-500/25 text-teal-300 border border-teal-500/30 transition-all inline-flex items-center space-x-1 cursor-pointer"
+                                title="ถ่ายรูปผู้รับมอบเสื้อ (สัดส่วน 1:1)"
                               >
                                 <Camera className="w-3.5 h-3.5" />
-                                <span className="text-[10px]">ถ่าย</span>
+                                <span className="text-[10px]">รูปเสื้อ</span>
                               </button>
                             )}
                           </td>
@@ -1705,7 +1728,7 @@ export default function EventCheckInHub({
                                   e.stopPropagation();
                                   onToggleShirtReceived(r.ticketNo, true);
                                   playAudioEffect("fanfare");
-                                  setPhotoModalTarget(r);
+                                  openPhotoModal(r, 'shirt');
                                 }}
                                 className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 font-bold text-[10px] sm:text-xs shadow-md shadow-teal-500/20 hover:scale-105 active:scale-95 transition-all inline-flex items-center space-x-1 cursor-pointer"
                                 title="ส่งมอบเสื้อและเปิดกล้องถ่ายรูปบุคคลทันที"
@@ -3129,9 +3152,9 @@ export default function EventCheckInHub({
           onClose={() => setIsScannerOpen(false)}
           registrations={registrations}
           onCheckIn={handleScanSuccess}
-          onCapturePhoto={(attendee) => {
+          onCapturePhoto={(attendee, pType = 'checkin') => {
             setIsScannerOpen(false);
-            setPhotoModalTarget(attendee);
+            openPhotoModal(attendee, pType);
           }}
           onToggleShirtReceived={onToggleShirtReceived}
         />
@@ -3315,7 +3338,7 @@ export default function EventCheckInHub({
                   onCheckIn(emergencyTarget.ticketNo, true);
                   playAudioEffect("beep");
                   setLastCheckInAttendee(emergencyTarget);
-                  setPhotoModalTarget(emergencyTarget);
+                  openPhotoModal(emergencyTarget, 'checkin');
                   setEmergencyTarget(null);
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/25 hover:from-emerald-400 hover:to-teal-400"
@@ -3436,20 +3459,22 @@ export default function EventCheckInHub({
           isOpen={!!photoModalTarget}
           onClose={() => setPhotoModalTarget(null)}
           attendee={photoModalTarget}
-          onSavePhoto={(photoUrl, ticketNo) => {
+          photoType={photoModalType}
+          onSavePhoto={(photoUrl, ticketNo, pType) => {
             const actualUrl = (typeof photoUrl === 'string' && (photoUrl.startsWith('http') || photoUrl.startsWith('data:')))
               ? photoUrl
               : (typeof ticketNo === 'string' && (ticketNo.startsWith('http') || ticketNo.startsWith('data:')) ? ticketNo : photoUrl);
             const targetTicket = (ticketNo && !ticketNo.startsWith('http') && !ticketNo.startsWith('data:'))
               ? ticketNo
               : photoModalTarget?.ticketNo;
+            const currentPType = pType || photoModalType || 'checkin';
             
             // Mark checkedIn: true as well when capturing photo at check-in desk
-            if (onCheckIn && targetTicket) {
+            if (currentPType === 'checkin' && onCheckIn && targetTicket) {
               onCheckIn(targetTicket, true);
             }
             if (onUpdateAttendeePhoto && targetTicket) {
-              onUpdateAttendeePhoto(targetTicket, actualUrl, true);
+              onUpdateAttendeePhoto(targetTicket, actualUrl, currentPType, currentPType === 'checkin');
             }
             setPhotoModalTarget(null);
             playAudioEffect("fanfare");
@@ -3458,91 +3483,154 @@ export default function EventCheckInHub({
       )}
 
       {/* MODAL 5.5: ATTENDEE PHOTO VIEWER (LIGHTBOX) */}
-      {photoViewerTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fadeIn">
-          <div className="bg-slate-900 rounded-3xl border border-amber-500/40 shadow-2xl w-full max-w-sm sm:max-w-md p-5 sm:p-6 space-y-4">
-            
-            {/* Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-white/10">
-              <div className="flex items-center space-x-2.5">
-                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400">
-                  <Camera className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-white text-base leading-tight">
-                    {photoViewerTarget.name} {photoViewerTarget.nickname ? `(${photoViewerTarget.nickname})` : ''}
-                  </h3>
-                  <p className="text-xs text-amber-400 font-mono font-semibold">
-                    {photoViewerTarget.ticketNo} • สนาม {photoViewerTarget.club || 'สงสพัท'}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPhotoViewerTarget(null)}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      {photoViewerTarget && (() => {
+        const attendee = registrations.find(r => r.ticketNo === photoViewerTarget.ticketNo) || photoViewerTarget;
+        const hasCheckin = Boolean(attendee.photoUrl);
+        const hasShirt = Boolean(attendee.shirtPhoto);
+        const activeTab = (photoViewerTab === 'shirt' && hasShirt) || (!hasCheckin && hasShirt) ? 'shirt' : 'checkin';
+        const currentImg = activeTab === 'shirt' ? attendee.shirtPhoto : attendee.photoUrl;
 
-            {/* High-Res Photo Display */}
-            <div className="relative rounded-2xl overflow-hidden aspect-square border-2 border-amber-400/40 shadow-2xl bg-black flex items-center justify-center">
-              <img
-                src={photoViewerTarget.photoUrl || photoViewerTarget.costumePhoto}
-                alt={photoViewerTarget.name}
-                className="w-full h-full object-cover"
-              />
-            </div>
-
-            {/* Info Badges */}
-            <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-2xl bg-white/5 border border-white/10 text-xs">
-              <div className="text-slate-300">
-                เสื้อที่ระลึก: <strong className="text-white">ไซส์ {photoViewerTarget.shirtSize || 'L'} ({photoViewerTarget.shirtGender || 'ชาย'})</strong>
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fadeIn">
+            <div className="bg-slate-900 rounded-3xl border border-amber-500/40 shadow-2xl w-full max-w-sm sm:max-w-md p-5 sm:p-6 space-y-4">
+              
+              {/* Header */}
+              <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                <div className="flex items-center space-x-2.5">
+                  <div className={`p-2 rounded-xl ${activeTab === 'shirt' ? 'bg-teal-500/20 text-teal-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                    {activeTab === 'shirt' ? <Shirt className="w-5 h-5" /> : <Camera className="w-5 h-5" />}
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-white text-base leading-tight">
+                      {attendee.name} {attendee.nickname ? `(${attendee.nickname})` : ''}
+                    </h3>
+                    <p className="text-xs text-amber-400 font-mono font-semibold">
+                      {attendee.ticketNo} • สนาม {attendee.club || 'สงสพัท'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPhotoViewerTarget(null)}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <div>
-                {photoViewerTarget.shirtReceived ? (
-                  <span className="text-[10px] font-bold text-teal-300 bg-teal-500/20 border border-teal-500/30 px-2 py-0.5 rounded-full">
-                    ✓ รับเสื้อแล้ว
-                  </span>
+
+              {/* Photo Type Toggle Tabs (If both exist or shirt eligible) */}
+              {(hasCheckin || hasShirt) && (
+                <div className="grid grid-cols-2 gap-2 bg-slate-950 p-1 rounded-2xl border border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => setPhotoViewerTab('checkin')}
+                    className={`py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1.5 ${
+                      activeTab === 'checkin'
+                        ? 'bg-amber-500 text-slate-950 shadow-md'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <Camera className="w-3.5 h-3.5" />
+                    <span>📸 รูปเข้างาน {hasCheckin ? '✓' : '(ว่าง)'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPhotoViewerTab('shirt')}
+                    className={`py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1.5 ${
+                      activeTab === 'shirt'
+                        ? 'bg-teal-400 text-slate-950 shadow-md'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <Shirt className="w-3.5 h-3.5" />
+                    <span>👕 รูปรับเสื้อ {hasShirt ? '✓' : '(ว่าง)'}</span>
+                  </button>
+                </div>
+              )}
+
+              {/* High-Res Photo Display */}
+              <div className="relative rounded-2xl overflow-hidden aspect-square border-2 border-amber-400/40 shadow-2xl bg-black flex items-center justify-center">
+                {currentImg ? (
+                  <img
+                    src={currentImg}
+                    alt={attendee.name}
+                    className="w-full h-full object-cover"
+                  />
                 ) : (
-                  <span className="text-[10px] font-bold text-amber-300 bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 rounded-full">
-                    📦 ยังไม่ได้รับเสื้อ
-                  </span>
+                  <div className="p-6 text-center text-slate-500 space-y-2">
+                    <AlertCircle className="w-10 h-10 text-slate-600 mx-auto" />
+                    <p className="text-xs">ยังไม่มี{activeTab === 'shirt' ? 'รูปรับเสื้อ' : 'รูปเข้างาน'}</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPhotoViewerTarget(null);
+                        openPhotoModal(attendee, activeTab);
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs"
+                    >
+                      ถ่ายรูปตอนนี้
+                    </button>
+                  </div>
                 )}
               </div>
+
+              {/* Info Badges */}
+              <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-2xl bg-white/5 border border-white/10 text-xs">
+                <div className="text-slate-300">
+                  เสื้อที่ระลึก: <strong className="text-white">ไซส์ {attendee.shirtSize || 'L'} ({attendee.shirtGender || 'ชาย'})</strong>
+                </div>
+                <div>
+                  {attendee.shirtReceived ? (
+                    <span className="text-[10px] font-bold text-teal-300 bg-teal-500/20 border border-teal-500/30 px-2 py-0.5 rounded-full">
+                      ✓ รับเสื้อแล้ว
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold text-amber-300 bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 rounded-full">
+                      📦 ยังไม่ได้รับเสื้อ
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = attendee;
+                    const typeToShoot = activeTab;
+                    setPhotoViewerTarget(null);
+                    openPhotoModal(target, typeToShoot);
+                  }}
+                  className="py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center justify-center space-x-1.5 shadow-md shadow-amber-500/20 transition-all cursor-pointer"
+                >
+                  <Camera className="w-4 h-4" />
+                  <span>📸 ถ่ายรูป{activeTab === 'shirt' ? 'รับเสื้อใหม่' : 'เข้างานใหม่'}</span>
+                </button>
+
+                {currentImg ? (
+                  <a
+                    href={currentImg}
+                    download={`รูป_${activeTab}_${attendee.ticketNo}_${attendee.name}.jpg`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center justify-center space-x-1.5 border border-white/10 transition-all cursor-pointer text-center"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>💾 บันทึกรูปภาพ</span>
+                  </a>
+                ) : (
+                  <div className="py-2.5 px-3 rounded-xl bg-slate-800/40 text-slate-600 font-bold text-xs flex items-center justify-center space-x-1.5 border border-white/5">
+                    <span>ไม่มีรูปให้โหลด</span>
+                  </div>
+                )}
+              </div>
+
             </div>
-
-            {/* Action Buttons */}
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  const target = photoViewerTarget;
-                  setPhotoViewerTarget(null);
-                  setPhotoModalTarget(target);
-                }}
-                className="py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center justify-center space-x-1.5 shadow-md shadow-amber-500/20 transition-all cursor-pointer"
-              >
-                <Camera className="w-4 h-4" />
-                <span>📸 ถ่ายรูปใหม่</span>
-              </button>
-
-              <a
-                href={photoViewerTarget.photoUrl || photoViewerTarget.costumePhoto}
-                download={`รูปถ่าย_${photoViewerTarget.ticketNo}_${photoViewerTarget.name}.jpg`}
-                target="_blank"
-                rel="noreferrer"
-                className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center justify-center space-x-1.5 border border-white/10 transition-all cursor-pointer text-center"
-              >
-                <Download className="w-4 h-4" />
-                <span>💾 บันทึกรูปภาพ</span>
-              </a>
-            </div>
-
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* MODAL 6: SHIRT 16:9 MASTER PRESENTATION SLIDE */}
       <ShirtPresentationModal

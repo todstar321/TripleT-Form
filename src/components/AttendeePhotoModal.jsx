@@ -19,7 +19,8 @@ export default function AttendeePhotoModal({
   isOpen,
   onClose,
   attendee,
-  onSavePhoto
+  onSavePhoto,
+  photoType = 'checkin' // 'checkin' | 'shirt'
 }) {
   const [activeMode, setActiveMode] = useState('camera'); // 'camera' | 'upload'
   const [capturedImage, setCapturedImage] = useState(null);
@@ -235,14 +236,14 @@ export default function AttendeePhotoModal({
       const finalUrl = await uploadToCloudinary(capturedImage, {}, "attendees");
       const urlToSave = finalUrl || capturedImage;
       if (onSavePhoto && attendee) {
-        onSavePhoto(urlToSave, attendee.ticketNo);
+        onSavePhoto(urlToSave, attendee.ticketNo, photoType);
       }
       stopCamera();
       onClose();
     } catch (err) {
       console.warn("Cloudinary upload fallback to local image:", err);
       if (onSavePhoto && attendee) {
-        onSavePhoto(capturedImage, attendee.ticketNo);
+        onSavePhoto(capturedImage, attendee.ticketNo, photoType);
       }
       stopCamera();
       onClose();
@@ -253,22 +254,28 @@ export default function AttendeePhotoModal({
 
   if (!isOpen || !attendee) return null;
 
+  const isShirtPhoto = photoType === 'shirt';
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-fadeIn overflow-y-auto">
-      <div className="relative w-full max-w-md bg-slate-900 border border-white/15 rounded-3xl p-4 sm:p-6 text-slate-100 shadow-2xl space-y-3 sm:space-y-4 my-auto">
+      <div className={`relative w-full max-w-md bg-slate-900 border rounded-3xl p-4 sm:p-6 text-slate-100 shadow-2xl space-y-3 sm:space-y-4 my-auto ${
+        isShirtPhoto ? 'border-teal-500/40 shadow-teal-500/10' : 'border-amber-500/30'
+      }`}>
         
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-white/10">
           <div className="flex items-center space-x-2.5">
-            <span className="p-2 rounded-xl bg-amber-500/20 text-amber-400">
-              <Camera className="w-5 h-5" />
+            <span className={`p-2 rounded-xl ${
+              isShirtPhoto ? 'bg-teal-500/20 text-teal-300' : 'bg-amber-500/20 text-amber-400'
+            }`}>
+              {isShirtPhoto ? <Shirt className="w-5 h-5" /> : <Camera className="w-5 h-5" />}
             </span>
             <div>
               <h3 className="font-extrabold text-white text-base flex items-center space-x-1.5">
-                <span>ถ่ายรูปผู้ร่วมงาน (สี่เหลี่ยมจัตุรัส 1:1)</span>
+                <span>{isShirtPhoto ? 'ถ่ายรูปรับมอบเสื้อที่ระลึก VIP' : 'ถ่ายรูปผู้ร่วมงาน (เช็คอินเข้างาน)'}</span>
               </h3>
               <p className="text-xs text-slate-400">
-                {attendee.name} {attendee.nickname ? `(${attendee.nickname})` : ''} • <span className="font-mono text-amber-400 font-semibold">{attendee.ticketNo}</span>
+                {attendee.name} {attendee.nickname ? `(${attendee.nickname})` : ''} • <span className={`font-mono font-semibold ${isShirtPhoto ? 'text-teal-400' : 'text-amber-400'}`}>{attendee.ticketNo}</span>
               </p>
             </div>
           </div>
@@ -285,17 +292,25 @@ export default function AttendeePhotoModal({
         </div>
 
         {/* Badge: Shirt details or check-in context */}
-        {attendee.hasShirt && (
-          <div className="px-3 py-1.5 rounded-xl bg-teal-500/15 border border-teal-500/30 text-teal-300 text-xs flex items-center justify-between">
-            <span className="flex items-center space-x-1.5 font-medium">
-              <Shirt className="w-4 h-4 text-teal-400" />
-              <span>เสื้อที่ระลึก: ไซส์ <strong>{attendee.shirtSize || 'L'}</strong> ({attendee.shirtGender || 'ชาย'})</span>
+        {isShirtPhoto ? (
+          <div className="px-3.5 py-2 rounded-xl bg-teal-500/20 border border-teal-500/40 text-teal-200 text-xs flex items-center justify-between shadow-xs">
+            <span className="flex items-center space-x-2 font-medium">
+              <Shirt className="w-4 h-4 text-teal-400 shrink-0" />
+              <span>เสื้อที่ระลึก VIP: ไซส์ <strong>{attendee.shirtSize || 'L'}</strong> ({attendee.shirtGender || 'ชาย'})</span>
             </span>
-            {attendee.shirtReceived ? (
-              <span className="text-[10px] bg-teal-500/30 text-teal-200 px-2 py-0.5 rounded-full font-bold">✓ รับเสื้อแล้ว</span>
-            ) : (
-              <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-bold">📦 บันทึกรับเสื้อ</span>
-            )}
+            <span className="text-[10px] bg-teal-400 text-slate-950 px-2.5 py-0.5 rounded-full font-black">
+              📦 รูปรับเสื้อ
+            </span>
+          </div>
+        ) : (
+          <div className="px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-200 text-xs flex items-center justify-between">
+            <span className="flex items-center space-x-1.5 font-medium truncate">
+              <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+              <span className="truncate">สังกัด: {attendee.regType === 'member' ? `สมาชิกสนาม ${attendee.club || 'สงสพัท'}` : `แขก (${attendee.club || 'ทั่วไป'})`}</span>
+            </span>
+            <span className="text-[10px] bg-amber-500/30 text-amber-300 px-2 py-0.5 rounded-full font-bold shrink-0">
+              📸 ภาพเข้างาน & ประกวด
+            </span>
           </div>
         )}
 
@@ -478,7 +493,11 @@ export default function AttendeePhotoModal({
                 type="button"
                 disabled={isSaving}
                 onClick={handleSave}
-                className="flex-1 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/25 flex items-center justify-center space-x-1.5 transition-all disabled:opacity-60 cursor-pointer"
+                className={`flex-1 py-3 rounded-xl font-black text-xs shadow-lg flex items-center justify-center space-x-1.5 transition-all disabled:opacity-60 cursor-pointer ${
+                  isShirtPhoto 
+                    ? 'bg-gradient-to-r from-teal-400 to-emerald-500 hover:from-teal-300 hover:to-emerald-400 text-slate-950 shadow-teal-500/25'
+                    : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-emerald-500/25'
+                }`}
               >
                 {isSaving ? (
                   <>
@@ -488,7 +507,7 @@ export default function AttendeePhotoModal({
                 ) : (
                   <>
                     <Check className="w-4 h-4 stroke-[3]" />
-                    <span>✅ ใช้รูปนี้ (บันทึก)</span>
+                    <span>{isShirtPhoto ? '✅ บันทึกรูปรับเสื้อ (แยกอิสระ)' : '✅ บันทึกรูปเข้างาน (สำหรับประกวด)'}</span>
                   </>
                 )}
               </button>
@@ -500,7 +519,11 @@ export default function AttendeePhotoModal({
                   type="button"
                   disabled={!isCameraActive || countdown !== null}
                   onClick={handleSnapCountdown}
-                  className="col-span-4 py-3.5 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-black text-sm shadow-xl shadow-amber-500/25 flex items-center justify-center space-x-2 transition-all disabled:opacity-50 cursor-pointer"
+                  className={`col-span-4 py-3.5 rounded-2xl font-black text-sm shadow-xl flex items-center justify-center space-x-2 transition-all disabled:opacity-50 cursor-pointer ${
+                    isShirtPhoto
+                      ? 'bg-gradient-to-r from-teal-400 to-emerald-500 hover:from-teal-300 hover:to-emerald-400 text-slate-950 shadow-teal-500/25'
+                      : 'bg-gradient-to-r from-amber-400 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 shadow-amber-500/25'
+                  }`}
                 >
                   <Camera className="w-5 h-5" />
                   <span>{countdown !== null ? `กำลังถ่ายใน ${countdown}...` : '📸 กดถ่ายภาพ (นับถอยหลัง 3 วิ)'}</span>
@@ -530,7 +553,11 @@ export default function AttendeePhotoModal({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-black text-sm shadow-xl shadow-amber-500/25 flex items-center justify-center space-x-2 transition-all cursor-pointer"
+              className={`w-full py-3.5 rounded-2xl font-black text-sm shadow-xl flex items-center justify-center space-x-2 transition-all cursor-pointer ${
+                isShirtPhoto
+                  ? 'bg-gradient-to-r from-teal-400 to-emerald-500 hover:from-teal-300 hover:to-emerald-400 text-slate-950 shadow-teal-500/25'
+                  : 'bg-gradient-to-r from-amber-400 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 shadow-amber-500/25'
+              }`}
             >
               <Upload className="w-5 h-5" />
               <span>เลือกรูปภาพจากมือถือ / คอมพิวเตอร์</span>
@@ -538,7 +565,9 @@ export default function AttendeePhotoModal({
           )}
 
           <p className="text-[11px] text-center text-slate-400">
-            * รูปถ่ายจะถูกนำไปใช้ในสไลด์โชว์ผู้ได้รับเสื้อ และในการประกวดแต่งกาย
+            {isShirtPhoto 
+              ? '* รูปถ่ายนี้จะถูกนำไปแสดงในทำเนียบผู้ได้รับเสื้อที่ระลึก VIP 15 ท่านบนเวที (ไม่ทับรูปเข้างาน)' 
+              : '* รูปถ่ายจะถูกนำไปใช้ในระบบการให้คะแนนการประกวดแต่งกายและยืนยันตัวตน'}
           </p>
         </div>
 

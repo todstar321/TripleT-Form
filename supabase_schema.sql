@@ -28,11 +28,15 @@ CREATE TABLE IF NOT EXISTS public.registrations (
     gift_registered_at TIMESTAMPTZ,
     photo_url TEXT,
     costume_photo TEXT,
+    shirt_photo TEXT,
     recommender_name TEXT DEFAULT '',
     guest_title TEXT DEFAULT '',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- เพิ่มคอลัมน์ shirt_photo สำหรับตารางเดิมที่มีอยู่แล้ว
+ALTER TABLE public.registrations ADD COLUMN IF NOT EXISTS shirt_photo TEXT;
 
 -- 2. Table: event_config (การตั้งค่าระบบ, ธีมสี, รูปหน้าปก)
 CREATE TABLE IF NOT EXISTS public.event_config (

@@ -20,7 +20,7 @@ export default function StoragePurgeModal({
   if (!isOpen) return null;
 
   // Calculate statistics
-  const attendeePhotosCount = registrations.filter(r => r.photoUrl || r.costumePhoto).length;
+  const attendeePhotosCount = registrations.filter(r => r.photoUrl || r.shirtPhoto || r.costumePhoto).length;
   const slipsCount = registrations.filter(r => r.paymentSlip).length;
   const totalPhotosCount = attendeePhotosCount + slipsCount;
 
@@ -31,12 +31,22 @@ export default function StoragePurgeModal({
   const handleDownloadBackup = () => {
     let downloadCount = 0;
     registrations.forEach(r => {
-      // 1. Download attendee photo if exists
+      // 1. Download attendee check-in photo if exists
       if (r.photoUrl) {
         downloadCount++;
         const a = document.createElement('a');
         a.href = r.photoUrl;
-        a.download = `photo_${r.ticketNo}_${r.name}.jpg`;
+        a.download = `checkin_photo_${r.ticketNo}_${r.name}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+      // 1.1 Download attendee shirt photo if exists
+      if (r.shirtPhoto) {
+        downloadCount++;
+        const a = document.createElement('a');
+        a.href = r.shirtPhoto;
+        a.download = `shirt_photo_${r.ticketNo}_${r.name}.jpg`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -77,8 +87,9 @@ export default function StoragePurgeModal({
       const updatedRegistrations = registrations.map(r => {
         const item = { ...r };
         if (purgeType === 'attendees' || purgeType === 'all') {
-          if (item.photoUrl || item.costumePhoto) clearedPhotos++;
+          if (item.photoUrl || item.shirtPhoto || item.costumePhoto) clearedPhotos++;
           item.photoUrl = null;
+          item.shirtPhoto = null;
           item.costumePhoto = null;
         }
         if (purgeType === 'slips' || purgeType === 'all') {
@@ -190,7 +201,7 @@ export default function StoragePurgeModal({
                 <div className="p-2.5 rounded-xl bg-slate-900 border border-white/5 space-y-1">
                   <div className="text-[11px] text-slate-400 flex items-center justify-center space-x-1">
                     <Camera className="w-3 h-3 text-cyan-400" />
-                    <span>รูปถ่ายบุคคล 1:1</span>
+                    <span>รูปถ่ายบุคคล (เข้างาน & รับเสื้อ)</span>
                   </div>
                   <div className="text-lg font-black text-cyan-300 font-mono">
                     {attendeePhotosCount} <span className="text-xs font-normal text-slate-500">รูป</span>
