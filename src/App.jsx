@@ -18,9 +18,11 @@ import { initialFormsList, FORMS_STORAGE_KEY } from './data/formsData';
 import { defaultFormData } from './data/defaultForm';
 import { submitSmeFanTicketToSheets } from './utils/googleSheets';
 import { 
+  getSupabase,
   isSupabaseConfigured, 
   fetchRegistrationsFromCloud, 
   upsertRegistrationToCloud,
+  wipeRegistrationsFromCloud,
   fetchEventConfigFromCloud,
   saveEventConfigToCloud,
   subscribeToRegistrations,
@@ -837,22 +839,10 @@ export default function App() {
     try {
       // 1. Delete all records from Supabase tables
       if (isSupabaseConfigured()) {
-        const client = getSupabase();
-        if (client) {
-          try {
-            await client.from('registrations').delete().neq('ticket_no', 'NEVER_MATCH');
-          } catch (e) {
-            console.warn("Supabase wipe registrations warning:", e);
-          }
-          try {
-            await client.from('contest_votes').delete().neq('id', 'NEVER_MATCH');
-          } catch (e) {}
-          try {
-            await client.from('contest_teams').delete().neq('id', 'NEVER_MATCH');
-          } catch (e) {}
-          try {
-            await client.from('form_responses').delete().neq('form_key', 'NEVER_MATCH');
-          } catch (e) {}
+        try {
+          await wipeRegistrationsFromCloud();
+        } catch (e) {
+          console.warn("Supabase wipe registrations warning:", e);
         }
       }
 
@@ -912,7 +902,6 @@ export default function App() {
       return true;
     } catch (err) {
       console.error("handleResetRegistrationsAndScores error:", err);
-      alert("เกิดข้อผิดพลาดในการล้างข้อมูล: " + (err?.message || err));
       throw err;
     }
   };

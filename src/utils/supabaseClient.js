@@ -507,3 +507,69 @@ export async function saveEventConfigToCloud(config) {
     return false;
   }
 }
+
+/**
+ * Completely wipe all registrations, contest votes, contest teams, and form responses from Supabase Cloud.
+ */
+export async function wipeRegistrationsFromCloud() {
+  const client = getSupabase();
+  if (!client) {
+    return { success: false, message: 'Supabase client is not configured' };
+  }
+
+  const results = { registrations: false, votes: false, teams: false, responses: false };
+
+  // 1. Delete all registrations
+  try {
+    const { error } = await client
+      .from('registrations')
+      .delete()
+      .neq('ticket_no', 'NEVER_MATCH');
+    if (!error) results.registrations = true;
+  } catch (err) {
+    console.warn('wipeRegistrations registrations error:', err);
+  }
+
+  // Fallback deletion by timestamp if ticket_no is null in any legacy row
+  try {
+    await client
+      .from('registrations')
+      .delete()
+      .gt('created_at', '1970-01-01T00:00:00Z');
+  } catch (e) {}
+
+  // 2. Delete contest votes
+  try {
+    const { error } = await client
+      .from('contest_votes')
+      .delete()
+      .neq('id', 'NEVER_MATCH');
+    if (!error) results.votes = true;
+  } catch (err) {
+    console.warn('wipeRegistrations votes warning:', err);
+  }
+
+  // 3. Delete contest teams
+  try {
+    const { error } = await client
+      .from('contest_teams')
+      .delete()
+      .neq('id', 'NEVER_MATCH');
+    if (!error) results.teams = true;
+  } catch (err) {
+    console.warn('wipeRegistrations teams warning:', err);
+  }
+
+  // 4. Delete form responses
+  try {
+    const { error } = await client
+      .from('form_responses')
+      .delete()
+      .neq('form_key', 'NEVER_MATCH');
+    if (!error) results.responses = true;
+  } catch (err) {
+    console.warn('wipeRegistrations form_responses warning:', err);
+  }
+
+  return { success: true, results };
+}
