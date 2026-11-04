@@ -7,13 +7,142 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
-    <title>Triple T Form - Modern Digital Form & Survey</title>
+    <title>Triple T Form - งานสังสรรค์ปีใหม่ SME FAN 2026</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Prompt:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+      #initial-loader {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: #020617;
+        color: #f8fafc;
+        font-family: 'Prompt', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        z-index: 99999;
+        padding: 1rem;
+      }
+      .loader-card {
+        max-width: 420px;
+        width: 100%;
+        background: radial-gradient(circle at top, rgba(245, 158, 11, 0.12), rgba(15, 23, 42, 0.95) 70%);
+        border: 1px solid rgba(245, 158, 11, 0.35);
+        border-radius: 1.5rem;
+        padding: 2.25rem 1.5rem;
+        text-align: center;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 30px rgba(245, 158, 11, 0.15);
+      }
+      .loader-spinner {
+        width: 48px;
+        height: 48px;
+        border: 3.5px solid rgba(245, 158, 11, 0.2);
+        border-top-color: #f59e0b;
+        border-right-color: #fbbf24;
+        border-radius: 50%;
+        margin: 0 auto 1.25rem;
+        animation: loader-spin 0.9s cubic-bezier(0.55, 0.15, 0.45, 0.85) infinite;
+      }
+      @keyframes loader-spin {
+        to { transform: rotate(360deg); }
+      }
+      .loader-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.35rem 0.85rem;
+        border-radius: 9999px;
+        background: rgba(245, 158, 11, 0.15);
+        border: 1px solid rgba(245, 158, 11, 0.4);
+        color: #fde68a;
+        font-size: 0.75rem;
+        font-weight: 700;
+        margin-bottom: 0.75rem;
+      }
+      .loader-title {
+        font-size: 1.15rem;
+        font-weight: 800;
+        color: #ffffff;
+        margin: 0 0 0.5rem;
+      }
+      .loader-desc {
+        font-size: 0.825rem;
+        color: #94a3b8;
+        line-height: 1.5;
+        margin: 0;
+      }
+      .loader-refresh-btn {
+        display: none;
+        margin-top: 1.25rem;
+        padding: 0.65rem 1.25rem;
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+        color: #020617;
+        font-weight: 700;
+        font-size: 0.8rem;
+        border-radius: 0.75rem;
+        border: none;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+      }
+    </style>
   </head>
   <body class="bg-slate-950 text-slate-100 antialiased min-h-screen selection:bg-indigo-500 selection:text-white">
-    <div id="root"></div>
+    <div id="root">
+      <div id="initial-loader">
+        <div class="loader-card">
+          <div class="loader-spinner"></div>
+          <div class="loader-badge">
+            <span>✨</span>
+            <span>Triple T Form</span>
+          </div>
+          <h2 class="loader-title">งานสังสรรค์ปีใหม่ SME FAN 2026</h2>
+          <p class="loader-desc">กำลังเปิดระบบลงทะเบียน...</p>
+          <button id="loader-refresh-btn" class="loader-refresh-btn" onclick="forceHardRefresh()">
+            🔄 แตะที่นี่เพื่อรีเฟรชโหลดใหม่
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      function forceHardRefresh() {
+        try {
+          if ('caches' in window) {
+            caches.keys().then(function(names) {
+              names.forEach(function(name) { caches.delete(name); });
+            });
+          }
+        } catch(e) {}
+        var cleanUrl = window.location.origin + window.location.pathname + '?_bust=' + Date.now() + window.location.hash;
+        window.location.replace(cleanUrl);
+      }
+
+      // Auto-detect uncaught chunk or syntax errors caused by stale browser caches
+      window.addEventListener('error', function(e) {
+        var msg = (e && e.message) ? e.message.toLowerCase() : '';
+        if (
+          msg.indexOf('unexpected token') !== -1 ||
+          msg.indexOf('dynamically imported module') !== -1 ||
+          msg.indexOf('loading chunk') !== -1 ||
+          msg.indexOf('failed to fetch') !== -1
+        ) {
+          console.warn('[Triple T Form] Chunk load failure detected. Auto-reloading fresh version...', e);
+          var now = Date.now();
+          var lastReload = parseInt(sessionStorage.getItem('last_auto_chunk_reload') || '0', 10);
+          if (now - lastReload > 8000) {
+            sessionStorage.setItem('last_auto_chunk_reload', String(now));
+            forceHardRefresh();
+          }
+        }
+      });
+
+      // Show manual reload button after 2.5 seconds if React hasn't unmounted the initial loader
+      setTimeout(function() {
+        var btn = document.getElementById('loader-refresh-btn');
+        if (btn) btn.style.display = 'inline-block';
+      }, 2500);
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
