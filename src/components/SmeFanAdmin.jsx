@@ -75,6 +75,7 @@ export default function SmeFanAdmin({
   onPurgeComplete,
   onForceSyncCloud,
   onResetAllRegistrations,
+  onUpdateRegistration,
   initialActiveTab = 'overview'
 }) {
   const [activeTab, setActiveTab] = useState(initialActiveTab); 
@@ -2902,6 +2903,13 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
         isOpen={!!activeAdminInspectingAttendee}
         onClose={() => setAdminInspectingAttendee(null)}
         attendee={activeAdminInspectingAttendee}
+        onUpdateAttendee={(updated) => {
+          if (onUpdateRegistration) {
+            onUpdateRegistration(updated);
+          }
+          setAdminInspectingAttendee(updated);
+        }}
+        eventConfig={eventConfig}
       />
 
     </div>

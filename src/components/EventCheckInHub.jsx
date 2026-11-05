@@ -90,6 +90,7 @@ export default function EventCheckInHub({
   onForceSyncCloud,
   onResetAllRegistrations,
   onViewTicket,
+  onUpdateRegistration,
   lastCloudSync
 }) {
   // Main Tab: "checkin" | "gifts" | "shirts" | "contest" | "lucky_draw"
@@ -3910,6 +3911,13 @@ export default function EventCheckInHub({
         onCheckIn={onCheckIn}
         onShirtReceive={onToggleShirtReceived}
         onViewTicket={onViewTicket}
+        onUpdateAttendee={(updated) => {
+          if (onUpdateRegistration) {
+            onUpdateRegistration(updated);
+          }
+          setInspectingAttendee(updated);
+        }}
+        eventConfig={eventConfig}
       />
 
       {/* Footer Accreditation */}

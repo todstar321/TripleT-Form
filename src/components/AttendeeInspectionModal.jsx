@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   CheckCircle2, 
@@ -20,9 +20,14 @@ import {
   Copy, 
   Maximize2,
   Tag,
-  Users
+  Users,
+  Edit3,
+  History,
+  ShieldCheck,
+  ArrowRight
 } from 'lucide-react';
-import { formatThaiDisplayDateTime } from '../utils/supabaseClient';
+import AdminEditAttendeeModal from './AdminEditAttendeeModal';
+import { formatThaiDisplayDateTime, fetchAuditLogsFromCloud } from '../utils/supabaseClient';
 
 export default function AttendeeInspectionModal({
   isOpen,
@@ -30,22 +35,53 @@ export default function AttendeeInspectionModal({
   attendee,
   onCheckIn,
   onShirtReceive,
-  onViewTicket
+  onViewTicket,
+  onUpdateAttendee,
+  eventConfig = {}
 }) {
+  const [currentAttendee, setCurrentAttendee] = useState(attendee);
   const [copiedPhone, setCopiedPhone] = useState(false);
   const [isSlipFullView, setIsSlipFullView] = useState(false);
 
-  if (!isOpen || !attendee) return null;
+  // Admin Edit Modal States
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editModalInitialTab, setEditModalInitialTab] = useState('financial');
 
-  const isCheckedIn = !!attendee.checkedIn;
-  const isShirtReceived = !!attendee.shirtReceived;
-  const slipImage = attendee.slipUrl || attendee.paymentSlip;
-  const slipData = attendee.slipDetails || {};
-  const regDateTime = formatThaiDisplayDateTime(attendee.createdAt || attendee.timestamp || attendee.slipUploadedAt);
+  // Audit Trail State
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [isLoadingAuditLogs, setIsLoadingAuditLogs] = useState(false);
+
+  // Sync with prop when changed
+  useEffect(() => {
+    setCurrentAttendee(attendee);
+  }, [attendee]);
+
+  // Load audit logs from Cloud when opened
+  useEffect(() => {
+    if (isOpen && currentAttendee?.ticketNo) {
+      setIsLoadingAuditLogs(true);
+      fetchAuditLogsFromCloud(currentAttendee.ticketNo)
+        .then((logs) => {
+          if (Array.isArray(logs)) {
+            setAuditLogs(logs);
+          }
+        })
+        .catch((err) => console.error('Error fetching audit logs:', err))
+        .finally(() => setIsLoadingAuditLogs(false));
+    }
+  }, [isOpen, currentAttendee?.ticketNo]);
+
+  if (!isOpen || !currentAttendee) return null;
+
+  const isCheckedIn = !!currentAttendee.checkedIn;
+  const isShirtReceived = !!currentAttendee.shirtReceived;
+  const slipImage = currentAttendee.slipUrl || currentAttendee.paymentSlip;
+  const slipData = currentAttendee.slipDetails || {};
+  const regDateTime = formatThaiDisplayDateTime(currentAttendee.createdAt || currentAttendee.timestamp || currentAttendee.slipUploadedAt);
 
   const handleCopyPhone = () => {
-    if (attendee.phone) {
-      navigator.clipboard.writeText(attendee.phone.replace(/-/g, ''));
+    if (currentAttendee.phone) {
+      navigator.clipboard.writeText(currentAttendee.phone.replace(/-/g, ''));
       setCopiedPhone(true);
       setTimeout(() => setCopiedPhone(false), 2000);
     }
@@ -64,17 +100,17 @@ export default function AttendeeInspectionModal({
           <div className="flex items-center space-x-3 sm:space-x-4">
             <div className="px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-400/50 shadow-inner">
               <span className="font-mono font-black text-amber-300 text-sm sm:text-base tracking-wider">
-                {attendee.ticketNo || 'SME-001'}
+                {currentAttendee.ticketNo || 'SME-001'}
               </span>
             </div>
             <div>
               <div className="flex items-center space-x-2 flex-wrap">
                 <h3 className="text-base sm:text-lg font-black text-white leading-tight">
-                  {attendee.name}
+                  {currentAttendee.name}
                 </h3>
-                {attendee.nickname && (
+                {currentAttendee.nickname && (
                   <span className="text-amber-400 text-xs sm:text-sm font-semibold">
-                    ({attendee.nickname})
+                    ({currentAttendee.nickname})
                   </span>
                 )}
               </div>
@@ -109,19 +145,19 @@ export default function AttendeeInspectionModal({
                 <span>ประเภท & สังกัด</span>
               </span>
               <div className="font-bold text-white text-xs sm:text-sm truncate">
-                {attendee.regType === 'member' ? (
-                  (attendee.club || '').includes('โรตารี่') ? (
-                    <span className="text-red-400 font-extrabold">สมาชิก {attendee.club}</span>
+                {currentAttendee.regType === 'member' ? (
+                  (currentAttendee.club || '').includes('โรตารี่') ? (
+                    <span className="text-red-400 font-extrabold">สมาชิก {currentAttendee.club}</span>
                   ) : (
-                    <span className="text-indigo-300">สมาชิก {attendee.club || 'สงสพัท'}</span>
+                    <span className="text-indigo-300">สมาชิก {currentAttendee.club || 'สงสพัท'}</span>
                   )
                 ) : (
-                  <span className="text-emerald-300">แขกผู้มีเกียรติ ({attendee.club || 'สงสพัท'})</span>
+                  <span className="text-emerald-300">แขกผู้มีเกียรติ ({currentAttendee.club || 'สงสพัท'})</span>
                 )}
               </div>
-              {attendee.memberCode && (
+              {currentAttendee.memberCode && (
                 <span className="text-[10px] text-amber-400 font-mono">
-                  รหัส: {attendee.memberCode}
+                  รหัส: {currentAttendee.memberCode}
                 </span>
               )}
             </div>
@@ -145,9 +181,9 @@ export default function AttendeeInspectionModal({
                   <span className="text-slate-400">⏳ ยังไม่เข้างาน</span>
                 )}
               </div>
-              {isCheckedIn && attendee.checkedInAt && (
+              {isCheckedIn && currentAttendee.checkedInAt && (
                 <span className="text-[10px] text-emerald-400 font-mono">
-                  เวลา: {attendee.checkedInAt}
+                  เวลา: {currentAttendee.checkedInAt}
                 </span>
               )}
             </div>
@@ -163,15 +199,15 @@ export default function AttendeeInspectionModal({
                 <span>เสื้อที่ระลึก</span>
               </span>
               <div className="font-bold text-xs sm:text-sm">
-                {attendee.hasShirt ? (
-                  <span>ไซส์ {attendee.shirtSize} ({attendee.shirtGender || 'ทั่วไป'})</span>
+                {currentAttendee.hasShirt ? (
+                  <span>ไซส์ {currentAttendee.shirtSize} ({currentAttendee.shirtGender || 'ทั่วไป'})</span>
                 ) : (
                   <span className="text-slate-500">ไม่ได้รับสิทธิ์</span>
                 )}
               </div>
-              {attendee.hasShirt && (
+              {currentAttendee.hasShirt && (
                 <span className={`text-[10px] font-semibold ${isShirtReceived ? 'text-teal-300' : 'text-amber-400'}`}>
-                  {isShirtReceived ? `✓ รับแล้ว (${attendee.shirtReceivedAt || ''})` : '📦 ยังไม่ได้รับ'}
+                  {isShirtReceived ? `✓ รับแล้ว (${currentAttendee.shirtReceivedAt || ''})` : '📦 ยังไม่ได้รับ'}
                 </span>
               )}
             </div>
@@ -183,15 +219,15 @@ export default function AttendeeInspectionModal({
                 <span>ของขวัญปีใหม่</span>
               </span>
               <div className="font-bold text-xs sm:text-sm">
-                {attendee.giftNumber ? (
-                  <span className="text-amber-300 font-mono">🎁 #{attendee.giftNumber}</span>
+                {currentAttendee.giftNumber ? (
+                  <span className="text-amber-300 font-mono">🎁 #{currentAttendee.giftNumber}</span>
                 ) : (
                   <span className="text-slate-500">-</span>
                 )}
               </div>
-              {attendee.giftRegisteredAt && (
+              {currentAttendee.giftRegisteredAt && (
                 <span className="text-[10px] text-amber-400/80 font-mono">
-                  ลงทะเบียน: {attendee.giftRegisteredAt}
+                  ลงทะเบียน: {currentAttendee.giftRegisteredAt}
                 </span>
               )}
             </div>
@@ -203,33 +239,47 @@ export default function AttendeeInspectionModal({
             {/* LEFT COLUMN: Attendee Info (7 cols) */}
             <div className="lg:col-span-7 space-y-4">
               <div className="bg-white/5 rounded-2xl p-4 sm:p-5 border border-white/10 space-y-3.5">
-                <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                <div className="flex items-center justify-between pb-2 border-b border-white/10 flex-wrap gap-2">
                   <h4 className="font-bold text-white text-xs sm:text-sm flex items-center space-x-2">
                     <User className="w-4 h-4 text-amber-400" />
                     <span>ข้อมูลส่วนตัวและการลงทะเบียน</span>
                   </h4>
-                  <span className="text-[10px] text-slate-400 font-mono">
-                    ID: {attendee.ticketNo}
-                  </span>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditModalInitialTab('personal');
+                        setIsEditModalOpen(true);
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold text-[11px] flex items-center space-x-1 transition-all hover:scale-105 cursor-pointer shadow-sm"
+                      title="แก้ไขชื่อ เบอร์โทร สังกัด ไซซ์เสื้อ"
+                    >
+                      <Edit3 className="w-3 h-3 text-amber-400" />
+                      <span>แก้ไขข้อมูล</span>
+                    </button>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      ID: {currentAttendee.ticketNo}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-slate-300">
                   {/* Photos: Check-in Photo & Shirt Photo */}
-                  {(attendee.photoUrl || attendee.shirtPhoto) && (
+                  {(currentAttendee.photoUrl || currentAttendee.shirtPhoto) && (
                     <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                       {/* Check-in photo */}
-                      {attendee.photoUrl && (
+                      {currentAttendee.photoUrl && (
                         <div className="flex items-center space-x-3 p-2.5 rounded-xl bg-slate-950/40 border border-amber-500/30">
                           <img 
-                            src={attendee.photoUrl} 
-                            alt={attendee.name}
+                            src={currentAttendee.photoUrl} 
+                            alt={currentAttendee.name}
                             className="w-14 h-14 rounded-xl object-cover border-2 border-amber-400/70 shadow-md shrink-0" 
                           />
                           <div className="space-y-0.5 min-w-0">
                             <span className="text-[11px] font-bold text-amber-300 block truncate">📸 รูปถ่ายเข้างาน</span>
                             <span className="text-[10px] text-slate-400 block truncate">ประกวดแต่งกาย / ยืนยันตัวตน</span>
                             <a 
-                              href={attendee.photoUrl} 
+                              href={currentAttendee.photoUrl} 
                               target="_blank" 
                               rel="noreferrer"
                               className="text-[10px] text-amber-400 hover:underline inline-flex items-center space-x-1"
@@ -242,18 +292,18 @@ export default function AttendeeInspectionModal({
                       )}
 
                       {/* Shirt photo */}
-                      {attendee.shirtPhoto && (
+                      {currentAttendee.shirtPhoto && (
                         <div className="flex items-center space-x-3 p-2.5 rounded-xl bg-slate-950/40 border border-teal-500/30">
                           <img 
-                            src={attendee.shirtPhoto} 
-                            alt={attendee.name}
+                            src={currentAttendee.shirtPhoto} 
+                            alt={currentAttendee.name}
                             className="w-14 h-14 rounded-xl object-cover border-2 border-teal-400/70 shadow-md shrink-0" 
                           />
                           <div className="space-y-0.5 min-w-0">
                             <span className="text-[11px] font-bold text-teal-300 block truncate">👕 รูปถ่ายรับเสื้อ VIP</span>
                             <span className="text-[10px] text-slate-400 block truncate">ทำเนียบผู้ได้รับเสื้อ 15 คน</span>
                             <a 
-                              href={attendee.shirtPhoto} 
+                              href={currentAttendee.shirtPhoto} 
                               target="_blank" 
                               rel="noreferrer"
                               className="text-[10px] text-teal-400 hover:underline inline-flex items-center space-x-1"
@@ -271,7 +321,7 @@ export default function AttendeeInspectionModal({
                   <div>
                     <span className="text-[10px] text-slate-400 uppercase tracking-wider block">ชื่อ - นามสกุล</span>
                     <span className="font-bold text-white text-xs sm:text-sm block">
-                      {attendee.name}
+                      {currentAttendee.name}
                     </span>
                   </div>
 
@@ -279,7 +329,7 @@ export default function AttendeeInspectionModal({
                   <div>
                     <span className="text-[10px] text-slate-400 uppercase tracking-wider block">ชื่อเล่น</span>
                     <span className="font-semibold text-amber-300 text-xs sm:text-sm block">
-                      {attendee.nickname || '-'}
+                      {currentAttendee.nickname || '-'}
                     </span>
                   </div>
 
@@ -288,12 +338,12 @@ export default function AttendeeInspectionModal({
                     <span className="text-[10px] text-slate-400 uppercase tracking-wider block">เบอร์โทรศัพท์</span>
                     <div className="flex items-center space-x-2 mt-0.5">
                       <span className="font-mono font-bold text-white">
-                        {attendee.phone || '-'}
+                        {currentAttendee.phone || '-'}
                       </span>
-                      {attendee.phone && (
+                      {currentAttendee.phone && (
                         <div className="flex items-center space-x-1">
                           <a
-                            href={`tel:${attendee.phone.replace(/[^0-9]/g, '')}`}
+                            href={`tel:${currentAttendee.phone.replace(/[^0-9]/g, '')}`}
                             className="p-1 rounded-md bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 transition-colors"
                             title="โทรออก"
                           >
@@ -302,7 +352,7 @@ export default function AttendeeInspectionModal({
                           <button
                             type="button"
                             onClick={handleCopyPhone}
-                            className="p-1 rounded-md bg-white/10 text-slate-300 hover:text-white hover:bg-white/20 transition-colors"
+                            className="p-1 rounded-md bg-white/10 text-slate-300 hover:text-white hover:bg-white/20 transition-colors cursor-pointer"
                             title="คัดลอกเบอร์โทร"
                           >
                             {copiedPhone ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
@@ -316,16 +366,16 @@ export default function AttendeeInspectionModal({
                   <div>
                     <span className="text-[10px] text-slate-400 uppercase tracking-wider block">อีเมล</span>
                     <span className="font-medium text-slate-300 truncate block">
-                      {attendee.email || '-'}
+                      {currentAttendee.email || '-'}
                     </span>
                   </div>
 
                   {/* Recommender (for guests) */}
-                  {attendee.regType === 'guest' && (
+                  {currentAttendee.regType === 'guest' && (
                     <div className="sm:col-span-2 p-2.5 rounded-xl bg-slate-950/40 border border-white/5">
                       <span className="text-[10px] text-slate-400 block">ผู้แนะนำ / ผู้เชิญ (Recommender):</span>
                       <span className="font-bold text-amber-300 text-xs sm:text-sm">
-                        {attendee.recommenderName || attendee.recommender || '-'}
+                        {currentAttendee.recommenderName || currentAttendee.recommender || '-'}
                       </span>
                     </div>
                   )}
@@ -334,8 +384,8 @@ export default function AttendeeInspectionModal({
                   <div className="sm:col-span-2 pt-2 border-t border-white/5 flex items-center justify-between text-[11px] text-slate-400">
                     <span>ประวัติการดาวน์โหลดบัตร:</span>
                     <span className="font-mono text-slate-200">
-                      {attendee.downloadCount > 0 ? (
-                        <span className="text-emerald-400 font-bold">✓ โหลดแล้ว {attendee.downloadCount} ครั้ง (ล่าสุด: {attendee.lastDownloadedAt || '-'})</span>
+                      {currentAttendee.downloadCount > 0 ? (
+                        <span className="text-emerald-400 font-bold">✓ โหลดแล้ว {currentAttendee.downloadCount} ครั้ง (ล่าสุด: {currentAttendee.lastDownloadedAt || '-'})</span>
                       ) : (
                         <span className="text-slate-500">⏳ ยังไม่ดาวน์โหลดบัตร</span>
                       )}
@@ -346,50 +396,64 @@ export default function AttendeeInspectionModal({
 
               {/* Financial Summary Card */}
               <div className="bg-gradient-to-br from-amber-500/10 via-slate-900 to-slate-900 rounded-2xl p-4 sm:p-5 border border-amber-500/30 space-y-3">
-                <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                <div className="flex items-center justify-between pb-2 border-b border-white/10 flex-wrap gap-2">
                   <h4 className="font-bold text-amber-300 text-xs sm:text-sm flex items-center space-x-2">
                     <CreditCard className="w-4 h-4 text-amber-400" />
                     <span>สรุปการชำระเงินค่าลงทะเบียน</span>
                   </h4>
-                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                    attendee.paymentStatus === 'paid' 
-                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' 
-                      : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                  }`}>
-                    {attendee.paymentStatus === 'paid' ? 'ชำระแล้ว' : 'รอตรวจสอบ'}
-                  </span>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditModalInitialTab('financial');
+                        setIsEditModalOpen(true);
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold text-[11px] flex items-center space-x-1 transition-all hover:scale-105 cursor-pointer shadow-sm"
+                      title="แก้ไขยอดเงินที่โอนจริง หรือสลิป"
+                    >
+                      <Edit3 className="w-3 h-3 text-amber-400" />
+                      <span>แก้ไขยอดเงิน / สลิป</span>
+                    </button>
+                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                      currentAttendee.paymentStatus === 'paid' 
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' 
+                        : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                    }`}>
+                      {currentAttendee.paymentStatus === 'paid' ? 'ชำระแล้ว' : 'รอตรวจสอบ'}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="p-2.5 rounded-xl bg-slate-950/50 border border-white/5">
                     <span className="text-[10px] text-slate-400 block">ยอดที่ต้องชำระตามเกณฑ์:</span>
                     <span className="text-sm sm:text-base font-extrabold text-white font-mono">
-                      ฿{attendee.amount?.toLocaleString() || 500}
+                      ฿{currentAttendee.amount?.toLocaleString() || 500}
                     </span>
                   </div>
 
                   <div className="p-2.5 rounded-xl bg-slate-950/50 border border-white/5">
                     <span className="text-[10px] text-slate-400 block">ยอดเงินที่โอนจริง:</span>
                     <span className="text-sm sm:text-base font-extrabold text-amber-400 font-mono">
-                      ฿{(attendee.paidAmount || attendee.amount)?.toLocaleString()}
+                      ฿{(currentAttendee.paidAmount || currentAttendee.amount)?.toLocaleString()}
                     </span>
                   </div>
                 </div>
 
-                {attendee.contributionAmount > 0 && (
+                {currentAttendee.contributionAmount > 0 && (
                   <div className="p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 flex items-center space-x-2 text-emerald-300">
                     <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
                     <span className="text-[11px] font-bold">
-                      ขอบพระคุณสำหรับเงินสมทบกิจกรรมเพิ่มเติม: +฿{attendee.contributionAmount.toLocaleString()} บาท
+                      ขอบพระคุณสำหรับเงินสมทบกิจกรรมเพิ่มเติม: +฿{currentAttendee.contributionAmount.toLocaleString()} บาท
                     </span>
                   </div>
                 )}
 
-                {attendee.shortage > 0 && (
+                {currentAttendee.shortage > 0 && (
                   <div className="p-2.5 rounded-xl bg-rose-950/40 border border-rose-500/30 flex items-center space-x-2 text-rose-300">
                     <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
                     <span className="text-[11px] font-bold">
-                      ยอดเงินโอนขาดอีก: ฿{attendee.shortage.toLocaleString()} บาท
+                      ยอดเงินโอนขาดอีก: ฿{currentAttendee.shortage.toLocaleString()} บาท
                     </span>
                   </div>
                 )}
@@ -436,21 +500,22 @@ export default function AttendeeInspectionModal({
                         <button
                           type="button"
                           onClick={() => setIsSlipFullView(true)}
-                          className="py-2 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold text-xs flex items-center justify-center space-x-1.5 transition-colors"
+                          className="py-2 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold text-xs flex items-center justify-center space-x-1.5 transition-colors cursor-pointer"
                         >
                           <Eye className="w-3.5 h-3.5 text-amber-400" />
                           <span>ดูรูปสลิปเต็มจอ</span>
                         </button>
-                        <a
-                          href={slipImage}
-                          download={`สลิป_${attendee.ticketNo}_${attendee.name}.jpg`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="py-2 px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-semibold text-xs flex items-center justify-center space-x-1.5 transition-colors text-center"
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditModalInitialTab('financial');
+                            setIsEditModalOpen(true);
+                          }}
+                          className="py-2 px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-semibold text-xs flex items-center justify-center space-x-1.5 transition-colors cursor-pointer text-center"
                         >
-                          <Download className="w-3.5 h-3.5" />
-                          <span>ดาวน์โหลดสลิป</span>
-                        </a>
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>เปลี่ยนสลิป / แก้ไข</span>
+                        </button>
                       </div>
 
                       {/* Slip OCR Extracted Details (if available) */}
@@ -487,7 +552,7 @@ export default function AttendeeInspectionModal({
                           <div className="flex justify-between pt-1 border-t border-white/5">
                             <span>เวลาอัปโหลดเข้าระบบ:</span>
                             <strong className="text-amber-400 font-mono">
-                              {formatThaiDisplayDateTime(attendee.slipUploadedAt || attendee.createdAt || attendee.timestamp)}
+                              {formatThaiDisplayDateTime(currentAttendee.slipUploadedAt || currentAttendee.createdAt || currentAttendee.timestamp)}
                             </strong>
                           </div>
                         </div>
@@ -504,12 +569,97 @@ export default function AttendeeInspectionModal({
                           (ได้รับการยกเว้นค่าลงทะเบียน หรือลงทะเบียนพิเศษโดยแอดมิน)
                         </p>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditModalInitialTab('financial');
+                          setIsEditModalOpen(true);
+                        }}
+                        className="py-1.5 px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-xs font-bold inline-flex items-center space-x-1"
+                      >
+                        <Edit3 className="w-3 h-3" />
+                        <span>แนบสลิปใหม่</span>
+                      </button>
                     </div>
                   )}
                 </div>
               </div>
             </div>
 
+          </div>
+
+          {/* ============================================================== */}
+          {/* ADMIN AUDIT TRAIL / EDIT HISTORY SECTION                       */}
+          {/* ============================================================== */}
+          <div className="bg-slate-950/70 rounded-2xl p-4 sm:p-5 border border-white/10 space-y-3.5">
+            <div className="flex items-center justify-between pb-2 border-b border-white/10 flex-wrap gap-2">
+              <h4 className="font-bold text-white text-xs sm:text-sm flex items-center space-x-2">
+                <History className="w-4 h-4 text-amber-400" />
+                <span>ประวัติการแก้ไขข้อมูลโดยแอดมิน (Admin Audit Trail)</span>
+              </h4>
+              <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-white/10 text-slate-300 font-mono">
+                {isLoadingAuditLogs ? 'กำลังโหลด...' : auditLogs.length > 0 ? `บันทึกแล้ว ${auditLogs.length} ครั้ง` : 'ไม่มีประวัติการแก้ไข'}
+              </span>
+            </div>
+
+            {auditLogs.length > 0 ? (
+              <div className="space-y-3">
+                {auditLogs.map((log, index) => (
+                  <div
+                    key={log.id || index}
+                    className="p-3.5 rounded-xl bg-slate-900 border border-amber-500/20 space-y-2 text-xs"
+                  >
+                    {/* Log Header: Time & Admin Name */}
+                    <div className="flex items-center justify-between flex-wrap gap-2 pb-1.5 border-b border-white/5">
+                      <div className="flex items-center space-x-2 flex-wrap">
+                        <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-bold font-mono text-[10px]">
+                          🕒 {log.formattedTime || formatThaiDisplayDateTime(log.timestamp)}
+                        </span>
+                        <span className="font-bold text-white">
+                          👤 ผู้แก้ไข: <span className="text-amber-200">{log.adminName}</span>
+                        </span>
+                      </div>
+                      {log.adminPhone && (
+                        <span className="text-[11px] text-slate-400 font-mono">
+                          📞 {log.adminPhone}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Log Reason */}
+                    {log.reason && (
+                      <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-200 text-xs">
+                        <strong className="text-amber-300">💬 หมายเหตุที่แก้ไข:</strong> {log.reason}
+                      </div>
+                    )}
+
+                    {/* Changes Diff List */}
+                    {Array.isArray(log.changes) && log.changes.length > 0 && (
+                      <div className="space-y-1 pt-1">
+                        <span className="text-[10px] text-slate-400 font-semibold block">รายละเอียดสิ่งที่แก้ไข:</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                          {log.changes.map((ch, ci) => (
+                            <div
+                              key={ci}
+                              className="px-2.5 py-1 rounded-lg bg-slate-950/60 border border-white/5 text-[11px] flex items-center space-x-1.5 flex-wrap"
+                            >
+                              <span className="text-slate-400 font-medium">• {ch.field}:</span>
+                              <span className="text-rose-400 line-through font-mono">{ch.from}</span>
+                              <ArrowRight className="w-2.5 h-2.5 text-slate-500 shrink-0" />
+                              <span className="text-emerald-400 font-bold font-mono">{ch.to}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-4 px-3 text-center rounded-xl bg-slate-900/40 border border-white/5 text-slate-400 text-xs flex items-center justify-center space-x-2">
+                <span>ℹ️ ยังไม่มีประวัติการแก้ไขข้อมูล (เป็นข้อมูลดั้งเดิมตั้งแต่ผู้เข้าร่วมลงทะเบียน)</span>
+              </div>
+            )}
           </div>
 
         </div>
@@ -524,7 +674,7 @@ export default function AttendeeInspectionModal({
             {onCheckIn && (
               <button
                 type="button"
-                onClick={() => onCheckIn(attendee.ticketNo, !isCheckedIn)}
+                onClick={() => onCheckIn(currentAttendee.ticketNo, !isCheckedIn)}
                 className={`px-3.5 py-2 rounded-xl font-bold text-xs flex items-center space-x-1.5 shadow-sm transition-all cursor-pointer ${
                   isCheckedIn
                     ? 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40'
@@ -537,10 +687,10 @@ export default function AttendeeInspectionModal({
             )}
 
             {/* Quick Shirt Receive / Cancel Shirt */}
-            {onShirtReceive && attendee.hasShirt && (
+            {onShirtReceive && currentAttendee.hasShirt && (
               <button
                 type="button"
-                onClick={() => onShirtReceive(attendee.ticketNo, !isShirtReceived)}
+                onClick={() => onShirtReceive(currentAttendee.ticketNo, !isShirtReceived)}
                 className={`px-3.5 py-2 rounded-xl font-bold text-xs flex items-center space-x-1.5 shadow-sm transition-all cursor-pointer ${
                   isShirtReceived
                     ? 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40'
@@ -556,13 +706,26 @@ export default function AttendeeInspectionModal({
             {onViewTicket && (
               <button
                 type="button"
-                onClick={() => onViewTicket(attendee)}
-                className="px-3.5 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-bold text-xs flex items-center space-x-1.5 transition-colors cursor-pointer"
+                onClick={() => onViewTicket(currentAttendee)}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 font-bold text-xs flex items-center space-x-1.5 transition-colors cursor-pointer"
               >
-                <Tag className="w-4 h-4" />
+                <Tag className="w-4 h-4 text-amber-400" />
                 <span>ดูบัตรเข้างาน (E-Ticket)</span>
               </button>
             )}
+
+            {/* Admin Edit Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setEditModalInitialTab('financial');
+                setIsEditModalOpen(true);
+              }}
+              className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center space-x-1.5 shadow-sm transition-all hover:scale-105 cursor-pointer"
+            >
+              <Edit3 className="w-4 h-4" />
+              <span>✏️ แก้ไขข้อมูล / ยอดเงิน</span>
+            </button>
           </div>
 
           <button
@@ -585,7 +748,7 @@ export default function AttendeeInspectionModal({
           <div className="absolute top-4 right-4 flex items-center space-x-2">
             <a
               href={slipImage}
-              download={`สลิป_${attendee.ticketNo}_${attendee.name}.jpg`}
+              download={`สลิป_${currentAttendee.ticketNo}_${currentAttendee.name}.jpg`}
               target="_blank"
               rel="noreferrer"
               onClick={(e) => e.stopPropagation()}
@@ -611,11 +774,29 @@ export default function AttendeeInspectionModal({
               className="w-full h-auto max-h-[85vh] object-contain rounded-2xl border-2 border-amber-400/60 shadow-2xl" 
             />
             <div className="text-center mt-3 text-slate-300 text-xs">
-              สลิปการโอนเงินของ: <strong className="text-white">{attendee.name} ({attendee.ticketNo})</strong>
+              สลิปการโอนเงินของ: <strong className="text-white">{currentAttendee.name} ({currentAttendee.ticketNo})</strong>
             </div>
           </div>
         </div>
       )}
+
+      {/* ============================================================== */}
+      {/* ADMIN EDIT ATTENDEE MODAL                                      */}
+      {/* ============================================================== */}
+      <AdminEditAttendeeModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        attendee={currentAttendee}
+        initialTab={editModalInitialTab}
+        eventConfig={eventConfig}
+        onSaveSuccess={(updatedAttendee, newLog) => {
+          setCurrentAttendee(updatedAttendee);
+          setAuditLogs((prev) => [newLog, ...(prev || [])]);
+          if (onUpdateAttendee) {
+            onUpdateAttendee(updatedAttendee);
+          }
+        }}
+      />
 
     </div>
   );

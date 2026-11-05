@@ -626,6 +626,63 @@ export async function addSponsorToCloud(newSponsor) {
   }
 }
 
+// Fetch Admin Audit Logs from Cloud (event_config id: 'registration_edit_logs')
+export async function fetchAuditLogsFromCloud(ticketNo = null) {
+  const client = getSupabase();
+  if (!client) return ticketNo ? [] : {};
+
+  try {
+    const { data, error } = await client
+      .from('event_config')
+      .select('config')
+      .eq('id', 'registration_edit_logs')
+      .maybeSingle();
+
+    if (error || !data || !data.config) {
+      return ticketNo ? [] : {};
+    }
+
+    const allLogs = data.config.logs || {};
+    if (ticketNo) {
+      return Array.isArray(allLogs[ticketNo]) ? allLogs[ticketNo] : [];
+    }
+    return allLogs;
+  } catch (err) {
+    console.warn('fetchAuditLogsFromCloud warning:', err);
+    return ticketNo ? [] : {};
+  }
+}
+
+// Add an Admin Audit Log entry for a ticket
+export async function addAuditLogToCloud(ticketNo, logEntry) {
+  const client = getSupabase();
+  if (!client || !ticketNo || !logEntry) return false;
+
+  try {
+    const allLogs = await fetchAuditLogsFromCloud();
+    const ticketLogs = Array.isArray(allLogs[ticketNo]) ? allLogs[ticketNo] : [];
+    const updatedTicketLogs = [logEntry, ...ticketLogs];
+    const updatedAllLogs = {
+      ...allLogs,
+      [ticketNo]: updatedTicketLogs
+    };
+
+    const { error } = await client
+      .from('event_config')
+      .upsert({
+        id: 'registration_edit_logs',
+        config: { logs: updatedAllLogs },
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'id' });
+
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.error('addAuditLogToCloud error:', err);
+    return false;
+  }
+}
+
 /**
  * Completely wipe all registrations, contest votes, contest teams, and form responses from Supabase Cloud.
  */
