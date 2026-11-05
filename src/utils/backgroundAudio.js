@@ -9,9 +9,9 @@ class BackgroundAudioManager {
     this.listeners = new Set();
     this.isInitialized = false;
 
-    // Primary: Cloudinary Global CDN; Fallback: Local public asset
-    this.primaryUrl = "https://res.cloudinary.com/dx2asgfo7/video/upload/v1793901001/triple_t_forms/sme_fan_2026/audio/new_year_ranad_bgm.mp4";
-    this.fallbackUrl = "/audio/new_year_ranad.mp4";
+    // Primary: Cloudinary Raw Audio CDN; Fallback: Local public asset
+    this.primaryUrl = "https://res.cloudinary.com/dx2asgfo7/raw/upload/v1793902349/triple_t_forms/sme_fan_2026/audio/new_year_ranad.m4a";
+    this.fallbackUrl = "/audio/new_year_ranad.m4a";
   }
 
   init() {
