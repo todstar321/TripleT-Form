@@ -13,6 +13,7 @@ import TicketModal from './components/TicketModal';
 import OwnerPortalHub from './components/OwnerPortalHub';
 import EventCheckInHub from './components/EventCheckInHub';
 import ContestJudgeModal from './components/ContestJudgeModal';
+import BackgroundMusicPlayer from './components/BackgroundMusicPlayer';
 import { initialSmeFanConfig, initialRegistrations } from './data/smeFanData';
 import { initialFormsList, FORMS_STORAGE_KEY } from './data/formsData';
 import { defaultFormData } from './data/defaultForm';
@@ -1170,6 +1171,9 @@ export default function App() {
           onRecordDownload={handleRecordDownload}
         />
       )}
+
+      {/* Ambient Background Music Player (Fixed Bottom-Right Toggle) */}
+      <BackgroundMusicPlayer />
 
     </div>
   );

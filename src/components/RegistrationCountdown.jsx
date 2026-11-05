@@ -141,9 +141,12 @@ export default function RegistrationCountdown({
         
         {/* Left: Status & Thai Date */}
         <div className="space-y-0.5 min-w-0">
-          <div className="flex items-center justify-center sm:justify-start space-x-1.5 text-xs font-bold text-emerald-400">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0" />
-            <span>🟢 กำลังเปิดรับลงทะเบียน</span>
+          <div className="flex items-center justify-center sm:justify-start space-x-2 text-xs font-bold text-emerald-400">
+            <span className="relative flex h-2.5 w-2.5 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400"></span>
+            </span>
+            <span>กำลังเปิดรับลงทะเบียน</span>
           </div>
           {formattedDateText && (
             <div className="text-[11px] text-slate-400">

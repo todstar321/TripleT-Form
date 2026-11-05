@@ -1271,7 +1271,7 @@ export default function SmeFanRegistration({
                         <button
                           type="button"
                           onClick={() => setStep(1)}
-                          className="w-full h-full min-h-[52px] sm:min-h-[56px] py-3 sm:py-3.5 px-3 sm:px-4 rounded-2xl text-sm sm:text-base font-extrabold bg-gradient-to-r from-emerald-600 via-emerald-400 to-teal-400 hover:from-emerald-500 hover:via-emerald-300 hover:to-teal-300 text-slate-950 shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 border border-emerald-300 transition-all hover:scale-[1.01] active:scale-95 flex items-center justify-center cursor-pointer"
+                          className="w-full h-full min-h-[52px] sm:min-h-[56px] py-3 sm:py-3.5 px-3 sm:px-4 rounded-2xl text-sm sm:text-base font-black bg-gradient-to-r from-emerald-400 via-teal-200 to-emerald-400 hover:from-emerald-300 hover:via-teal-100 hover:to-emerald-300 text-slate-950 shadow-xl shadow-emerald-400/35 hover:shadow-emerald-400/55 border-2 border-emerald-200 transition-all hover:scale-[1.01] active:scale-95 flex items-center justify-center cursor-pointer tracking-wide"
                         >
                           <span className="truncate">
                             {(!eventConfig.landingButtonText || eventConfig.landingButtonText === "กดลงทะเบียนเข้างาน")
