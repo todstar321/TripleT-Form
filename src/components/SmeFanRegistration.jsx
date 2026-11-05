@@ -54,6 +54,7 @@ import ImageCropperModal from './ImageCropperModal';
 import RegistrationCountdown from './RegistrationCountdown';
 import SponsorRegistrationModal from './SponsorRegistrationModal';
 import EventPublicDataSheetModal from './EventPublicDataSheetModal';
+import { MusicFooterToggle } from './BackgroundMusicPlayer';
 import { themePresetsList } from '../data/smeFanData';
 import { uploadToCloudinary } from '../utils/cloudinary';
 import { analyzeSlipData } from '../utils/slipReader';
@@ -3220,6 +3221,9 @@ export default function SmeFanRegistration({
               </button>
             </div>
           )}
+
+          {/* Mini Background Music Control (50% smaller, non-floating, centered at the very bottom) */}
+          <MusicFooterToggle />
         </footer>
 
       </div>
