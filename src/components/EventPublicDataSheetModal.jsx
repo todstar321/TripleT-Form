@@ -15,6 +15,7 @@ import {
   Layers
 } from "lucide-react";
 import { fetchSponsorsFromCloud } from "../utils/supabaseClient";
+import EventA4PrintModal from "./EventA4PrintModal";
 
 export default function EventPublicDataSheetModal({
   isOpen,
@@ -37,6 +38,9 @@ export default function EventPublicDataSheetModal({
   // Live sponsors state synced with cloud
   const [liveSponsors, setLiveSponsors] = useState(sponsors);
 
+  // A4 Print & Export Modal State
+  const [isA4PrintModalOpen, setIsA4PrintModalOpen] = useState(false);
+
   useEffect(() => {
     setLiveSponsors(sponsors);
   }, [sponsors]);
@@ -53,9 +57,9 @@ export default function EventPublicDataSheetModal({
     }
   }, [isOpen]);
 
-  // Print Mode trigger
+  // Print Mode trigger: opens dedicated A4 multi-page document hub
   const handlePrint = () => {
-    window.print();
+    setIsA4PrintModalOpen(true);
   };
 
   // 1. Combine All Sponsors (Auto-sync excess payments + direct sponsors)
@@ -646,6 +650,18 @@ export default function EventPublicDataSheetModal({
         </div>
 
       </div>
+
+      {/* ======================================================= */}
+      {/* A4 MULTI-PAGE PRINT & IMAGE EXPORT MODAL                */}
+      {/* ======================================================= */}
+      <EventA4PrintModal
+        isOpen={isA4PrintModalOpen}
+        onClose={() => setIsA4PrintModalOpen(false)}
+        registrations={registrations}
+        sponsors={consolidatedSponsors}
+        eventConfig={eventConfig}
+      />
+
     </div>
   );
 }
