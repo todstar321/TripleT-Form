@@ -30,9 +30,12 @@ import {
 } from './utils/supabaseClient';
 
 const CONFIG_STORAGE_KEY = 'sme_fan_config_v3';
-const REGISTRATIONS_STORAGE_KEY = 'sme_fan_registrations_v4';
+const REGISTRATIONS_STORAGE_KEY = 'sme_fan_registrations_v5';
 const USER_STORAGE_KEY = 'sme_fan_admin_user_v5';
 const ACTIVE_TAB_STORAGE_KEY = 'sme_fan_active_tab_v3';
+
+// Official Live Registration Launch Epoch (09:00 AM on 5 Nov 2026 Thailand Time = 02:00 UTC)
+export const REGISTRATION_LAUNCH_EPOCH = 1793844000000;
 
 // Global Session Cutoff Timestamp (Revokes any session created before this exact millisecond)
 export const GLOBAL_AUTH_EPOCH = 1793668600000; // 2026-11-03 08:16:40+07:00
@@ -170,7 +173,8 @@ export default function App() {
     try {
       // Auto-purge test registrations & contest data from previous test runs across all devices
       [
-        'sme_fan_registrations', 'sme_fan_registrations_v1', 'sme_fan_registrations_v2', 'sme_fan_registrations_v3',
+        'sme_fan_registrations', 'sme_fan_registrations_v1', 'sme_fan_registrations_v2', 
+        'sme_fan_registrations_v3', 'sme_fan_registrations_v4',
         'sme_fan_contest_teams', 'sme_fan_contest_teams_v1',
         'sme_fan_contest_votes', 'sme_fan_contest_all_votes', 'sme_fan_contest_all_votes_v1'
       ].forEach(k => {
@@ -180,7 +184,8 @@ export default function App() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed;
+          // Keep only legitimate registrations created after launch time
+          return parsed.filter(r => !r.createdAt || new Date(r.createdAt).getTime() >= REGISTRATION_LAUNCH_EPOCH);
         }
       }
     } catch (e) {
@@ -395,24 +400,19 @@ export default function App() {
         }
       }).catch(err => console.warn('Supabase config fetch warning:', err));
 
-      // 1.2 Hydrate registrations (Authoritative cloud source + merge offline/local)
+      // 1.2 Hydrate registrations (Authoritative cloud source: Supabase Cloud is single source of truth)
       fetchRegistrationsFromCloud().then(cloudData => {
         if (cloudData && Array.isArray(cloudData)) {
-          setRegistrations(prev => {
-            const cloudTicketNos = new Set(cloudData.map(r => r.ticketNo));
-            const localOnly = (prev || []).filter(r => r && r.ticketNo && !cloudTicketNos.has(r.ticketNo));
-
-            // Sync any local tickets to cloud if missing in cloud
-            if (localOnly.length > 0) {
-              localOnly.forEach(t => syncTicketToCloud(t));
-            }
-
-            const merged = [...cloudData, ...localOnly];
-            try {
-              localStorage.setItem(REGISTRATIONS_STORAGE_KEY, JSON.stringify(merged));
-            } catch (e) {}
-            return merged;
+          // Filter out any stale mock/test data created before official launch time
+          const validRegistrations = cloudData.filter(r => {
+            if (!r.createdAt) return true;
+            return new Date(r.createdAt).getTime() >= REGISTRATION_LAUNCH_EPOCH;
           });
+
+          setRegistrations(validRegistrations);
+          try {
+            localStorage.setItem(REGISTRATIONS_STORAGE_KEY, JSON.stringify(validRegistrations));
+          } catch (e) {}
           setLastCloudSync(new Date());
         }
       }).catch(err => console.warn('Supabase initial fetch warning:', err));

@@ -287,11 +287,72 @@ export async function fetchRegistrationsFromCloud() {
 
 export async function upsertRegistrationToCloud(reg) {
   const client = getSupabase();
-  if (!client || !reg || !reg.ticketNo) return false;
+  if (!client || !reg) return false;
 
   try {
+    let finalTicketNo = reg.ticketNo;
+
+    // Safety Collision Guard: Prevent overwriting another person if ticket_no was already claimed
+    if (finalTicketNo) {
+      try {
+        const { data: existingRows } = await client
+          .from('registrations')
+          .select('ticket_no, name, phone')
+          .eq('ticket_no', finalTicketNo);
+
+        if (existingRows && existingRows.length > 0) {
+          const existing = existingRows[0];
+          const cleanExistingPhone = (existing.phone || '').replace(/\D/g, '');
+          const cleanNewPhone = (reg.phone || '').replace(/\D/g, '');
+          const existingName = (existing.name || '').trim().toLowerCase();
+          const newName = (reg.name || '').trim().toLowerCase();
+
+          const isSamePerson = (
+            (cleanExistingPhone && cleanExistingPhone.length >= 8 && cleanExistingPhone === cleanNewPhone) ||
+            (existingName && existingName === newName)
+          );
+
+          if (!isSamePerson) {
+            console.warn(`[Collision Guard] Ticket ${finalTicketNo} belongs to "${existing.name}". Assigning new number for "${reg.name}".`);
+            const { data: allRows } = await client
+              .from('registrations')
+              .select('ticket_no');
+
+            let maxN = 0;
+            if (allRows) {
+              allRows.forEach(r => {
+                const m = (r.ticket_no || '').match(/\d+/);
+                if (m) maxN = Math.max(maxN, parseInt(m[0], 10));
+              });
+            }
+            finalTicketNo = `SME-${String(maxN + 1).padStart(3, '0')}`;
+            reg.ticketNo = finalTicketNo;
+          }
+        }
+      } catch (checkErr) {
+        console.warn('Collision check warning:', checkErr);
+      }
+    } else {
+      // If no ticket number passed, compute next
+      try {
+        const { data: allRows } = await client
+          .from('registrations')
+          .select('ticket_no');
+
+        let maxN = 0;
+        if (allRows) {
+          allRows.forEach(r => {
+            const m = (r.ticket_no || '').match(/\d+/);
+            if (m) maxN = Math.max(maxN, parseInt(m[0], 10));
+          });
+        }
+        finalTicketNo = `SME-${String(maxN + 1).padStart(3, '0')}`;
+        reg.ticketNo = finalTicketNo;
+      } catch (e) {}
+    }
+
     const payload = {
-      ticket_no: reg.ticketNo,
+      ticket_no: finalTicketNo,
       name: reg.name,
       nickname: reg.nickname || '',
       phone: reg.phone || '',

@@ -55,6 +55,7 @@ import { uploadToCloudinary } from '../utils/cloudinary';
 import { analyzeSlipData } from '../utils/slipReader';
 import { formatPhoneNumber, cleanPhoneNumber } from '../utils/phoneFormatter';
 import { getScheduleStatus, formatThaiScheduleDateTime, formatThaiShortDateTime } from '../utils/scheduleHelper';
+import { fetchRegistrationsFromCloud } from '../utils/supabaseClient';
 
 const THAI_MONTHS_FULL = [
   "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
@@ -792,8 +793,17 @@ export default function SmeFanRegistration({
   };
 
   // Submit Registration
-  const handleSubmitRegistration = () => {
-    const maxNum = registrations.reduce((max, r) => {
+  const handleSubmitRegistration = async () => {
+    // 1. Fetch freshest registrations from Cloud to avoid stale maxNum collision
+    let currentRegs = registrations;
+    try {
+      const freshCloud = await fetchRegistrationsFromCloud();
+      if (freshCloud && Array.isArray(freshCloud)) {
+        currentRegs = freshCloud;
+      }
+    } catch (e) {}
+
+    const maxNum = currentRegs.reduce((max, r) => {
       const match = (r.ticketNo || '').match(/\d+/);
       return match ? Math.max(max, parseInt(match[0], 10)) : max;
     }, 0);
