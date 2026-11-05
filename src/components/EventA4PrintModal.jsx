@@ -4,8 +4,6 @@ import {
   Printer,
   Download,
   Share2,
-  ChevronLeft,
-  ChevronRight,
   Copy,
   Check,
   FileSpreadsheet,
@@ -16,7 +14,9 @@ import {
   Clock,
   Sparkles,
   RefreshCw,
-  ExternalLink
+  ExternalLink,
+  Layers,
+  ArrowDown
 } from "lucide-react";
 import html2canvas from "html2canvas";
 
@@ -41,7 +41,8 @@ function getThaiA4ExtractionTime(d = new Date()) {
   };
 }
 
-const ROWS_PER_PAGE = 18;
+// 26 rows per page allows compact slim rows so 21 attendees fit on 1 single A4 page
+const ROWS_PER_PAGE = 26;
 
 export default function EventA4PrintModal({
   isOpen,
@@ -52,11 +53,10 @@ export default function EventA4PrintModal({
 }) {
   if (!isOpen) return null;
 
-  const [activePageIndex, setActivePageIndex] = useState(0);
-  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [progressText, setProgressText] = useState("");
   const [copiedText, setCopiedText] = useState(false);
   const [printTimestamp, setPrintTimestamp] = useState(() => getThaiA4ExtractionTime());
-  const printContainerRef = useRef(null);
 
   // Refresh timestamp when opened
   useEffect(() => {
@@ -73,23 +73,16 @@ export default function EventA4PrintModal({
   }, [registrations]);
 
   // 1. Group Data into 4 Categories
-  // หมวด 1: ตารางรายชื่อลงทะเบียน (ทุกสังกัด) - หัวตารางสีชมพู
   const cat1Items = sortedRegistrations;
-
-  // หมวด 2: ตารางรายชื่อลงทะเบียน สงสพัท - หัวตารางสีน้ำเงิน
   const cat2Items = useMemo(() => {
     return sortedRegistrations.filter((r) => (r.club || "สงสพัท").includes("สงสพัท"));
   }, [sortedRegistrations]);
-
-  // หมวด 3: ตารางรายชื่อลงทะเบียน โรตารี่ - หัวตารางสีแดง
   const cat3Items = useMemo(() => {
     return sortedRegistrations.filter((r) => (r.club || "").includes("โรตารี่"));
   }, [sortedRegistrations]);
-
-  // หมวด 4: ตารางผู้สนับสนุนกิจกรรม (ทุกสังกัด) - หัวตารางสีชมพู
   const cat4Items = sponsors;
 
-  // 2. Build Multi-Page A4 Array with Chunking (18 items per page)
+  // 2. Build Multi-Page A4 Array with Chunking (26 items per page)
   const a4Pages = useMemo(() => {
     const pages = [];
 
@@ -165,8 +158,6 @@ export default function EventA4PrintModal({
     return pages;
   }, [cat1Items, cat2Items, cat3Items, cat4Items]);
 
-  const currentPage = a4Pages[activePageIndex] || a4Pages[0];
-
   // LINE Share Summary Text
   const lineShareSummaryText = useMemo(() => {
     const cashSponsorsTotal = sponsors
@@ -211,48 +202,73 @@ export default function EventA4PrintModal({
     });
   };
 
-  // 1. Download Current Page as A4 Image (.PNG)
-  const handleDownloadCurrentPageImage = async () => {
-    if (isGeneratingImage) return;
-    setIsGeneratingImage(true);
+  // 1. Share ALL Pages to LINE at once
+  const handleShareAllToLine = async () => {
+    if (isProcessing) return;
+    setIsProcessing(true);
 
     try {
-      const pageEl = document.getElementById(`a4-page-render-${currentPage.pageNumber}`);
-      if (!pageEl) throw new Error("Page element not found");
+      const files = [];
 
-      const canvas = await renderA4PageCanvas(pageEl);
-      const dataUrl = canvas.toDataURL("image/png");
+      for (let i = 0; i < a4Pages.length; i++) {
+        const page = a4Pages[i];
+        setProgressText(`กำลังเตรียมรูป A4 แผ่นที่ ${i + 1}/${a4Pages.length}...`);
+        const el = document.getElementById(`a4-page-render-${page.pageNumber}`);
+        if (el) {
+          const canvas = await renderA4PageCanvas(el);
+          const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
+          const cleanTitle = page.categoryTitle.replace(/[\s/\\:]+/g, "_");
+          const file = new File([blob], `A4_แผ่นที่_${page.pageNumber}_${cleanTitle}.png`, { type: "image/png" });
+          files.push(file);
+        }
+      }
 
-      const cleanTitle = currentPage.categoryTitle.replace(/[\s/\\:]+/g, "_");
-      const filename = `${cleanTitle}_${currentPage.pageLabel.replace(/[\s/]+/g, "_")}.png`;
-
-      const link = document.createElement("a");
-      link.href = dataUrl;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      // Check if navigator.canShare supports files
+      if (navigator.canShare && navigator.canShare({ files })) {
+        setProgressText("กำลังเปิดหน้าต่างแชร์เข้า LINE...");
+        await navigator.share({
+          title: "สรุปการลงทะเบียนเข้าร่วมกิจกรรมปีใหม่ SME FAN 2026",
+          text: lineShareSummaryText,
+          files: files
+        });
+      } else {
+        // Fallback: download all files and open LINE Share intent
+        setProgressText("กำลังดาวน์โหลดรูปภาพทั้งหมดลงเครื่อง...");
+        for (const file of files) {
+          const link = document.createElement("a");
+          link.href = URL.createObjectURL(file);
+          link.download = file.name;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          await new Promise((r) => setTimeout(r, 400));
+        }
+        window.open(`https://line.me/R/msg/text/?${encodeURIComponent(lineShareSummaryText)}`, "_blank");
+      }
     } catch (err) {
-      console.error("Export image error:", err);
-      alert("เกิดข้อผิดพลาดในการสร้างรูปภาพ กรุณาลองใหม่อีกครั้ง");
+      console.log("Share all error/cancelled:", err);
     } finally {
-      setIsGeneratingImage(false);
+      setIsProcessing(false);
+      setProgressText("");
     }
   };
 
-  // 2. Download All Pages Sequentially
+  // 2. Download ALL Pages Images at once
   const handleDownloadAllPagesImages = async () => {
-    if (isGeneratingImage) return;
-    setIsGeneratingImage(true);
+    if (isProcessing) return;
+    setIsProcessing(true);
 
     try {
-      for (const page of a4Pages) {
-        const pageEl = document.getElementById(`a4-page-render-${page.pageNumber}`);
-        if (pageEl) {
-          const canvas = await renderA4PageCanvas(pageEl);
+      for (let i = 0; i < a4Pages.length; i++) {
+        const page = a4Pages[i];
+        setProgressText(`กำลังบันทึกรูปภาพแผ่นที่ ${i + 1}/${a4Pages.length}...`);
+
+        const el = document.getElementById(`a4-page-render-${page.pageNumber}`);
+        if (el) {
+          const canvas = await renderA4PageCanvas(el);
           const dataUrl = canvas.toDataURL("image/png");
           const cleanTitle = page.categoryTitle.replace(/[\s/\\:]+/g, "_");
-          const filename = `หน้า_${page.pageNumber}_${cleanTitle}_${page.pageLabel.replace(/[\s/]+/g, "_")}.png`;
+          const filename = `A4_แผ่นที่_${page.pageNumber}_${cleanTitle}_${page.pageLabel.replace(/[\s/]+/g, "_")}.png`;
 
           const link = document.createElement("a");
           link.href = dataUrl;
@@ -261,60 +277,28 @@ export default function EventA4PrintModal({
           link.click();
           document.body.removeChild(link);
 
-          // Small delay between downloads to prevent browser throttling
-          await new Promise((r) => setTimeout(r, 600));
+          // Delay between downloads
+          await new Promise((r) => setTimeout(r, 500));
         }
       }
+      setProgressText("บันทึกรูปภาพครบทั้งหมดแล้ว!");
+      await new Promise((r) => setTimeout(r, 1200));
     } catch (err) {
       console.error("Export all images error:", err);
-      alert("เกิดข้อผิดพลาดในการดาวน์โหลดรูปภาพทั้งหมด กรุณาลองใหม่อีกครั้ง");
+      alert("เกิดข้อผิดพลาดในการดาวน์โหลดรูปภาพ กรุณาลองใหม่อีกครั้ง");
     } finally {
-      setIsGeneratingImage(false);
+      setIsProcessing(false);
+      setProgressText("");
     }
   };
 
-  // 3. Share to LINE (Web Share API with image fallback to LINE URL)
-  const handleShareToLine = async () => {
-    if (isGeneratingImage) return;
-    setIsGeneratingImage(true);
-
-    try {
-      const pageEl = document.getElementById(`a4-page-render-${currentPage.pageNumber}`);
-      if (pageEl && navigator.canShare) {
-        const canvas = await renderA4PageCanvas(pageEl);
-        const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
-
-        const cleanTitle = currentPage.categoryTitle.replace(/[\s/\\:]+/g, "_");
-        const file = new File([blob], `${cleanTitle}.png`, { type: "image/png" });
-
-        if (navigator.canShare({ files: [file] })) {
-          await navigator.share({
-            title: `สรุปงานสังสรรค์ปีใหม่ SME FAN 2026 - ${currentPage.categoryTitle}`,
-            text: lineShareSummaryText,
-            files: [file]
-          });
-          setIsGeneratingImage(false);
-          return;
-        }
-      }
-    } catch (shareErr) {
-      console.log("Web share with file error/cancelled:", shareErr);
-    }
-
-    setIsGeneratingImage(false);
-
-    // Fallback: Open LINE Share intent with message
-    const lineUrl = `https://line.me/R/msg/text/?${encodeURIComponent(lineShareSummaryText)}`;
-    window.open(lineUrl, "_blank");
-  };
-
-  // 4. Trigger Native Print Mode
+  // 3. Trigger Native Print Mode
   const handleTriggerPrint = () => {
     window.print();
   };
 
   return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center p-2 sm:p-4 bg-slate-950/95 backdrop-blur-xl animate-fadeIn overflow-y-auto">
+    <div className="fixed inset-0 z-60 flex items-center justify-center p-1 sm:p-4 bg-slate-950/95 backdrop-blur-xl animate-fadeIn overflow-y-auto">
       {/* ========================================================= */}
       {/* PRINT CSS STYLING: Exact A4 Page-break                    */}
       {/* ========================================================= */}
@@ -342,7 +326,7 @@ export default function EventA4PrintModal({
             max-width: 210mm !important;
             min-height: 297mm !important;
             margin: 0 auto !important;
-            padding: 14mm 12mm !important;
+            padding: 10mm 10mm !important;
             box-shadow: none !important;
             border: none !important;
             -webkit-print-color-adjust: exact !important;
@@ -352,83 +336,76 @@ export default function EventA4PrintModal({
       `}</style>
 
       <div
-        className="relative bg-slate-900 rounded-3xl border border-white/15 shadow-2xl w-full max-w-5xl max-h-[96vh] flex flex-col overflow-hidden my-auto"
+        className="relative bg-slate-900 rounded-2xl sm:rounded-3xl border border-white/15 shadow-2xl w-full max-w-5xl max-h-[96vh] flex flex-col overflow-hidden my-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* ========================================================= */}
-        {/* TOP CONTROLS BAR                                          */}
+        {/* STICKY TOP CONTROLS BAR (Mobile & Desktop Optimized)      */}
         {/* ========================================================= */}
-        <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 px-4 sm:px-6 py-3.5 border-b border-white/10 flex flex-wrap items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-9 h-9 rounded-xl bg-pink-500/20 border border-pink-400/40 flex items-center justify-center text-pink-400">
-              <FileSpreadsheet className="w-5 h-5" />
+        <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 px-3 sm:px-6 py-3 border-b border-white/10 flex flex-wrap items-center justify-between gap-2.5 shrink-0 z-20">
+          <div className="flex items-center space-x-2 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-pink-500/20 border border-pink-400/40 flex items-center justify-center text-pink-400 shrink-0">
+              <FileSpreadsheet className="w-4 h-4" />
             </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <h3 className="text-sm sm:text-base font-black text-white">
-                  ตัวจัดการพิมพ์และส่งออกเอกสาร A4
+            <div className="min-w-0">
+              <div className="flex items-center space-x-1.5 flex-wrap">
+                <h3 className="text-xs sm:text-base font-black text-white truncate">
+                  เอกสารตาราง A4 ({a4Pages.length} แผ่นต่อเนื่อง)
                 </h3>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-pink-500/20 text-pink-300 border border-pink-500/30 font-mono">
-                  4 หมวดหมู่ ({a4Pages.length} หน้า)
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-pink-500/20 text-pink-300 border border-pink-500/30 font-mono">
+                  4 หมวดหมู่
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 font-mono">
+              <p className="text-[10px] sm:text-[11px] text-slate-400 font-mono truncate">
                 {printTimestamp.fullStr}
               </p>
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center space-x-2 flex-wrap">
-            {/* Share to LINE */}
+          {/* Action Buttons: Share ALL, Save ALL, Print, Close */}
+          <div className="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
+            {/* Share ALL to LINE */}
             <button
               type="button"
-              onClick={handleShareToLine}
-              disabled={isGeneratingImage}
-              className="py-1.5 px-3 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white font-bold text-xs flex items-center space-x-1.5 shadow-md shadow-emerald-950 transition-all hover:scale-105 active:scale-95 cursor-pointer"
-              title="แชร์รูปภาพและข้อความสรุปเข้าแอป LINE"
+              onClick={handleShareAllToLine}
+              disabled={isProcessing}
+              className="py-1.5 px-2.5 sm:px-3 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white font-bold text-xs flex items-center space-x-1 sm:space-x-1.5 shadow-md shadow-emerald-950 transition-all hover:scale-105 active:scale-95 cursor-pointer disabled:opacity-50"
+              title="กดแชร์ครั้งเดียว เอกสารรูปภาพ A4 ไปทั้งหมดทุกหน้า"
             >
-              <Share2 className="w-3.5 h-3.5" />
-              <span>แชร์เข้า LINE</span>
+              {isProcessing ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Share2 className="w-3.5 h-3.5" />
+              )}
+              <span>แชร์เข้า LINE ({a4Pages.length} รูป)</span>
             </button>
 
-            {/* Save Current Page Image */}
+            {/* Save ALL Pages Image */}
             <button
               type="button"
-              onClick={handleDownloadCurrentPageImage}
-              disabled={isGeneratingImage}
-              className="py-1.5 px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-bold text-xs flex items-center space-x-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer"
-              title="บันทึกหน้าปัจจุบันเป็นรูปภาพ A4 (.png)"
+              onClick={handleDownloadAllPagesImages}
+              disabled={isProcessing}
+              className="py-1.5 px-2.5 sm:px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-bold text-xs flex items-center space-x-1 sm:space-x-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer disabled:opacity-50"
+              title="กดเซฟครั้งเดียว ดาวน์โหลดเอกสาร A4 ครบทุกรูป"
             >
-              {isGeneratingImage ? (
+              {isProcessing ? (
                 <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-400" />
               ) : (
                 <Download className="w-3.5 h-3.5" />
               )}
-              <span>รูป A4 หน้านี้</span>
-            </button>
-
-            {/* Download All Pages */}
-            <button
-              type="button"
-              onClick={handleDownloadAllPagesImages}
-              disabled={isGeneratingImage}
-              className="py-1.5 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-slate-200 border border-white/15 font-bold text-xs flex items-center space-x-1.5 transition-all hover:scale-105 cursor-pointer hidden sm:flex"
-              title="ดาวน์โหลดรูปภาพ A4 ทุกหน้ารวดเดียว"
-            >
-              <Download className="w-3.5 h-3.5 text-pink-400" />
-              <span>ดาวน์โหลดทุกหน้า ({a4Pages.length})</span>
+              <span>บันทึกรูปทั้งหมด</span>
             </button>
 
             {/* Print Real Document */}
             <button
               type="button"
               onClick={handleTriggerPrint}
-              className="py-1.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white border border-white/15 font-bold text-xs flex items-center space-x-1.5 transition-all hover:scale-105 cursor-pointer"
-              title="สั่งพิมพ์ออกเครื่องพิมพ์ หรือ Save เป็น PDF"
+              disabled={isProcessing}
+              className="py-1.5 px-2 sm:px-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white border border-white/15 font-bold text-xs flex items-center space-x-1 transition-all hover:scale-105 cursor-pointer"
+              title="สั่งพิมพ์หรือ Save เป็น PDF"
             >
               <Printer className="w-3.5 h-3.5 text-amber-400" />
-              <span>พิมพ์ (PDF)</span>
+              <span className="hidden sm:inline">พิมพ์ (PDF)</span>
             </button>
 
             <button
@@ -442,347 +419,318 @@ export default function EventA4PrintModal({
           </div>
         </div>
 
-        {/* ========================================================= */}
-        {/* PAGE NAVIGATION THUMBNAILS CAROUSEL                       */}
-        {/* ========================================================= */}
-        <div className="bg-slate-950/80 px-4 py-2 border-b border-white/10 flex items-center justify-between gap-2 overflow-x-auto shrink-0">
-          <div className="flex items-center space-x-1.5 overflow-x-auto py-1">
-            {a4Pages.map((pg, idx) => {
-              const isActive = idx === activePageIndex;
-              const badgeBg =
-                pg.headerColorType === "blue"
-                  ? "border-blue-500 text-blue-400 bg-blue-500/10"
-                  : pg.headerColorType === "red"
-                  ? "border-red-500 text-red-400 bg-red-500/10"
-                  : "border-pink-500 text-pink-400 bg-pink-500/10";
-
-              return (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => setActivePageIndex(idx)}
-                  className={`py-1.5 px-3 rounded-xl text-xs font-bold whitespace-nowrap transition-all border flex items-center space-x-1.5 cursor-pointer ${
-                    isActive
-                      ? "bg-white text-slate-950 border-white shadow-md font-extrabold scale-105"
-                      : `${badgeBg} hover:bg-white/10`
-                  }`}
-                >
-                  <span className="w-2 h-2 rounded-full shrink-0" style={{
-                    backgroundColor:
-                      pg.headerColorType === "blue"
-                        ? "#2563eb"
-                        : pg.headerColorType === "red"
-                        ? "#dc2626"
-                        : "#ec4899"
-                  }} />
-                  <span>
-                    หน้า {pg.pageNumber}: {pg.categoryTitle.replace("ตาราง", "").trim()} ({pg.pageLabel})
-                  </span>
-                </button>
-              );
-            })}
+        {/* Processing Banner (if active) */}
+        {isProcessing && (
+          <div className="bg-amber-500 text-slate-950 px-4 py-2 text-xs font-bold flex items-center justify-center space-x-2 animate-pulse shrink-0">
+            <RefreshCw className="w-4 h-4 animate-spin" />
+            <span>{progressText || "กำลังประมวลผลเอกสาร A4..."}</span>
           </div>
-
-          <div className="flex items-center space-x-1 shrink-0">
-            <button
-              type="button"
-              disabled={activePageIndex === 0}
-              onClick={() => setActivePageIndex((p) => Math.max(0, p - 1))}
-              className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <span className="text-xs font-mono font-bold text-slate-300 px-2">
-              {activePageIndex + 1} / {a4Pages.length}
-            </span>
-            <button
-              type="button"
-              disabled={activePageIndex === a4Pages.length - 1}
-              onClick={() => setActivePageIndex((p) => Math.min(a4Pages.length - 1, p + 1))}
-              className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        )}
 
         {/* ========================================================= */}
-        {/* PREVIEW CONTAINER: Interactive A4 Viewport                */}
+        {/* CONTINUOUS VERTICAL SCROLL: All A4 Pages in a Row         */}
         {/* ========================================================= */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-950/60 flex flex-col items-center justify-start">
+        <div className="flex-1 overflow-y-auto p-2 sm:p-6 bg-slate-950/70 flex flex-col items-center space-y-6 sm:space-y-10">
           
-          {/* Active A4 Page Display (White Paper) */}
-          <div
-            id={`a4-page-render-${currentPage.pageNumber}`}
-            className="bg-white text-slate-900 rounded-lg shadow-2xl p-8 sm:p-10 border border-slate-300 flex flex-col justify-between"
-            style={{
-              width: "100%",
-              maxWidth: "794px",
-              minHeight: "1123px",
-              boxSizing: "border-box"
-            }}
-          >
-            {/* Top Sheet Header */}
-            <div>
-              <div className="flex items-start justify-between pb-3 border-b-2 border-slate-900">
-                <div className="space-y-1">
-                  <div className="flex items-center space-x-2">
-                    <span className="px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wider text-white"
-                      style={{
-                        backgroundColor:
-                          currentPage.headerColorType === "blue"
-                            ? "#1d4ed8"
-                            : currentPage.headerColorType === "red"
-                            ? "#dc2626"
-                            : "#db2777"
-                      }}
-                    >
-                      หน้าที่ {currentPage.pageNumber} จาก {a4Pages.length}
-                    </span>
-                    <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
-                      งานสังสรรค์ปีใหม่ SME FAN 2026
-                    </h1>
-                  </div>
+          {a4Pages.map((page, idx) => {
+            const isPink = page.headerColorType === "pink";
+            const isBlue = page.headerColorType === "blue";
+            const isRed = page.headerColorType === "red";
 
-                  <h2 className="text-sm sm:text-base font-extrabold text-slate-800">
-                    {currentPage.categoryTitle}
-                  </h2>
-                  <p className="text-xs text-slate-500 font-medium">
-                    {currentPage.categorySubtitle}
-                  </p>
+            const headerBgColor = isBlue
+              ? "#1d4ed8"
+              : isRed
+              ? "#dc2626"
+              : "#db2777";
+
+            const pillBg = isBlue
+              ? "bg-blue-500/20 text-blue-300 border-blue-500/40"
+              : isRed
+              ? "bg-red-500/20 text-red-300 border-red-500/40"
+              : "bg-pink-500/20 text-pink-300 border-pink-500/40";
+
+            return (
+              <div key={idx} className="w-full flex flex-col items-center">
+                {/* Section Separator Pill */}
+                <div className="mb-2 px-3.5 py-1 rounded-full text-xs font-bold border flex items-center space-x-2 shadow-sm"
+                  style={{
+                    backgroundColor: "rgba(15, 23, 42, 0.8)",
+                    borderColor: headerBgColor,
+                    color: "#ffffff"
+                  }}
+                >
+                  <span
+                    className="w-2.5 h-2.5 rounded-full shrink-0"
+                    style={{ backgroundColor: headerBgColor }}
+                  />
+                  <span>
+                    แผ่นที่ {page.pageNumber}: {page.categoryTitle} ({page.pageLabel})
+                  </span>
                 </div>
 
-                <div className="text-right space-y-1 shrink-0">
-                  <div className="px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-300 font-mono text-xs font-bold text-slate-800">
-                    {currentPage.pageLabel}
-                  </div>
-                  <div className="text-[11px] font-mono text-slate-600 leading-tight">
-                    <div>{printTimestamp.dateStr}</div>
-                    <div className="font-bold text-slate-800">{printTimestamp.timeStr}</div>
+                {/* Scaled A4 Sheet Container (Mobile Horizontal Scrollable Wrapper) */}
+                <div className="w-full overflow-x-auto flex justify-center pb-2">
+                  <div
+                    id={`a4-page-render-${page.pageNumber}`}
+                    className="bg-white text-slate-900 shadow-2xl p-6 sm:p-8 border border-slate-300 flex flex-col justify-between shrink-0"
+                    style={{
+                      width: "794px",
+                      minHeight: "1123px",
+                      boxSizing: "border-box"
+                    }}
+                  >
+                    {/* Top Sheet Header */}
+                    <div>
+                      <div className="flex items-start justify-between pb-2.5 border-b-2 border-slate-900">
+                        <div className="space-y-0.5">
+                          <div className="flex items-center space-x-2">
+                            <span
+                              className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider text-white"
+                              style={{ backgroundColor: headerBgColor }}
+                            >
+                              แผ่นที่ {page.pageNumber} จาก {a4Pages.length}
+                            </span>
+                            <h1 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                              งานสังสรรค์ปีใหม่ SME FAN 2026
+                            </h1>
+                          </div>
+
+                          <h2 className="text-xs sm:text-sm font-extrabold text-slate-800">
+                            {page.categoryTitle}
+                          </h2>
+                          <p className="text-[10px] text-slate-500 font-medium">
+                            {page.categorySubtitle}
+                          </p>
+                        </div>
+
+                        <div className="text-right space-y-0.5 shrink-0">
+                          <div className="px-2 py-0.5 rounded bg-slate-100 border border-slate-300 font-mono text-[11px] font-bold text-slate-800">
+                            {page.pageLabel}
+                          </div>
+                          <div className="text-[10px] font-mono text-slate-600 leading-tight">
+                            <div>{printTimestamp.dateStr}</div>
+                            <div className="font-bold text-slate-800">{printTimestamp.timeStr}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Status bar */}
+                      <div className="py-1.5 px-0.5 flex items-center justify-between text-[11px] text-slate-600 border-b border-slate-200 mb-2">
+                        <span>
+                          หมวดหมู่: <strong className="text-slate-900">{page.categoryTitle}</strong> (ทั้งหมด {page.totalItemsCount} รายการ)
+                        </span>
+                        <span className="font-mono text-[10px]">
+                          แสดงรายการที่ {page.startIndex} - {page.startIndex + page.items.length - 1}
+                        </span>
+                      </div>
+
+                      {/* ======================================================= */}
+                      {/* TABLE: REGISTRATION DATA (หมวด 1, 2, 3) - SLIM & COMPACT */}
+                      {/* ======================================================= */}
+                      {page.dataType === "registration" && (
+                        <table className="w-full text-[10.5px] border-collapse">
+                          <thead>
+                            <tr
+                              className="text-white text-left font-bold"
+                              style={{ backgroundColor: headerBgColor }}
+                            >
+                              <th className="py-1.5 px-1.5 text-center w-10 border border-slate-300">ลำดับ</th>
+                              <th className="py-1.5 px-1.5 text-center w-16 border border-slate-300">เลขที่บัตร</th>
+                              <th className="py-1.5 px-2.5 border border-slate-300">ชื่อ - นามสกุล (ชื่อเล่น)</th>
+                              <th className="py-1.5 px-1.5 text-center w-24 border border-slate-300">เบอร์โทรศัพท์</th>
+                              <th className="py-1.5 px-1.5 text-center w-20 border border-slate-300">ประเภท / สังกัด</th>
+                              <th className="py-1.5 px-1.5 text-center w-28 border border-slate-300 whitespace-nowrap">สถานะ</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {page.items.map((row, rIdx) => {
+                              const rowNum = page.startIndex + rIdx;
+                              const isRotary = (row.club || "").includes("โรตารี่");
+
+                              return (
+                                <tr
+                                  key={row.ticketNo || rIdx}
+                                  className={`border-b border-slate-300 ${
+                                    rIdx % 2 === 0 ? "bg-white" : "bg-slate-50"
+                                  } hover:bg-amber-50/40`}
+                                >
+                                  <td className="py-1 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200">
+                                    {rowNum}
+                                  </td>
+                                  <td className="py-1 px-1.5 text-center font-bold font-mono text-slate-800 border-r border-slate-200">
+                                    {row.ticketNo}
+                                  </td>
+                                  <td className="py-1 px-2.5 border-r border-slate-200">
+                                    <span className="font-bold text-slate-900 block leading-tight">
+                                      {row.name}
+                                      {row.nickname && (
+                                        <span className="font-semibold text-slate-600 ml-1">
+                                          ({row.nickname})
+                                        </span>
+                                      )}
+                                    </span>
+                                    {row.email && (
+                                      <span className="text-[9.5px] text-slate-500 block truncate leading-tight">
+                                        {row.email}
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="py-1 px-1.5 text-center font-mono text-slate-700 font-medium border-r border-slate-200 whitespace-nowrap">
+                                    {row.phone || "-"}
+                                  </td>
+                                  <td className="py-1 px-1.5 text-center border-r border-slate-200 whitespace-nowrap">
+                                    <span
+                                      className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
+                                        isRotary
+                                          ? "bg-red-100 text-red-700 border border-red-300"
+                                          : "bg-blue-100 text-blue-700 border border-blue-300"
+                                      }`}
+                                    >
+                                      {isRotary ? "โรตารี่" : "สงสพัท"}
+                                    </span>
+                                  </td>
+                                  <td className="py-1 px-1.5 text-center whitespace-nowrap">
+                                    <span className="text-[9.5px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 whitespace-nowrap inline-block">
+                                      ✓ ลงทะเบียนแล้ว
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      )}
+
+                      {/* ======================================================= */}
+                      {/* TABLE: SPONSORS DATA (หมวด 4) - SLIM & COMPACT          */}
+                      {/* ======================================================= */}
+                      {page.dataType === "sponsor" && (
+                        <table className="w-full text-[10.5px] border-collapse">
+                          <thead>
+                            <tr className="bg-pink-600 text-white text-left font-bold">
+                              <th className="py-1.5 px-1.5 text-center w-10 border border-slate-300">ลำดับ</th>
+                              <th className="py-1.5 px-2.5 border border-slate-300">ชื่อผู้สนับสนุน / หน่วยงาน</th>
+                              <th className="py-1.5 px-1.5 text-center w-20 border border-slate-300">สังกัด</th>
+                              <th className="py-1.5 px-1.5 text-center w-22 border border-slate-300">ประเภท</th>
+                              <th className="py-1.5 px-2.5 border border-slate-300">รายละเอียดการสนับสนุน</th>
+                              <th className="py-1.5 px-1.5 text-center w-26 border border-slate-300">แหล่งที่มา</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {page.items.map((row, rIdx) => {
+                              const rowNum = page.startIndex + rIdx;
+                              const isCash = row.sponsorType === "cash";
+
+                              return (
+                                <tr
+                                  key={row.id || rIdx}
+                                  className={`border-b border-slate-300 ${
+                                    rIdx % 2 === 0 ? "bg-white" : "bg-slate-50"
+                                  } hover:bg-pink-50/40`}
+                                >
+                                  <td className="py-1.5 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200">
+                                    {rowNum}
+                                  </td>
+                                  <td className="py-1.5 px-2.5 border-r border-slate-200">
+                                    <span className="font-bold text-slate-900 block leading-tight">
+                                      {row.name}
+                                      {row.nickname && (
+                                        <span className="font-semibold text-slate-600 ml-1">
+                                          ({row.nickname})
+                                        </span>
+                                      )}
+                                    </span>
+                                    {row.organization && (
+                                      <span className="text-[9.5px] text-slate-500 block leading-tight">
+                                        {row.organization}
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="py-1.5 px-1.5 text-center border-r border-slate-200 whitespace-nowrap">
+                                    <span className="px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                                      {row.club || "ทั่วไป"}
+                                    </span>
+                                  </td>
+                                  <td className="py-1.5 px-1.5 text-center border-r border-slate-200 whitespace-nowrap">
+                                    <span
+                                      className={`px-1.5 py-0.5 rounded-full text-[9.5px] font-bold whitespace-nowrap ${
+                                        isCash
+                                          ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                          : "bg-purple-100 text-purple-800 border border-purple-300"
+                                      }`}
+                                    >
+                                      {isCash ? "💵 เงินสด" : "🎁 ของสนับสนุน"}
+                                    </span>
+                                  </td>
+                                  <td className="py-1.5 px-2.5 border-r border-slate-200">
+                                    {isCash ? (
+                                      <span className="font-bold text-emerald-700 font-mono text-xs">
+                                        ฿{Number(row.amount || 0).toLocaleString()} บาท
+                                      </span>
+                                    ) : (
+                                      <div>
+                                        <span className="font-bold text-purple-900 block leading-tight">
+                                          {row.itemName}
+                                        </span>
+                                        {row.itemQuantity && (
+                                          <span className="text-[9.5px] text-slate-600 block leading-tight">
+                                            จำนวน: {row.itemQuantity}
+                                          </span>
+                                        )}
+                                        {row.itemNote && (
+                                          <span className="text-[9.5px] text-slate-500 italic block leading-tight">
+                                            {row.itemNote}
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td className="py-1.5 px-1.5 text-center text-[9.5px] font-medium text-slate-600 whitespace-nowrap">
+                                    {row.source || "สนับสนุนกิจกรรม"}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+
+                    {/* Bottom Sheet Footer */}
+                    <div className="pt-3 mt-4 border-t border-slate-300 flex items-center justify-between text-[11px] text-slate-500">
+                      <div className="space-y-0.5">
+                        <span className="font-semibold text-slate-700 block">
+                          สรุปแผ่นที่ {page.pageNumber}: {page.categoryTitle} ({page.pageLabel})
+                        </span>
+                        <span className="text-[9.5px] text-slate-500 block">
+                          ระบบลงทะเบียนออนไลน์ Triple T Form • จัดการข้อมูลอัตโนมัติ
+                        </span>
+                      </div>
+
+                      <div className="text-right">
+                        <span className="font-mono text-xs font-bold text-slate-800">
+                          แผ่นที่ {page.pageNumber} จาก {a4Pages.length}
+                        </span>
+                        <span className="text-[9.5px] text-slate-400 block font-mono">
+                          {printTimestamp.timeStr}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-
-              {/* Status bar */}
-              <div className="py-2 px-1 flex items-center justify-between text-xs text-slate-600 border-b border-slate-200 mb-3">
-                <span>
-                  หมวดหมู่: <strong className="text-slate-900">{currentPage.categoryTitle}</strong> (ทั้งหมด {currentPage.totalItemsCount} รายการ)
-                </span>
-                <span className="font-mono text-[11px]">
-                  แสดงรายการที่ {currentPage.startIndex} - {currentPage.startIndex + currentPage.items.length - 1}
-                </span>
-              </div>
-
-              {/* ======================================================= */}
-              {/* TABLE: REGISTRATION DATA (หมวด 1, 2, 3)                  */}
-              {/* ======================================================= */}
-              {currentPage.dataType === "registration" && (
-                <table className="w-full text-xs border-collapse">
-                  <thead>
-                    <tr
-                      className="text-white text-left font-bold"
-                      style={{
-                        backgroundColor:
-                          currentPage.headerColorType === "blue"
-                            ? "#1d4ed8"
-                            : currentPage.headerColorType === "red"
-                            ? "#dc2626"
-                            : "#db2777"
-                      }}
-                    >
-                      <th className="py-2 px-2 text-center w-12 border border-slate-300">ลำดับ</th>
-                      <th className="py-2 px-2 text-center w-20 border border-slate-300">เลขที่บัตร</th>
-                      <th className="py-2 px-3 border border-slate-300">ชื่อ - นามสกุล (ชื่อเล่น)</th>
-                      <th className="py-2 px-2 text-center w-28 border border-slate-300">เบอร์โทรศัพท์</th>
-                      <th className="py-2 px-2 text-center w-24 border border-slate-300">ประเภท / สังกัด</th>
-                      <th className="py-2 px-2 text-center w-24 border border-slate-300">สถานะ</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {currentPage.items.map((row, idx) => {
-                      const rowNum = currentPage.startIndex + idx;
-                      const isRotary = (row.club || "").includes("โรตารี่");
-
-                      return (
-                        <tr
-                          key={row.ticketNo || idx}
-                          className={`border-b border-slate-300 ${
-                            idx % 2 === 0 ? "bg-white" : "bg-slate-50"
-                          } hover:bg-amber-50/50`}
-                        >
-                          <td className="py-2 px-2 text-center font-bold text-slate-500 font-mono border-r border-slate-200">
-                            {rowNum}
-                          </td>
-                          <td className="py-2 px-2 text-center font-bold font-mono text-slate-800 border-r border-slate-200">
-                            {row.ticketNo}
-                          </td>
-                          <td className="py-2 px-3 border-r border-slate-200">
-                            <span className="font-bold text-slate-900 block">
-                              {row.name}
-                              {row.nickname && (
-                                <span className="font-semibold text-slate-600 ml-1.5">
-                                  ({row.nickname})
-                                </span>
-                              )}
-                            </span>
-                            {row.email && (
-                              <span className="text-[10px] text-slate-500 block truncate">
-                                {row.email}
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-2 px-2 text-center font-mono text-slate-700 font-medium border-r border-slate-200">
-                            {row.phone || "-"}
-                          </td>
-                          <td className="py-2 px-2 text-center border-r border-slate-200">
-                            <span
-                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                isRotary
-                                  ? "bg-red-100 text-red-700 border border-red-300"
-                                  : "bg-blue-100 text-blue-700 border border-blue-300"
-                              }`}
-                            >
-                              {isRotary ? "โรตารี่" : "สงสพัท"}
-                            </span>
-                          </td>
-                          <td className="py-2 px-2 text-center">
-                            <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                              ✓ ลงทะเบียนแล้ว
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
-
-              {/* ======================================================= */}
-              {/* TABLE: SPONSORS DATA (หมวด 4)                           */}
-              {/* ======================================================= */}
-              {currentPage.dataType === "sponsor" && (
-                <table className="w-full text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-pink-600 text-white text-left font-bold">
-                      <th className="py-2 px-2 text-center w-12 border border-slate-300">ลำดับ</th>
-                      <th className="py-2 px-3 border border-slate-300">ชื่อผู้สนับสนุน / หน่วยงาน</th>
-                      <th className="py-2 px-2 text-center w-24 border border-slate-300">สังกัด</th>
-                      <th className="py-2 px-2 text-center w-24 border border-slate-300">ประเภท</th>
-                      <th className="py-2 px-3 border border-slate-300">รายละเอียดการสนับสนุน</th>
-                      <th className="py-2 px-2 text-center w-28 border border-slate-300">แหล่งที่มา</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {currentPage.items.map((row, idx) => {
-                      const rowNum = currentPage.startIndex + idx;
-                      const isCash = row.sponsorType === "cash";
-
-                      return (
-                        <tr
-                          key={row.id || idx}
-                          className={`border-b border-slate-300 ${
-                            idx % 2 === 0 ? "bg-white" : "bg-slate-50"
-                          } hover:bg-pink-50/40`}
-                        >
-                          <td className="py-2.5 px-2 text-center font-bold text-slate-500 font-mono border-r border-slate-200">
-                            {rowNum}
-                          </td>
-                          <td className="py-2.5 px-3 border-r border-slate-200">
-                            <span className="font-bold text-slate-900 block">
-                              {row.name}
-                              {row.nickname && (
-                                <span className="font-semibold text-slate-600 ml-1.5">
-                                  ({row.nickname})
-                                </span>
-                              )}
-                            </span>
-                            {row.organization && (
-                              <span className="text-[10px] text-slate-500 block">
-                                {row.organization}
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-2.5 px-2 text-center border-r border-slate-200">
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
-                              {row.club || "ทั่วไป"}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-2 text-center border-r border-slate-200">
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                isCash
-                                  ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                                  : "bg-purple-100 text-purple-800 border border-purple-300"
-                              }`}
-                            >
-                              {isCash ? "💵 เงินสด" : "🎁 ของสนับสนุน"}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 border-r border-slate-200">
-                            {isCash ? (
-                              <span className="font-bold text-emerald-700 font-mono text-sm">
-                                ฿{Number(row.amount || 0).toLocaleString()} บาท
-                              </span>
-                            ) : (
-                              <div>
-                                <span className="font-bold text-purple-900 block">
-                                  {row.itemName}
-                                </span>
-                                {row.itemQuantity && (
-                                  <span className="text-[10px] text-slate-600 block">
-                                    จำนวน: {row.itemQuantity}
-                                  </span>
-                                )}
-                                {row.itemNote && (
-                                  <span className="text-[10px] text-slate-500 italic block">
-                                    {row.itemNote}
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                          </td>
-                          <td className="py-2.5 px-2 text-center text-[10px] font-medium text-slate-600">
-                            {row.source || "สนับสนุนกิจกรรม"}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
-            </div>
-
-            {/* Bottom Sheet Footer */}
-            <div className="pt-4 mt-6 border-t border-slate-300 flex items-center justify-between text-xs text-slate-500">
-              <div className="space-y-0.5">
-                <span className="font-semibold text-slate-700 block">
-                  สรุปหน้า: {currentPage.categoryTitle} ({currentPage.pageLabel})
-                </span>
-                <span className="text-[10px] text-slate-500 block">
-                  ระบบลงทะเบียนออนไลน์ Triple T Form • จัดการข้อมูลอัตโนมัติ
-                </span>
-              </div>
-
-              <div className="text-right">
-                <span className="font-mono text-xs font-bold text-slate-800">
-                  หน้า {currentPage.pageNumber} จาก {a4Pages.length}
-                </span>
-                <span className="text-[10px] text-slate-400 block font-mono">
-                  {printTimestamp.timeStr}
-                </span>
-              </div>
-            </div>
-          </div>
+            );
+          })}
         </div>
 
         {/* ========================================================= */}
         {/* BOTTOM SUMMARY & LINE SHARE INTENT BAR                    */}
         {/* ========================================================= */}
-        <div className="bg-slate-950 px-4 sm:px-6 py-3 border-t border-white/10 flex flex-wrap items-center justify-between gap-2.5 text-xs text-slate-300 shrink-0">
-          <div className="flex items-center space-x-2">
-            <span className="font-bold text-amber-300">💡 ข้อความสำหรับแชร์ LINE:</span>
-            <span className="text-slate-400 truncate max-w-xs sm:max-w-md">
-              "{printTimestamp.dateStr} {printTimestamp.timeStr}"
+        <div className="bg-slate-950 px-3 sm:px-6 py-2.5 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-300 shrink-0">
+          <div className="flex items-center space-x-1.5 truncate max-w-sm sm:max-w-md">
+            <span className="font-bold text-amber-300">💡 สรุปข้อมูล:</span>
+            <span className="text-slate-400 truncate">
+              {printTimestamp.dateStr} {printTimestamp.timeStr}
             </span>
           </div>
 
@@ -808,7 +756,7 @@ export default function EventA4PrintModal({
             <button
               type="button"
               onClick={onClose}
-              className="py-1.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition-colors cursor-pointer"
+              className="py-1 px-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition-colors cursor-pointer"
             >
               ปิดหน้าต่าง
             </button>
@@ -819,247 +767,244 @@ export default function EventA4PrintModal({
         {/* HIDDEN PRINT CONTAINER (Render all pages for Print to PDF) */}
         {/* ========================================================= */}
         <div id="print-a4-all-pages" className="hidden">
-          {a4Pages.map((pg, pageIdx) => (
-            <div
-              key={pageIdx}
-              className="a4-print-sheet bg-white text-slate-900"
-              style={{
-                width: "210mm",
-                minHeight: "297mm",
-                padding: "12mm 10mm",
-                margin: "0 auto",
-                boxSizing: "border-box"
-              }}
-            >
-              <div className="flex items-start justify-between pb-3 border-b-2 border-slate-900">
-                <div className="space-y-1">
-                  <div className="flex items-center space-x-2">
-                    <span
-                      className="px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wider text-white"
-                      style={{
-                        backgroundColor:
-                          pg.headerColorType === "blue"
-                            ? "#1d4ed8"
-                            : pg.headerColorType === "red"
-                            ? "#dc2626"
-                            : "#db2777"
-                      }}
-                    >
-                      หน้าที่ {pg.pageNumber} จาก {a4Pages.length}
-                    </span>
-                    <h1 className="text-xl font-black text-slate-900 tracking-tight">
-                      งานสังสรรค์ปีใหม่ SME FAN 2026
-                    </h1>
+          {a4Pages.map((pg, pageIdx) => {
+            const isBlue = pg.headerColorType === "blue";
+            const isRed = pg.headerColorType === "red";
+            const headerBgColor = isBlue ? "#1d4ed8" : isRed ? "#dc2626" : "#db2777";
+
+            return (
+              <div
+                key={pageIdx}
+                className="a4-print-sheet bg-white text-slate-900"
+                style={{
+                  width: "210mm",
+                  minHeight: "297mm",
+                  padding: "10mm 10mm",
+                  margin: "0 auto",
+                  boxSizing: "border-box"
+                }}
+              >
+                <div className="flex items-start justify-between pb-2.5 border-b-2 border-slate-900">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center space-x-2">
+                      <span
+                        className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider text-white"
+                        style={{ backgroundColor: headerBgColor }}
+                      >
+                        แผ่นที่ {pg.pageNumber} จาก {a4Pages.length}
+                      </span>
+                      <h1 className="text-lg font-black text-slate-900 tracking-tight">
+                        งานสังสรรค์ปีใหม่ SME FAN 2026
+                      </h1>
+                    </div>
+
+                    <h2 className="text-sm font-extrabold text-slate-800">
+                      {pg.categoryTitle}
+                    </h2>
+                    <p className="text-[10px] text-slate-500 font-medium">
+                      {pg.categorySubtitle}
+                    </p>
                   </div>
 
-                  <h2 className="text-base font-extrabold text-slate-800">
-                    {pg.categoryTitle}
-                  </h2>
-                  <p className="text-xs text-slate-500 font-medium">
-                    {pg.categorySubtitle}
-                  </p>
+                  <div className="text-right space-y-0.5">
+                    <div className="px-2 py-0.5 rounded bg-slate-100 border border-slate-300 font-mono text-[11px] font-bold text-slate-800">
+                      {pg.pageLabel}
+                    </div>
+                    <div className="text-[10px] font-mono text-slate-600 leading-tight">
+                      <div>{printTimestamp.dateStr}</div>
+                      <div className="font-bold text-slate-800">{printTimestamp.timeStr}</div>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="text-right space-y-1">
-                  <div className="px-2.5 py-1 rounded bg-slate-100 border border-slate-300 font-mono text-xs font-bold text-slate-800">
-                    {pg.pageLabel}
-                  </div>
-                  <div className="text-[11px] font-mono text-slate-600 leading-tight">
-                    <div>{printTimestamp.dateStr}</div>
-                    <div className="font-bold text-slate-800">{printTimestamp.timeStr}</div>
-                  </div>
+                <div className="py-1.5 px-0.5 flex items-center justify-between text-[11px] text-slate-600 border-b border-slate-200 mb-2">
+                  <span>
+                    หมวดหมู่: <strong className="text-slate-900">{pg.categoryTitle}</strong> (ทั้งหมด {pg.totalItemsCount} รายการ)
+                  </span>
+                  <span className="font-mono text-[10px]">
+                    แสดงรายการที่ {pg.startIndex} - {pg.startIndex + pg.items.length - 1}
+                  </span>
                 </div>
-              </div>
 
-              <div className="py-2 px-1 flex items-center justify-between text-xs text-slate-600 border-b border-slate-200 mb-3">
-                <span>
-                  หมวดหมู่: <strong className="text-slate-900">{pg.categoryTitle}</strong> (ทั้งหมด {pg.totalItemsCount} รายการ)
-                </span>
-                <span className="font-mono text-[11px]">
-                  แสดงรายการที่ {pg.startIndex} - {pg.startIndex + pg.items.length - 1}
-                </span>
-              </div>
+                {/* Print Registration Table */}
+                {pg.dataType === "registration" && (
+                  <table className="w-full text-[10.5px] border-collapse">
+                    <thead>
+                      <tr
+                        className="text-white text-left font-bold"
+                        style={{ backgroundColor: headerBgColor }}
+                      >
+                        <th className="py-1.5 px-1.5 text-center w-10 border border-slate-300">ลำดับ</th>
+                        <th className="py-1.5 px-1.5 text-center w-16 border border-slate-300">เลขที่บัตร</th>
+                        <th className="py-1.5 px-2.5 border border-slate-300">ชื่อ - นามสกุล (ชื่อเล่น)</th>
+                        <th className="py-1.5 px-1.5 text-center w-24 border border-slate-300">เบอร์โทรศัพท์</th>
+                        <th className="py-1.5 px-1.5 text-center w-20 border border-slate-300">ประเภท / สังกัด</th>
+                        <th className="py-1.5 px-1.5 text-center w-28 border border-slate-300 whitespace-nowrap">สถานะ</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pg.items.map((row, rIdx) => {
+                        const rowNum = pg.startIndex + rIdx;
+                        const isRotary = (row.club || "").includes("โรตารี่");
 
-              {/* Print Registration Table */}
-              {pg.dataType === "registration" && (
-                <table className="w-full text-xs border-collapse">
-                  <thead>
-                    <tr
-                      className="text-white text-left font-bold"
-                      style={{
-                        backgroundColor:
-                          pg.headerColorType === "blue"
-                            ? "#1d4ed8"
-                            : pg.headerColorType === "red"
-                            ? "#dc2626"
-                            : "#db2777"
-                      }}
-                    >
-                      <th className="py-2 px-2 text-center w-12 border border-slate-300">ลำดับ</th>
-                      <th className="py-2 px-2 text-center w-20 border border-slate-300">เลขที่บัตร</th>
-                      <th className="py-2 px-3 border border-slate-300">ชื่อ - นามสกุล (ชื่อเล่น)</th>
-                      <th className="py-2 px-2 text-center w-28 border border-slate-300">เบอร์โทรศัพท์</th>
-                      <th className="py-2 px-2 text-center w-24 border border-slate-300">ประเภท / สังกัด</th>
-                      <th className="py-2 px-2 text-center w-24 border border-slate-300">สถานะ</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pg.items.map((row, idx) => {
-                      const rowNum = pg.startIndex + idx;
-                      const isRotary = (row.club || "").includes("โรตารี่");
-
-                      return (
-                        <tr
-                          key={row.ticketNo || idx}
-                          className={`border-b border-slate-300 ${
-                            idx % 2 === 0 ? "bg-white" : "bg-slate-50"
-                          }`}
-                        >
-                          <td className="py-2 px-2 text-center font-bold text-slate-500 font-mono border-r border-slate-200">
-                            {rowNum}
-                          </td>
-                          <td className="py-2 px-2 text-center font-bold font-mono text-slate-800 border-r border-slate-200">
-                            {row.ticketNo}
-                          </td>
-                          <td className="py-2 px-3 border-r border-slate-200">
-                            <span className="font-bold text-slate-900 block">
-                              {row.name}
-                              {row.nickname && (
-                                <span className="font-semibold text-slate-600 ml-1.5">
-                                  ({row.nickname})
-                                </span>
-                              )}
-                            </span>
-                            {row.email && (
-                              <span className="text-[10px] text-slate-500 block truncate">
-                                {row.email}
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-2 px-2 text-center font-mono text-slate-700 font-medium border-r border-slate-200">
-                            {row.phone || "-"}
-                          </td>
-                          <td className="py-2 px-2 text-center border-r border-slate-200">
-                            <span
-                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                isRotary
-                                  ? "bg-red-100 text-red-700 border border-red-300"
-                                  : "bg-blue-100 text-blue-700 border border-blue-300"
-                              }`}
-                            >
-                              {isRotary ? "โรตารี่" : "สงสพัท"}
-                            </span>
-                          </td>
-                          <td className="py-2 px-2 text-center">
-                            <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                              ✓ ลงทะเบียนแล้ว
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
-
-              {/* Print Sponsor Table */}
-              {pg.dataType === "sponsor" && (
-                <table className="w-full text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-pink-600 text-white text-left font-bold">
-                      <th className="py-2 px-2 text-center w-12 border border-slate-300">ลำดับ</th>
-                      <th className="py-2 px-3 border border-slate-300">ชื่อผู้สนับสนุน / หน่วยงาน</th>
-                      <th className="py-2 px-2 text-center w-24 border border-slate-300">สังกัด</th>
-                      <th className="py-2 px-2 text-center w-24 border border-slate-300">ประเภท</th>
-                      <th className="py-2 px-3 border border-slate-300">รายละเอียดการสนับสนุน</th>
-                      <th className="py-2 px-2 text-center w-28 border border-slate-300">แหล่งที่มา</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pg.items.map((row, idx) => {
-                      const rowNum = pg.startIndex + idx;
-                      const isCash = row.sponsorType === "cash";
-
-                      return (
-                        <tr
-                          key={row.id || idx}
-                          className={`border-b border-slate-300 ${
-                            idx % 2 === 0 ? "bg-white" : "bg-slate-50"
-                          }`}
-                        >
-                          <td className="py-2.5 px-2 text-center font-bold text-slate-500 font-mono border-r border-slate-200">
-                            {rowNum}
-                          </td>
-                          <td className="py-2.5 px-3 border-r border-slate-200">
-                            <span className="font-bold text-slate-900 block">
-                              {row.name}
-                              {row.nickname && (
-                                <span className="font-semibold text-slate-600 ml-1.5">
-                                  ({row.nickname})
-                                </span>
-                              )}
-                            </span>
-                            {row.organization && (
-                              <span className="text-[10px] text-slate-500 block">
-                                {row.organization}
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-2.5 px-2 text-center border-r border-slate-200">
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
-                              {row.club || "ทั่วไป"}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-2 text-center border-r border-slate-200">
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                isCash
-                                  ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                                  : "bg-purple-100 text-purple-800 border border-purple-300"
-                              }`}
-                            >
-                              {isCash ? "💵 เงินสด" : "🎁 ของสนับสนุน"}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 border-r border-slate-200">
-                            {isCash ? (
-                              <span className="font-bold text-emerald-700 font-mono text-sm">
-                                ฿{Number(row.amount || 0).toLocaleString()} บาท
-                              </span>
-                            ) : (
-                              <div>
-                                <span className="font-bold text-purple-900 block">
-                                  {row.itemName}
-                                </span>
-                                {row.itemQuantity && (
-                                  <span className="text-[10px] text-slate-600 block">
-                                    จำนวน: {row.itemQuantity}
+                        return (
+                          <tr
+                            key={row.ticketNo || rIdx}
+                            className={`border-b border-slate-300 ${
+                              rIdx % 2 === 0 ? "bg-white" : "bg-slate-50"
+                            }`}
+                          >
+                            <td className="py-1 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200">
+                              {rowNum}
+                            </td>
+                            <td className="py-1 px-1.5 text-center font-bold font-mono text-slate-800 border-r border-slate-200">
+                              {row.ticketNo}
+                            </td>
+                            <td className="py-1 px-2.5 border-r border-slate-200">
+                              <span className="font-bold text-slate-900 block leading-tight">
+                                {row.name}
+                                {row.nickname && (
+                                  <span className="font-semibold text-slate-600 ml-1">
+                                    ({row.nickname})
                                   </span>
                                 )}
-                              </div>
-                            )}
-                          </td>
-                          <td className="py-2.5 px-2 text-center text-[10px] font-medium text-slate-600">
-                            {row.source || "สนับสนุนกิจกรรม"}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
+                              </span>
+                              {row.email && (
+                                <span className="text-[9.5px] text-slate-500 block truncate leading-tight">
+                                  {row.email}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-1 px-1.5 text-center font-mono text-slate-700 font-medium border-r border-slate-200 whitespace-nowrap">
+                              {row.phone || "-"}
+                            </td>
+                            <td className="py-1 px-1.5 text-center border-r border-slate-200 whitespace-nowrap">
+                              <span
+                                className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
+                                  isRotary
+                                    ? "bg-red-100 text-red-700 border border-red-300"
+                                    : "bg-blue-100 text-blue-700 border border-blue-300"
+                                }`}
+                              >
+                                {isRotary ? "โรตารี่" : "สงสพัท"}
+                              </span>
+                            </td>
+                            <td className="py-1 px-1.5 text-center whitespace-nowrap">
+                              <span className="text-[9.5px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 whitespace-nowrap inline-block">
+                                ✓ ลงทะเบียนแล้ว
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
 
-              {/* Print Sheet Footer */}
-              <div className="pt-4 mt-6 border-t border-slate-300 flex items-center justify-between text-xs text-slate-500">
-                <span className="font-semibold text-slate-700">
-                  {pg.categoryTitle} ({pg.pageLabel}) • งานสังสรรค์ปีใหม่ SME FAN 2026
-                </span>
-                <span className="font-mono text-xs font-bold text-slate-800">
-                  หน้า {pg.pageNumber} จาก {a4Pages.length} ({printTimestamp.timeStr})
-                </span>
+                {/* Print Sponsor Table */}
+                {pg.dataType === "sponsor" && (
+                  <table className="w-full text-[10.5px] border-collapse">
+                    <thead>
+                      <tr className="bg-pink-600 text-white text-left font-bold">
+                        <th className="py-1.5 px-1.5 text-center w-10 border border-slate-300">ลำดับ</th>
+                        <th className="py-1.5 px-2.5 border border-slate-300">ชื่อผู้สนับสนุน / หน่วยงาน</th>
+                        <th className="py-1.5 px-1.5 text-center w-20 border border-slate-300">สังกัด</th>
+                        <th className="py-1.5 px-1.5 text-center w-22 border border-slate-300">ประเภท</th>
+                        <th className="py-1.5 px-2.5 border border-slate-300">รายละเอียดการสนับสนุน</th>
+                        <th className="py-1.5 px-1.5 text-center w-26 border border-slate-300">แหล่งที่มา</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pg.items.map((row, rIdx) => {
+                        const rowNum = pg.startIndex + rIdx;
+                        const isCash = row.sponsorType === "cash";
+
+                        return (
+                          <tr
+                            key={row.id || rIdx}
+                            className={`border-b border-slate-300 ${
+                              rIdx % 2 === 0 ? "bg-white" : "bg-slate-50"
+                            }`}
+                          >
+                            <td className="py-1.5 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200">
+                              {rowNum}
+                            </td>
+                            <td className="py-1.5 px-2.5 border-r border-slate-200">
+                              <span className="font-bold text-slate-900 block leading-tight">
+                                {row.name}
+                                {row.nickname && (
+                                  <span className="font-semibold text-slate-600 ml-1">
+                                    ({row.nickname})
+                                  </span>
+                                )}
+                              </span>
+                              {row.organization && (
+                                <span className="text-[9.5px] text-slate-500 block leading-tight">
+                                  {row.organization}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-1.5 px-1.5 text-center border-r border-slate-200 whitespace-nowrap">
+                              <span className="px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                                {row.club || "ทั่วไป"}
+                              </span>
+                            </td>
+                            <td className="py-1.5 px-1.5 text-center border-r border-slate-200 whitespace-nowrap">
+                              <span
+                                className={`px-1.5 py-0.5 rounded-full text-[9.5px] font-bold whitespace-nowrap ${
+                                  isCash
+                                    ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                    : "bg-purple-100 text-purple-800 border border-purple-300"
+                                }`}
+                              >
+                                {isCash ? "💵 เงินสด" : "🎁 ของสนับสนุน"}
+                              </span>
+                            </td>
+                            <td className="py-1.5 px-2.5 border-r border-slate-200">
+                              {isCash ? (
+                                <span className="font-bold text-emerald-700 font-mono text-xs">
+                                  ฿{Number(row.amount || 0).toLocaleString()} บาท
+                                </span>
+                              ) : (
+                                <div>
+                                  <span className="font-bold text-purple-900 block leading-tight">
+                                    {row.itemName}
+                                  </span>
+                                  {row.itemQuantity && (
+                                    <span className="text-[9.5px] text-slate-600 block leading-tight">
+                                      จำนวน: {row.itemQuantity}
+                                    </span>
+                                  )}
+                                  {row.itemNote && (
+                                    <span className="text-[9.5px] text-slate-500 italic block leading-tight">
+                                      {row.itemNote}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-1.5 px-1.5 text-center text-[9.5px] font-medium text-slate-600 whitespace-nowrap">
+                              {row.source || "สนับสนุนกิจกรรม"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+
+                {/* Print Sheet Footer */}
+                <div className="pt-3 mt-4 border-t border-slate-300 flex items-center justify-between text-[11px] text-slate-500">
+                  <span className="font-semibold text-slate-700">
+                    แผ่นที่ {pg.pageNumber}: {pg.categoryTitle} ({pg.pageLabel}) • งานสังสรรค์ปีใหม่ SME FAN 2026
+                  </span>
+                  <span className="font-mono text-xs font-bold text-slate-800">
+                    แผ่นที่ {pg.pageNumber} จาก {a4Pages.length} ({printTimestamp.timeStr})
+                  </span>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
