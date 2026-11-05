@@ -17,7 +17,9 @@ import {
   Sparkles,
   Search,
   ExternalLink,
-  ChevronDown
+  ChevronDown,
+  Copy,
+  CreditCard
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { uploadToCloudinary } from "../utils/cloudinary";
@@ -60,6 +62,7 @@ export default function SponsorRegistrationModal({
   const [cashAmount, setCashAmount] = useState("");
   const [slipFile, setSlipFile] = useState(null);
   const [slipPreview, setSlipPreview] = useState("");
+  const [copiedAccount, setCopiedAccount] = useState(false);
 
   // Item details
   const [itemName, setItemName] = useState("");
@@ -202,6 +205,23 @@ export default function SponsorRegistrationModal({
     setOrganization(c.organization || "ผู้สนับสนุนภายนอก");
     setClub(c.club || "สงสพัท");
     setIsGuestSuggestionsOpen(false);
+  };
+
+  // Handle Copy Bank Account
+  const handleCopyAccount = () => {
+    const acc = (eventConfig?.bankInfo?.accountNumber || "199-8-74676-7").trim();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(acc);
+    } else {
+      const textArea = document.createElement("textarea");
+      textArea.value = acc;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textArea);
+    }
+    setCopiedAccount(true);
+    setTimeout(() => setCopiedAccount(false), 2000);
   };
 
   // File upload handler
@@ -660,27 +680,39 @@ export default function SponsorRegistrationModal({
                     </div>
                   </div>
 
-                  {/* Bank info reminder */}
-                  <div className="p-3 rounded-xl bg-slate-950/70 border border-white/10 flex items-center justify-between text-xs">
-                    <div className="space-y-0.5">
-                      <div className="font-bold text-white flex items-center space-x-1">
-                        <QrCode className="w-3.5 h-3.5 text-amber-400" />
-                        <span>{eventConfig?.bankInfo?.bankName || 'ธ.กสิกรไทย'}</span>
+                  {/* Bank info reminder with Copy button instead of QR code */}
+                  <div className="p-3 sm:p-3.5 rounded-2xl bg-slate-950/80 border border-amber-500/30 flex items-center justify-between gap-3 text-xs shadow-inner">
+                    <div className="space-y-0.5 min-w-0">
+                      <div className="font-bold text-white flex items-center space-x-1.5 truncate">
+                        <CreditCard className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <span className="truncate">{eventConfig?.bankInfo?.bankName || 'ธนาคารกสิกรไทย (KBANK)'}</span>
                       </div>
-                      <div className="font-mono text-amber-300 text-xs font-bold">
-                        {eventConfig?.bankInfo?.accountNumber || '045-8-99921-4'}
+                      <div className="font-mono text-amber-300 text-sm sm:text-base font-black tracking-wider">
+                        {eventConfig?.bankInfo?.accountNumber || '199-8-74676-7'}
                       </div>
-                      <div className="text-[10px] text-slate-400">
-                        {eventConfig?.bankInfo?.accountName || 'กองทุนกิจกรรม SME FAN (ทีป์ชลิต ทองจันทร์)'}
+                      <div className="text-[10px] sm:text-[11px] text-slate-400 line-clamp-1 leading-tight">
+                        {eventConfig?.bankInfo?.accountName || 'นาง นภัสกร ยังรัตนะ และ นาย พิชัย จงไพรัตน์ และ นางธีราพร เลากาวงศ์'}
                       </div>
                     </div>
-                    {eventConfig?.bankInfo?.qrImage && (
-                      <img 
-                        src={eventConfig.bankInfo.qrImage} 
-                        alt="QR PromptPay" 
-                        className="w-12 h-12 rounded-lg bg-white p-0.5 border border-white/20"
-                      />
-                    )}
+
+                    <button
+                      type="button"
+                      onClick={handleCopyAccount}
+                      className="flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 hover:bg-amber-400 transition-all shrink-0 cursor-pointer active:scale-95"
+                      title="คัดลอกเลขที่บัญชีเพื่อโอนเงิน"
+                    >
+                      {copiedAccount ? (
+                        <>
+                          <Check className="w-4 h-4 text-slate-950 stroke-[3]" />
+                          <span>คัดลอกแล้ว!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-4 h-4 text-slate-950" />
+                          <span>คัดลอก</span>
+                        </>
+                      )}
+                    </button>
                   </div>
 
                   {/* Slip Upload */}
