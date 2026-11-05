@@ -58,6 +58,7 @@ export default function EventA4PrintModal({
   const [copiedText, setCopiedText] = useState(false);
   const [printTimestamp, setPrintTimestamp] = useState(() => getThaiA4ExtractionTime());
   const [zoomMode, setZoomMode] = useState("fit"); // 'fit' | 'actual'
+  const [showShareModal, setShowShareModal] = useState(false);
 
   // Ref for scroll container to calculate mobile scale
   const containerRef = useRef(null);
@@ -224,8 +225,21 @@ export default function EventA4PrintModal({
     setTimeout(() => setCopiedText(false), 2000);
   };
 
-  // Convert A4 element to Canvas (Offscreen Clone at exact 794x1123 for maximum 2x Retina crispness)
-  const renderA4PageCanvas = async (pageElement) => {
+  // Safely free up Canvas memory for Safari iOS
+  const releaseCanvas = (canvas) => {
+    if (!canvas) return;
+    try {
+      canvas.width = 1;
+      canvas.height = 1;
+      const ctx = canvas.getContext("2d");
+      if (ctx) ctx.clearRect(0, 0, 1, 1);
+    } catch (e) {
+      // ignore
+    }
+  };
+
+  // Convert A4 element to Canvas (Offscreen Clone at exact 794x1123 for maximum crispness)
+  const renderA4PageCanvas = async (pageElement, scaleFactor = 2) => {
     const offscreenContainer = document.createElement("div");
     offscreenContainer.style.position = "fixed";
     offscreenContainer.style.left = "-9999px";
@@ -249,7 +263,7 @@ export default function EventA4PrintModal({
 
     try {
       return await html2canvas(clone, {
-        scale: 2, // 2x Retina high resolution
+        scale: scaleFactor,
         useCORS: true,
         backgroundColor: "#ffffff",
         logging: false,
@@ -265,8 +279,82 @@ export default function EventA4PrintModal({
     }
   };
 
-  // 1. Share ALL Pages to LINE at once
-  const handleShareAllToLine = async () => {
+  // 1. Share Merged Long Image (1 รูปยาวต่อเนื่อง เรียง 1 -> 4 เป๊ะ 100% ป้องกันเน็ตส่งสลับ)
+  const handleShareMergedLongImage = async () => {
+    if (isProcessing) return;
+    setIsProcessing(true);
+
+    try {
+      const canvases = [];
+      for (let i = 0; i < a4Pages.length; i++) {
+        const page = a4Pages[i];
+        setProgressText(`กำลังเตรียมแผ่นที่ ${i + 1}/${a4Pages.length} เพื่อรวมเป็นรูปเดียว...`);
+        const el = document.getElementById(`a4-page-render-${page.pageNumber}`);
+        if (el) {
+          // 1.5x scale keeps combined canvas safely under iOS Safari limits while remaining crisp
+          const c = await renderA4PageCanvas(el, 1.5);
+          canvases.push(c);
+        }
+      }
+
+      if (canvases.length === 0) return;
+
+      setProgressText("กำลังรวมภาพเรียงต่อกันเป็น 1 รูปยาว...");
+      const width = canvases[0].width;
+      const totalHeight = canvases.reduce((sum, c) => sum + c.height, 0);
+
+      const mergedCanvas = document.createElement("canvas");
+      mergedCanvas.width = width;
+      mergedCanvas.height = totalHeight;
+      const ctx = mergedCanvas.getContext("2d");
+
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, width, totalHeight);
+
+      let currentY = 0;
+      for (let i = 0; i < canvases.length; i++) {
+        const c = canvases[i];
+        ctx.drawImage(c, 0, currentY);
+        currentY += c.height;
+        releaseCanvas(c);
+      }
+
+      setProgressText("กำลังเตรียมไฟล์รูปภาพส่งเข้า LINE...");
+      const blob = await new Promise((res) => mergedCanvas.toBlob(res, "image/png"));
+      releaseCanvas(mergedCanvas);
+
+      const file = new File(
+        [blob],
+        `A4_รวมทุกหมวด_เรียงหน้า1ถึง${a4Pages.length}_งานสังสรรค์ปีใหม่.png`,
+        { type: "image/png" }
+      );
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        setProgressText("กำลังเปิดหน้าต่างแชร์เข้า LINE...");
+        await navigator.share({
+          title: "สรุปการลงทะเบียนเข้าร่วมกิจกรรมปีใหม่ SME FAN 2026",
+          text: lineShareSummaryText,
+          files: [file]
+        });
+      } else {
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(file);
+        link.download = file.name;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.open(`https://line.me/R/msg/text/?${encodeURIComponent(lineShareSummaryText)}`, "_blank");
+      }
+    } catch (err) {
+      console.log("Share merged error/cancelled:", err);
+    } finally {
+      setIsProcessing(false);
+      setProgressText("");
+    }
+  };
+
+  // 2. Share Separated Images (แชร์แยก 4 รูป มีเลขลำดับ 01-04 และ Timestamp กำกับ)
+  const handleShareSeparatedImages = async () => {
     if (isProcessing) return;
     setIsProcessing(true);
 
@@ -278,15 +366,23 @@ export default function EventA4PrintModal({
         setProgressText(`กำลังเตรียมรูป A4 แผ่นที่ ${i + 1}/${a4Pages.length}...`);
         const el = document.getElementById(`a4-page-render-${page.pageNumber}`);
         if (el) {
-          const canvas = await renderA4PageCanvas(el);
+          const canvas = await renderA4PageCanvas(el, 2);
           const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
+          releaseCanvas(canvas);
           const cleanTitle = page.categoryTitle.replace(/[\s/\\:]+/g, "_");
-          const file = new File([blob], `A4_แผ่นที่_${page.pageNumber}_${cleanTitle}.png`, { type: "image/png" });
+          const padNum = String(page.pageNumber).padStart(2, "0");
+          const file = new File(
+            [blob],
+            `${padNum}_แผ่นที่_${page.pageNumber}_${cleanTitle}.png`,
+            {
+              type: "image/png",
+              lastModified: Date.now() + i * 5000
+            }
+          );
           files.push(file);
         }
       }
 
-      // Check if navigator.canShare supports files
       if (navigator.canShare && navigator.canShare({ files })) {
         setProgressText("กำลังเปิดหน้าต่างแชร์เข้า LINE...");
         await navigator.share({
@@ -295,7 +391,6 @@ export default function EventA4PrintModal({
           files: files
         });
       } else {
-        // Fallback: download all files and open LINE Share intent
         setProgressText("กำลังดาวน์โหลดรูปภาพทั้งหมดลงเครื่อง...");
         for (const file of files) {
           const link = document.createElement("a");
@@ -309,14 +404,161 @@ export default function EventA4PrintModal({
         window.open(`https://line.me/R/msg/text/?${encodeURIComponent(lineShareSummaryText)}`, "_blank");
       }
     } catch (err) {
-      console.log("Share all error/cancelled:", err);
+      console.log("Share separated error/cancelled:", err);
     } finally {
       setIsProcessing(false);
       setProgressText("");
     }
   };
 
-  // 2. Download ALL Pages Images at once
+  // 3. Share Single Page (แชร์เฉพาะแผ่นที่เลือกเข้า LINE โดยตรง)
+  const handleShareSinglePage = async (page) => {
+    if (isProcessing) return;
+    setIsProcessing(true);
+
+    try {
+      setProgressText(`กำลังเตรียมรูป A4 แผ่นที่ ${page.pageNumber}...`);
+      const el = document.getElementById(`a4-page-render-${page.pageNumber}`);
+      if (!el) return;
+
+      const canvas = await renderA4PageCanvas(el, 2);
+      const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
+      releaseCanvas(canvas);
+
+      const cleanTitle = page.categoryTitle.replace(/[\s/\\:]+/g, "_");
+      const padNum = String(page.pageNumber).padStart(2, "0");
+      const filename = `${padNum}_แผ่นที่_${page.pageNumber}_${cleanTitle}.png`;
+      const file = new File([blob], filename, { type: "image/png" });
+
+      const singlePageSummary =
+        `${page.categoryTitle} (${page.pageLabel})\n` +
+        `งานสังสรรค์ปีใหม่ SME FAN 2026\n` +
+        `${printTimestamp.dateStr}\n` +
+        `${printTimestamp.timeStr}\n` +
+        `━━━━━━━━━━\n` +
+        `• จำนวนรายการในหน้านี้: ${page.items.length} รายการ\n` +
+        `━━━━━━━━━━\n` +
+        `🔗 ตรวจสอบข้อมูลแบบ Real-time:\n` +
+        `https://triple-t-form.vercel.app`;
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          title: `${page.categoryTitle} - SME FAN 2026`,
+          text: singlePageSummary,
+          files: [file]
+        });
+      } else {
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(file);
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.open(`https://line.me/R/msg/text/?${encodeURIComponent(singlePageSummary)}`, "_blank");
+      }
+    } catch (err) {
+      console.log("Share single page error:", err);
+    } finally {
+      setIsProcessing(false);
+      setProgressText("");
+    }
+  };
+
+  // 4. Download Single Page Image
+  const handleDownloadSinglePage = async (page) => {
+    if (isProcessing) return;
+    setIsProcessing(true);
+
+    try {
+      setProgressText(`กำลังบันทึกรูปภาพแผ่นที่ ${page.pageNumber}...`);
+      const el = document.getElementById(`a4-page-render-${page.pageNumber}`);
+      if (!el) return;
+
+      const canvas = await renderA4PageCanvas(el, 2);
+      const dataUrl = canvas.toDataURL("image/png");
+      releaseCanvas(canvas);
+
+      const cleanTitle = page.categoryTitle.replace(/[\s/\\:]+/g, "_");
+      const padNum = String(page.pageNumber).padStart(2, "0");
+      const filename = `${padNum}_แผ่นที่_${page.pageNumber}_${cleanTitle}_${page.pageLabel.replace(/[\s/]+/g, "_")}.png`;
+
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      setProgressText("บันทึกรูปภาพสำเร็จ!");
+      await new Promise((r) => setTimeout(r, 600));
+    } catch (err) {
+      console.error("Download single error:", err);
+    } finally {
+      setIsProcessing(false);
+      setProgressText("");
+    }
+  };
+
+  // 5. Download Merged Long Image (1 รูปยาว)
+  const handleDownloadMergedLongImage = async () => {
+    if (isProcessing) return;
+    setIsProcessing(true);
+
+    try {
+      const canvases = [];
+      for (let i = 0; i < a4Pages.length; i++) {
+        const page = a4Pages[i];
+        setProgressText(`กำลังเตรียมแผ่นที่ ${i + 1}/${a4Pages.length}...`);
+        const el = document.getElementById(`a4-page-render-${page.pageNumber}`);
+        if (el) {
+          const c = await renderA4PageCanvas(el, 1.5);
+          canvases.push(c);
+        }
+      }
+
+      if (canvases.length === 0) return;
+
+      setProgressText("กำลังรวมภาพรูปยาว...");
+      const width = canvases[0].width;
+      const totalHeight = canvases.reduce((sum, c) => sum + c.height, 0);
+
+      const mergedCanvas = document.createElement("canvas");
+      mergedCanvas.width = width;
+      mergedCanvas.height = totalHeight;
+      const ctx = mergedCanvas.getContext("2d");
+
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, width, totalHeight);
+
+      let currentY = 0;
+      for (let i = 0; i < canvases.length; i++) {
+        const c = canvases[i];
+        ctx.drawImage(c, 0, currentY);
+        currentY += c.height;
+        releaseCanvas(c);
+      }
+
+      const dataUrl = mergedCanvas.toDataURL("image/png");
+      releaseCanvas(mergedCanvas);
+
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = `A4_รวมทุกหมวด_เรียงหน้า1ถึง${a4Pages.length}_งานสังสรรค์ปีใหม่.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      setProgressText("บันทึกรูปภาพยาวสำเร็จ!");
+      await new Promise((r) => setTimeout(r, 800));
+    } catch (err) {
+      console.error("Download merged error:", err);
+    } finally {
+      setIsProcessing(false);
+      setProgressText("");
+    }
+  };
+
+  // 6. Download ALL Pages Images (แยก 4 ไฟล์)
   const handleDownloadAllPagesImages = async () => {
     if (isProcessing) return;
     setIsProcessing(true);
@@ -328,10 +570,13 @@ export default function EventA4PrintModal({
 
         const el = document.getElementById(`a4-page-render-${page.pageNumber}`);
         if (el) {
-          const canvas = await renderA4PageCanvas(el);
+          const canvas = await renderA4PageCanvas(el, 2);
           const dataUrl = canvas.toDataURL("image/png");
+          releaseCanvas(canvas);
+
           const cleanTitle = page.categoryTitle.replace(/[\s/\\:]+/g, "_");
-          const filename = `A4_แผ่นที่_${page.pageNumber}_${cleanTitle}_${page.pageLabel.replace(/[\s/]+/g, "_")}.png`;
+          const padNum = String(page.pageNumber).padStart(2, "0");
+          const filename = `${padNum}_แผ่นที่_${page.pageNumber}_${cleanTitle}_${page.pageLabel.replace(/[\s/]+/g, "_")}.png`;
 
           const link = document.createElement("a");
           link.href = dataUrl;
@@ -340,12 +585,11 @@ export default function EventA4PrintModal({
           link.click();
           document.body.removeChild(link);
 
-          // Delay between downloads
-          await new Promise((r) => setTimeout(r, 500));
+          await new Promise((r) => setTimeout(r, 400));
         }
       }
       setProgressText("บันทึกรูปภาพครบทั้งหมดแล้ว!");
-      await new Promise((r) => setTimeout(r, 1200));
+      await new Promise((r) => setTimeout(r, 1000));
     } catch (err) {
       console.error("Export all images error:", err);
       alert("เกิดข้อผิดพลาดในการดาวน์โหลดรูปภาพ กรุณาลองใหม่อีกครั้ง");
@@ -355,7 +599,7 @@ export default function EventA4PrintModal({
     }
   };
 
-  // 3. Trigger Native Print Mode
+  // 7. Trigger Native Print Mode
   const handleTriggerPrint = () => {
     window.print();
   };
@@ -442,36 +686,36 @@ export default function EventA4PrintModal({
               <span className="text-[11px]">{zoomMode === "fit" ? "พอดีจอ" : "100%"}</span>
             </button>
 
-            {/* Share ALL to LINE */}
+            {/* Share to LINE */}
             <button
               type="button"
-              onClick={handleShareAllToLine}
+              onClick={() => setShowShareModal(true)}
               disabled={isProcessing}
               className="py-1.5 px-2.5 sm:px-3 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white font-bold text-xs flex items-center space-x-1 sm:space-x-1.5 shadow-md shadow-emerald-950 transition-all hover:scale-105 active:scale-95 cursor-pointer disabled:opacity-50"
-              title="กดแชร์ครั้งเดียว เอกสารรูปภาพ A4 ไปทั้งหมดทุกหน้า"
+              title="แชร์เข้า LINE (เลือกรวม 1 รูปยาว หรือ แยก 4 รูป)"
             >
               {isProcessing ? (
                 <RefreshCw className="w-3.5 h-3.5 animate-spin" />
               ) : (
                 <Share2 className="w-3.5 h-3.5" />
               )}
-              <span>แชร์เข้า LINE ({a4Pages.length} รูป)</span>
+              <span>แชร์เข้า LINE</span>
             </button>
 
-            {/* Save ALL Pages Image */}
+            {/* Save Merged Long Image */}
             <button
               type="button"
-              onClick={handleDownloadAllPagesImages}
+              onClick={handleDownloadMergedLongImage}
               disabled={isProcessing}
               className="py-1.5 px-2.5 sm:px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-bold text-xs flex items-center space-x-1 sm:space-x-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer disabled:opacity-50"
-              title="กดเซฟครั้งเดียว ดาวน์โหลดเอกสาร A4 ครบทุกรูป"
+              title="บันทึกรูปยาวรวมทุกหน้า (1 รูป)"
             >
               {isProcessing ? (
                 <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-400" />
               ) : (
                 <Download className="w-3.5 h-3.5" />
               )}
-              <span>บันทึกรูปทั้งหมด</span>
+              <span>บันทึกรูปยาว (1 รูป)</span>
             </button>
 
             {/* Print Real Document */}
@@ -525,22 +769,48 @@ export default function EventA4PrintModal({
 
             return (
               <div key={idx} className="w-full flex flex-col items-center">
-                {/* Section Separator Pill */}
-                <div
-                  className="mb-2 px-3.5 py-1 rounded-full text-xs font-bold border flex items-center space-x-2 shadow-sm"
-                  style={{
-                    backgroundColor: "rgba(15, 23, 42, 0.8)",
-                    borderColor: headerBgColor,
-                    color: "#ffffff"
-                  }}
-                >
-                  <span
-                    className="w-2.5 h-2.5 rounded-full shrink-0"
-                    style={{ backgroundColor: headerBgColor }}
-                  />
-                  <span>
-                    แผ่นที่ {page.pageNumber}: {page.categoryTitle} ({page.pageLabel})
-                  </span>
+                {/* Section Separator Pill with Per-Page Actions */}
+                <div className="mb-2 w-full max-w-[794px] px-1 sm:px-2 flex flex-wrap items-center justify-between gap-1.5">
+                  <div
+                    className="px-3 py-1 rounded-full text-xs font-bold border flex items-center space-x-2 shadow-sm"
+                    style={{
+                      backgroundColor: "rgba(15, 23, 42, 0.8)",
+                      borderColor: headerBgColor,
+                      color: "#ffffff"
+                    }}
+                  >
+                    <span
+                      className="w-2.5 h-2.5 rounded-full shrink-0"
+                      style={{ backgroundColor: headerBgColor }}
+                    />
+                    <span>
+                      แผ่นที่ {page.pageNumber}: {page.categoryTitle} ({page.pageLabel})
+                    </span>
+                  </div>
+
+                  {/* Quick Share / Download for this specific page */}
+                  <div className="flex items-center space-x-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleShareSinglePage(page)}
+                      disabled={isProcessing}
+                      className="py-1 px-2.5 rounded-lg bg-[#06C755]/20 hover:bg-[#06C755]/30 text-emerald-300 border border-emerald-500/30 text-[11px] font-bold flex items-center space-x-1 transition-all cursor-pointer disabled:opacity-50"
+                      title="แชร์เฉพาะแผ่นนี้เข้า LINE"
+                    >
+                      <Share2 className="w-3 h-3" />
+                      <span>แชร์แผ่นนี้</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadSinglePage(page)}
+                      disabled={isProcessing}
+                      className="py-1 px-2 rounded-lg bg-white/10 hover:bg-white/20 text-slate-200 border border-white/15 text-[11px] font-bold flex items-center space-x-1 transition-all cursor-pointer disabled:opacity-50"
+                      title="บันทึกรูปภาพเฉพาะแผ่นนี้"
+                    >
+                      <Download className="w-3 h-3" />
+                      <span className="hidden sm:inline">บันทึก</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Scaled A4 Sheet Container (Snug fit to screen width on mobile) */}
@@ -1082,6 +1352,130 @@ export default function EventA4PrintModal({
           })}
         </div>
       </div>
+
+      {/* ========================================================= */}
+      {/* SHARE OPTIONS MODAL (Fixes LINE Multi-Image Reorder Issue) */}
+      {/* ========================================================= */}
+      {showShareModal && (
+        <div
+          className="fixed inset-0 z-70 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fadeIn"
+          onClick={() => setShowShareModal(false)}
+        >
+          <div
+            className="bg-slate-900 border border-white/20 rounded-2xl sm:rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl space-y-4 text-white relative animate-scaleUp"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-9 h-9 rounded-xl bg-[#06C755]/20 border border-[#06C755]/40 flex items-center justify-center text-[#06C755]">
+                  <Share2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm sm:text-base text-white">
+                    เลือกวิธีแชร์เข้า LINE
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    ป้องกันปัญหาระบบอินเทอร์เน็ตส่งภาพสลับหน้า
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowShareModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {/* Option 1: Merged Continuous Long Image (RECOMMENDED) */}
+              <div
+                onClick={() => {
+                  setShowShareModal(false);
+                  handleShareMergedLongImage();
+                }}
+                className="group relative p-3.5 rounded-2xl bg-gradient-to-r from-emerald-950/70 via-slate-800 to-slate-800/90 border-2 border-emerald-500/60 hover:border-emerald-400 transition-all cursor-pointer hover:scale-[1.02] shadow-lg"
+              >
+                <div className="space-y-1.5">
+                  <div className="flex items-center space-x-1.5">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500 text-slate-950 uppercase tracking-wider">
+                      🌟 แนะนำ • เรียงเป๊ะ 100%
+                    </span>
+                  </div>
+                  <h4 className="font-bold text-sm text-white group-hover:text-emerald-300 transition-colors flex items-center space-x-1.5">
+                    <span>รวมเป็น 1 รูปยาวต่อเนื่อง (เรียง 1 ➔ {a4Pages.length})</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                    รวมทุกหน้าต่อกันลงมาในภาพเดียว <strong>ภาพเรียงตามลำดับเป๊ะ 100% ไม่มีวันสลับจากเน็ต</strong> ผู้รับเปิดอ่านง่าย เลื่อนดูยาวลงมาได้ครบทุกสังกัด
+                  </p>
+                </div>
+                <div className="mt-3 flex items-center justify-between text-xs font-bold text-emerald-400 pt-2 border-t border-emerald-500/20">
+                  <span className="flex items-center space-x-1">
+                    <Check className="w-3.5 h-3.5" />
+                    <span>กดแชร์รูปยาวเข้า LINE ทันที</span>
+                  </span>
+                  <span>➔</span>
+                </div>
+              </div>
+
+              {/* Option 2: Separated 4 Images */}
+              <div
+                onClick={() => {
+                  setShowShareModal(false);
+                  handleShareSeparatedImages();
+                }}
+                className="group p-3.5 rounded-2xl bg-slate-800/60 border border-white/15 hover:border-white/30 transition-all cursor-pointer hover:scale-[1.01]"
+              >
+                <div className="space-y-1.5">
+                  <div className="flex items-center space-x-1.5">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-700 text-slate-300">
+                      ส่งแยก {a4Pages.length} ไฟล์
+                    </span>
+                  </div>
+                  <h4 className="font-bold text-sm text-white group-hover:text-amber-300 transition-colors">
+                    แชร์แยก {a4Pages.length} รูป (01 - 0{a4Pages.length})
+                  </h4>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    ส่งแยกทีละแผ่น พร้อมใส่เลขลำดับกำกับ 01 ถึง 0{a4Pages.length} เหมาะสำหรับนำไปแยกส่งเฉพาะกลุ่ม
+                  </p>
+                </div>
+                <div className="mt-3 flex items-center justify-between text-xs font-bold text-slate-300 pt-2 border-t border-white/10">
+                  <span>กดแชร์แยก {a4Pages.length} รูป</span>
+                  <span>➔</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Tip Alert */}
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-2.5 text-[11px] text-amber-200/90 leading-relaxed">
+              💡 <strong>สาเหตุที่ภาพสลับ:</strong> การส่งหลายไฟล์พร้อมกัน ความเร็วเน็ตของแต่ละไฟล์อาจไม่เท่ากัน ทำให้ LINE แสดงผลไฟล์ที่เสร็จก่อน แนะนำให้เลือก <strong>"รวมเป็น 1 รูปยาว"</strong> จะเรียงตามลำดับ 1 ถึง {a4Pages.length} แน่นอน 100% ครับ
+            </div>
+
+            <div className="pt-1 flex items-center justify-between border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowShareModal(false);
+                  handleDownloadMergedLongImage();
+                }}
+                className="text-xs text-slate-400 hover:text-amber-300 flex items-center space-x-1 cursor-pointer transition-colors"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>หรือ บันทึกรูปยาวลงเครื่อง</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowShareModal(false)}
+                className="py-1 px-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold transition-colors cursor-pointer"
+              >
+                ปิด
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
