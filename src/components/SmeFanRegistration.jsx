@@ -1271,15 +1271,13 @@ export default function SmeFanRegistration({
                         <button
                           type="button"
                           onClick={() => setStep(1)}
-                          style={primaryButtonStyle}
-                          className="w-full h-full min-h-[52px] sm:min-h-[56px] py-3 sm:py-3.5 px-3 sm:px-4 rounded-2xl text-sm sm:text-base font-bold shadow-xl transition-all hover:scale-[1.01] hover:opacity-95 flex items-center justify-center space-x-2"
+                          className="w-full h-full min-h-[52px] sm:min-h-[56px] py-3 sm:py-3.5 px-3 sm:px-4 rounded-2xl text-sm sm:text-base font-extrabold bg-gradient-to-r from-emerald-600 via-emerald-400 to-teal-400 hover:from-emerald-500 hover:via-emerald-300 hover:to-teal-300 text-slate-950 shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 border border-emerald-300 transition-all hover:scale-[1.01] active:scale-95 flex items-center justify-center cursor-pointer"
                         >
                           <span className="truncate">
                             {(!eventConfig.landingButtonText || eventConfig.landingButtonText === "กดลงทะเบียนเข้างาน")
                               ? "ลงทะเบียนเข้างาน"
                               : eventConfig.landingButtonText}
                           </span>
-                          <ArrowRight className="w-5 h-5 shrink-0" />
                         </button>
                       ) : scheduleStatus.status === 'UPCOMING' ? (
                         <button
@@ -1330,10 +1328,9 @@ export default function SmeFanRegistration({
                           setFindTicketPhone("");
                           setFindTicketError("");
                         }}
-                        className="w-full h-full min-h-[48px] sm:min-h-[50px] py-2.5 sm:py-3.5 px-3 sm:px-4 rounded-2xl text-xs sm:text-sm font-extrabold bg-slate-900/90 hover:bg-slate-800 border border-white/15 hover:border-amber-500/50 text-slate-200 hover:text-white transition-all shadow-lg flex items-center justify-center space-x-1.5 sm:space-x-2 group hover:scale-[1.01]"
+                        className="w-full h-full min-h-[48px] sm:min-h-[50px] py-2.5 sm:py-3.5 px-3 sm:px-4 rounded-2xl text-xs sm:text-sm font-extrabold bg-slate-900/90 hover:bg-slate-800 border border-white/15 hover:border-amber-500/50 text-slate-200 hover:text-white transition-all shadow-lg flex items-center justify-center group hover:scale-[1.01]"
                       >
-                        <Download className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform shrink-0" />
-                        <span className="truncate">📥 สำหรับผู้ที่ลงทะเบียนแล้ว • ดาวน์โหลดบัตรเข้างาน</span>
+                        <span className="truncate">สำหรับผู้ที่ลงทะเบียนแล้ว • ดาวน์โหลดบัตรเข้างาน</span>
                       </button>
                     </div>
 
