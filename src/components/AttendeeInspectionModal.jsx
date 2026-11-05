@@ -110,7 +110,11 @@ export default function AttendeeInspectionModal({
               </span>
               <div className="font-bold text-white text-xs sm:text-sm truncate">
                 {attendee.regType === 'member' ? (
-                  <span className="text-indigo-300">สมาชิก {attendee.club || 'สงสพัท'}</span>
+                  (attendee.club || '').includes('โรตารี่') ? (
+                    <span className="text-red-400 font-extrabold">สมาชิก {attendee.club}</span>
+                  ) : (
+                    <span className="text-indigo-300">สมาชิก {attendee.club || 'สงสพัท'}</span>
+                  )
                 ) : (
                   <span className="text-emerald-300">แขกผู้มีเกียรติ ({attendee.club || 'สงสพัท'})</span>
                 )}

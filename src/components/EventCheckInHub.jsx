@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import { 
   Camera, 
   Search, 
+  Filter,
   CheckCircle2, 
   X, 
   Plus, 
@@ -396,6 +397,16 @@ export default function EventCheckInHub({
   );
   const giftCount = giftList.length;
 
+  // Club counts (SongSapat vs Rotary)
+  const countSongSapat = useMemo(
+    () => registrations.filter(r => (r.club || "สงสพัท").includes("สงสพัท")).length,
+    [registrations]
+  );
+  const countRotary = useMemo(
+    () => registrations.filter(r => (r.club || "").includes("โรตารี่")).length,
+    [registrations]
+  );
+
   // Shirt calculations
   const shirtAttendees = useMemo(() => registrations.filter(r => r.hasShirt), [registrations]);
   const shirtTotalCount = shirtAttendees.length;
@@ -542,7 +553,10 @@ export default function EventCheckInHub({
     return sortedRegistrations.filter(r => {
       if (filterCheckInStatus === "checked_in" && !r.checkedIn) return false;
       if (filterCheckInStatus === "not_checked_in" && r.checkedIn) return false;
-      if (filterCheckInClub !== "all" && r.club !== filterCheckInClub) return false;
+      if (filterCheckInClub !== "all") {
+        const attendeeClub = r.club || "สงสพัท";
+        if (!attendeeClub.includes(filterCheckInClub)) return false;
+      }
       if (searchCheckIn.trim()) {
         const q = searchCheckIn.toLowerCase();
         const matchName = r.name?.toLowerCase().includes(q);
@@ -988,51 +1002,173 @@ export default function EventCheckInHub({
       {activeMainTab === "checkin" && (
         <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-4">
           
-          {/* Top Action & Search Bar */}
-          <div className="bg-slate-900/80 rounded-2xl p-4 border border-white/10 shadow-xl flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          {/* Top Action & Filter Toolbar */}
+          <div className="bg-slate-900/80 rounded-2xl p-4 border border-white/10 shadow-xl space-y-3.5">
             
-            {/* Primary Action Button: Open Camera Scanner */}
-            <button
-              type="button"
-              onClick={() => setIsScannerOpen(true)}
-              className="flex items-center justify-center space-x-2 px-6 py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-extrabold text-sm shadow-xl shadow-emerald-500/25 hover:scale-[1.02] active:scale-95 transition-all"
-            >
-              <Camera className="w-5 h-5" />
-              <span>📷 เปิดกล้องสแกน QR Code บัตรเข้างาน</span>
-            </button>
+            {/* Row 1: Camera Scanner CTA + Search Bar */}
+            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+              {/* Primary Action Button: Open Camera Scanner */}
+              <button
+                type="button"
+                onClick={() => setIsScannerOpen(true)}
+                className="flex items-center justify-center space-x-2 px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-extrabold text-sm shadow-xl shadow-emerald-500/25 hover:scale-[1.02] active:scale-95 transition-all cursor-pointer shrink-0"
+              >
+                <Camera className="w-5 h-5" />
+                <span>📷 เปิดกล้องสแกน QR Code บัตรเข้างาน</span>
+              </button>
 
-            {/* Search & Filters */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-1 md:max-w-xl md:justify-end">
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              {/* Search Box */}
+              <div className="relative flex-1 md:max-w-md">
+                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 <input
                   type="text"
-                  placeholder="ค้นหาชื่อ, ชื่อเล่น, เลขที่บัตร, เบอร์..."
+                  placeholder="ค้นหาชื่อ, ชื่อเล่น, เลขที่บัตร, เบอร์โทร..."
                   value={searchCheckIn}
                   onChange={(e) => setSearchCheckIn(e.target.value)}
-                  className="w-full bg-slate-950/80 border border-white/10 rounded-xl pl-9 pr-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-slate-950/90 border border-white/10 rounded-xl pl-9 pr-9 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors shadow-inner"
                 />
+                {searchCheckIn && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchCheckIn("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                    title="ล้างข้อความค้นหา"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Row 2: Interactive Filter Button Bars (แถบปุ่มเลือกสถานะและสังกัด) */}
+            <div className="pt-3 border-t border-white/10 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+              
+              {/* 1. แถบปุ่มสถานะเข้างาน */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-bold text-slate-400 flex items-center space-x-1 shrink-0">
+                  <Filter className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>สถานะเข้างาน:</span>
+                </span>
+                <div className="inline-flex p-1 rounded-xl bg-slate-950/80 border border-white/10 shadow-inner gap-1 flex-wrap">
+                  {/* สถานะทั้งหมด */}
+                  <button
+                    type="button"
+                    onClick={() => setFilterCheckInStatus("all")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer ${
+                      filterCheckInStatus === "all"
+                        ? "bg-slate-800 text-white shadow-md border border-white/20 font-bold"
+                        : "text-slate-400 hover:text-white hover:bg-white/5"
+                    }`}
+                  >
+                    <span>สถานะทั้งหมด</span>
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                      filterCheckInStatus === "all" ? "bg-white/20 text-white font-bold" : "bg-white/5 text-slate-400"
+                    }`}>
+                      {totalCount}
+                    </span>
+                  </button>
+
+                  {/* เข้างานแล้ว */}
+                  <button
+                    type="button"
+                    onClick={() => setFilterCheckInStatus("checked_in")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer ${
+                      filterCheckInStatus === "checked_in"
+                        ? "bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950 font-extrabold shadow-md shadow-emerald-500/25"
+                        : "text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-500/10"
+                    }`}
+                  >
+                    <span>🟢 เข้างานแล้ว</span>
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                      filterCheckInStatus === "checked_in" ? "bg-slate-950/40 text-slate-950 font-extrabold" : "bg-emerald-500/10 text-emerald-400 font-bold"
+                    }`}>
+                      {checkedInList.length}
+                    </span>
+                  </button>
+
+                  {/* ยังไม่เข้างาน */}
+                  <button
+                    type="button"
+                    onClick={() => setFilterCheckInStatus("not_checked_in")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer ${
+                      filterCheckInStatus === "not_checked_in"
+                        ? "bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-extrabold shadow-md shadow-amber-500/20"
+                        : "text-slate-400 hover:text-white hover:bg-white/5"
+                    }`}
+                  >
+                    <span>⚪ ยังไม่เข้างาน</span>
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                      filterCheckInStatus === "not_checked_in" ? "bg-slate-950/40 text-slate-950 font-extrabold" : "bg-white/5 text-slate-400"
+                    }`}>
+                      {Math.max(0, totalCount - checkedInList.length)}
+                    </span>
+                  </button>
+                </div>
               </div>
 
-              <select
-                value={filterCheckInStatus}
-                onChange={(e) => setFilterCheckInStatus(e.target.value)}
-                className="bg-slate-950/80 border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-emerald-500"
-              >
-                <option value="all">สถานะทั้งหมด</option>
-                <option value="checked_in">🟢 เข้างานแล้ว</option>
-                <option value="not_checked_in">⚪ ยังไม่เข้างาน</option>
-              </select>
+              {/* 2. แถบปุ่มสังกัด */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-bold text-slate-400 flex items-center space-x-1 shrink-0">
+                  <Users className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>สังกัด:</span>
+                </span>
+                <div className="inline-flex p-1 rounded-xl bg-slate-950/80 border border-white/10 shadow-inner gap-1 flex-wrap">
+                  {/* ทุกสังกัด */}
+                  <button
+                    type="button"
+                    onClick={() => setFilterCheckInClub("all")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer ${
+                      filterCheckInClub === "all"
+                        ? "bg-slate-800 text-white shadow-md border border-white/20 font-bold"
+                        : "text-slate-400 hover:text-white hover:bg-white/5"
+                    }`}
+                  >
+                    <span>ทุกสังกัด</span>
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                      filterCheckInClub === "all" ? "bg-white/20 text-white font-bold" : "bg-white/5 text-slate-400"
+                    }`}>
+                      {totalCount}
+                    </span>
+                  </button>
 
-              <select
-                value={filterCheckInClub}
-                onChange={(e) => setFilterCheckInClub(e.target.value)}
-                className="bg-slate-950/80 border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-emerald-500"
-              >
-                <option value="all">ทุกสังกัด</option>
-                <option value="สงสพัท">สงสพัท</option>
-                <option value="โรตารี่">โรตารี่</option>
-              </select>
+                  {/* สมาชิกสงสพัท */}
+                  <button
+                    type="button"
+                    onClick={() => setFilterCheckInClub("สงสพัท")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer ${
+                      filterCheckInClub === "สงสพัท"
+                        ? "bg-gradient-to-r from-indigo-600 to-indigo-700 text-white font-extrabold shadow-md shadow-indigo-500/25 border border-indigo-400/40"
+                        : "text-indigo-300 hover:text-indigo-200 hover:bg-indigo-500/10"
+                    }`}
+                  >
+                    <span>สงสพัท</span>
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                      filterCheckInClub === "สงสพัท" ? "bg-white/20 text-white font-bold" : "bg-indigo-500/10 text-indigo-400 font-bold"
+                    }`}>
+                      {countSongSapat}
+                    </span>
+                  </button>
+
+                  {/* สมาชิกโรตารี่ */}
+                  <button
+                    type="button"
+                    onClick={() => setFilterCheckInClub("โรตารี่")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer ${
+                      filterCheckInClub === "โรตารี่"
+                        ? "bg-gradient-to-r from-red-600 to-rose-600 text-white font-extrabold shadow-md shadow-red-500/30 border border-red-400/50 ring-1 ring-red-400/30"
+                        : "text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                    }`}
+                  >
+                    <span>โรตารี่</span>
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                      filterCheckInClub === "โรตารี่" ? "bg-white/20 text-white font-bold" : "bg-red-500/10 text-red-400 font-bold"
+                    }`}>
+                      {countRotary}
+                    </span>
+                  </button>
+                </div>
+              </div>
+
             </div>
           </div>
 
@@ -1194,9 +1330,15 @@ export default function EventCheckInHub({
                         {/* 4. สังกัด */}
                         <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 border-r border-white/5 text-[11px] sm:text-xs">
                           {r.regType === "member" ? (
-                            <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 whitespace-nowrap">
-                              สมาชิก{r.club || "สงสพัท"}
-                            </span>
+                            (r.club || '').includes('โรตารี่') ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-extrabold bg-red-500/20 text-red-300 border border-red-500/40 shadow-sm shadow-red-500/20 whitespace-nowrap">
+                                สมาชิก{r.club}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 whitespace-nowrap">
+                                สมาชิก{r.club || "สงสพัท"}
+                              </span>
+                            )
                           ) : (
                             <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 whitespace-nowrap">
                               แขกผู้มีเกียรติ {r.club && `(${r.club})`}
@@ -1548,16 +1690,57 @@ export default function EventCheckInHub({
               />
             </div>
 
-            <div className="flex items-center space-x-2">
-              <select
-                value={filterShirtStatus}
-                onChange={(e) => setFilterShirtStatus(e.target.value)}
-                className="bg-slate-950/80 border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-teal-500"
+            <div className="inline-flex p-1 rounded-xl bg-slate-950/80 border border-white/10 shadow-inner gap-1 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setFilterShirtStatus("all")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer ${
+                  filterShirtStatus === "all"
+                    ? "bg-slate-800 text-white shadow-md border border-white/20 font-bold"
+                    : "text-slate-400 hover:text-white hover:bg-white/5"
+                }`}
               >
-                <option value="all">สถานะรับเสื้อทั้งหมด ({shirtTotalCount})</option>
-                <option value="received">🟢 รับเสื้อเรียบร้อย ({shirtReceivedCount})</option>
-                <option value="not_received">⏳ ยังไม่ได้รับเสื้อ ({shirtTotalCount - shirtReceivedCount})</option>
-              </select>
+                <span>ทั้งหมด</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                  filterShirtStatus === "all" ? "bg-white/20 text-white font-bold" : "bg-white/5 text-slate-400"
+                }`}>
+                  {shirtTotalCount}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFilterShirtStatus("received")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer ${
+                  filterShirtStatus === "received"
+                    ? "bg-gradient-to-r from-teal-500 to-emerald-600 text-slate-950 font-extrabold shadow-md shadow-teal-500/20"
+                    : "text-teal-400/80 hover:text-teal-300 hover:bg-teal-500/10"
+                }`}
+              >
+                <span>🟢 รับเสื้อแล้ว</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                  filterShirtStatus === "received" ? "bg-slate-950/40 text-slate-950 font-extrabold" : "bg-teal-500/10 text-teal-400 font-bold"
+                }`}>
+                  {shirtReceivedCount}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFilterShirtStatus("not_received")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer ${
+                  filterShirtStatus === "not_received"
+                    ? "bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-extrabold shadow-md shadow-amber-500/20"
+                    : "text-amber-400/80 hover:text-amber-300 hover:bg-amber-500/10"
+                }`}
+              >
+                <span>⏳ ยังไม่ได้รับเสื้อ</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                  filterShirtStatus === "not_received" ? "bg-slate-950/40 text-slate-950 font-extrabold" : "bg-amber-500/10 text-amber-400 font-bold"
+                }`}>
+                  {Math.max(0, shirtTotalCount - shirtReceivedCount)}
+                </span>
+              </button>
             </div>
           </div>
 
@@ -1669,9 +1852,15 @@ export default function EventCheckInHub({
                           {/* 5. สังกัด */}
                           <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 border-r border-white/5 text-[11px] sm:text-xs">
                             {r.regType === "member" ? (
-                              <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 whitespace-nowrap">
-                                สมาชิก{r.club || "สงสพัท"}
-                              </span>
+                              (r.club || '').includes('โรตารี่') ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-extrabold bg-red-500/20 text-red-300 border border-red-500/40 shadow-sm shadow-red-500/20 whitespace-nowrap">
+                                  สมาชิก{r.club}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 whitespace-nowrap">
+                                  สมาชิก{r.club || "สงสพัท"}
+                                </span>
+                              )
                             ) : (
                               <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 whitespace-nowrap">
                                 แขก {r.club && `(${r.club})`}
