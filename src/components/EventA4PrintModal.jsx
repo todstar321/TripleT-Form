@@ -57,11 +57,45 @@ export default function EventA4PrintModal({
   const [progressText, setProgressText] = useState("");
   const [copiedText, setCopiedText] = useState(false);
   const [printTimestamp, setPrintTimestamp] = useState(() => getThaiA4ExtractionTime());
+  const [zoomMode, setZoomMode] = useState("fit"); // 'fit' | 'actual'
 
-  // Refresh timestamp when opened
+  // Ref for scroll container to calculate mobile scale
+  const containerRef = useRef(null);
+  const [containerWidth, setContainerWidth] = useState(
+    typeof window !== "undefined" ? window.innerWidth : 800
+  );
+
+  // Refresh timestamp when opened & measure container width
   useEffect(() => {
+    if (!isOpen) return;
     setPrintTimestamp(getThaiA4ExtractionTime());
+
+    const updateWidth = () => {
+      if (containerRef.current) {
+        setContainerWidth(containerRef.current.clientWidth);
+      } else {
+        setContainerWidth(window.innerWidth);
+      }
+    };
+
+    updateWidth();
+    const rafId = requestAnimationFrame(updateWidth);
+    window.addEventListener("resize", updateWidth);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.removeEventListener("resize", updateWidth);
+    };
   }, [isOpen]);
+
+  // Responsive scale factor: snug fit to screen on mobile, 1.0 on large screens
+  const scale = useMemo(() => {
+    if (zoomMode === "actual") return 1;
+    const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
+    const margin = isMobile ? 8 : 32;
+    const available = Math.max(280, containerWidth - margin);
+    return Math.min(1, available / 794);
+  }, [containerWidth, zoomMode]);
 
   // Sort registrations by ticket number
   const sortedRegistrations = useMemo(() => {
@@ -169,15 +203,15 @@ export default function EventA4PrintModal({
       `สรุปการลงทะเบียนเข้าร่วมกิจกรรมปีใหม่\n` +
       `${printTimestamp.dateStr}\n` +
       `${printTimestamp.timeStr}\n` +
-      `━━━━━━━━━━━━━━━━━━━\n` +
+      `━━━━━━━━━━\n` +
       `📋 สรุปยอดล่าสุด:\n` +
-      `• ผู้ลงทะเบียนรวม: ${sortedRegistrations.length} ท่าน\n` +
-      `  - สโมสรสงสพัท: ${cat2Items.length} ท่าน\n` +
-      `  - สโมสรโรตารี่: ${cat3Items.length} ท่าน\n` +
+      `• ผู้ลงทะเบียนรวม ${sortedRegistrations.length} ท่าน\n` +
+      `  - สโมสรสงสพัท ${cat2Items.length} ท่าน\n` +
+      `  - สโมสรโรตารี่ ${cat3Items.length} ท่าน\n` +
       `• ผู้สนับสนุนกิจกรรม: ${sponsors.length} ราย\n` +
-      `  - ยอดเงินสดสนับสนุน: ฿${cashSponsorsTotal.toLocaleString()} บาท\n` +
+      `  - ยอดเงินสดสนับสนุน ${cashSponsorsTotal.toLocaleString()} บาท\n` +
       `  - ของสนับสนุน/ของขวัญ: ${itemSponsorsCount} รายการ\n` +
-      `━━━━━━━━━━━━━━━━━━━\n` +
+      `━━━━━━━━━━\n` +
       `🔗 ตรวจสอบข้อมูลแบบ Real-time:\n` +
       `https://triple-t-form.vercel.app`
     );
@@ -190,16 +224,45 @@ export default function EventA4PrintModal({
     setTimeout(() => setCopiedText(false), 2000);
   };
 
-  // Convert A4 element to Canvas
+  // Convert A4 element to Canvas (Offscreen Clone at exact 794x1123 for maximum 2x Retina crispness)
   const renderA4PageCanvas = async (pageElement) => {
-    return await html2canvas(pageElement, {
-      scale: 2, // 2x Retina high resolution
-      useCORS: true,
-      backgroundColor: "#ffffff",
-      logging: false,
-      windowWidth: 794,
-      windowHeight: 1123
-    });
+    const offscreenContainer = document.createElement("div");
+    offscreenContainer.style.position = "fixed";
+    offscreenContainer.style.left = "-9999px";
+    offscreenContainer.style.top = "0";
+    offscreenContainer.style.width = "794px";
+    offscreenContainer.style.height = "1123px";
+    offscreenContainer.style.zIndex = "-9999";
+
+    const clone = pageElement.cloneNode(true);
+    clone.style.transform = "none";
+    clone.style.position = "static";
+    clone.style.top = "auto";
+    clone.style.left = "auto";
+    clone.style.width = "794px";
+    clone.style.minHeight = "1123px";
+    clone.style.height = "1123px";
+    clone.style.margin = "0";
+
+    offscreenContainer.appendChild(clone);
+    document.body.appendChild(offscreenContainer);
+
+    try {
+      return await html2canvas(clone, {
+        scale: 2, // 2x Retina high resolution
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        logging: false,
+        width: 794,
+        height: 1123,
+        windowWidth: 794,
+        windowHeight: 1123
+      });
+    } finally {
+      if (offscreenContainer.parentNode) {
+        offscreenContainer.parentNode.removeChild(offscreenContainer);
+      }
+    }
   };
 
   // 1. Share ALL Pages to LINE at once
@@ -362,8 +425,23 @@ export default function EventA4PrintModal({
             </div>
           </div>
 
-          {/* Action Buttons: Share ALL, Save ALL, Print, Close */}
-          <div className="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
+          {/* Action Buttons: Share ALL, Save ALL, Zoom Toggle, Print, Close */}
+          <div className="flex items-center flex-wrap gap-1.5 sm:gap-2 shrink-0">
+            {/* Zoom Mode Toggle: Fit to Screen vs 100% */}
+            <button
+              type="button"
+              onClick={() => setZoomMode(zoomMode === "fit" ? "actual" : "fit")}
+              className={`py-1.5 px-2 sm:px-2.5 rounded-xl border text-xs font-bold flex items-center space-x-1 transition-all cursor-pointer ${
+                zoomMode === "fit"
+                  ? "bg-slate-800 hover:bg-slate-700 text-slate-200 border-white/20"
+                  : "bg-indigo-600/30 text-indigo-300 border-indigo-500/50"
+              }`}
+              title={zoomMode === "fit" ? "คลิกเพื่อขยายเป็นขนาดจริง 100%" : "คลิกเพื่อย่อให้พอดีขอบหน้าจอ"}
+            >
+              <span className="text-amber-400">🔍</span>
+              <span className="text-[11px]">{zoomMode === "fit" ? "พอดีจอ" : "100%"}</span>
+            </button>
+
             {/* Share ALL to LINE */}
             <button
               type="button"
@@ -430,8 +508,10 @@ export default function EventA4PrintModal({
         {/* ========================================================= */}
         {/* CONTINUOUS VERTICAL SCROLL: All A4 Pages in a Row         */}
         {/* ========================================================= */}
-        <div className="flex-1 overflow-y-auto p-2 sm:p-6 bg-slate-950/70 flex flex-col items-center space-y-6 sm:space-y-10">
-          
+        <div
+          ref={containerRef}
+          className="flex-1 overflow-y-auto px-1 sm:px-6 py-3 sm:py-6 bg-slate-950/70 flex flex-col items-center space-y-4 sm:space-y-8"
+        >
           {a4Pages.map((page, idx) => {
             const isPink = page.headerColorType === "pink";
             const isBlue = page.headerColorType === "blue";
@@ -443,16 +523,11 @@ export default function EventA4PrintModal({
               ? "#dc2626"
               : "#db2777";
 
-            const pillBg = isBlue
-              ? "bg-blue-500/20 text-blue-300 border-blue-500/40"
-              : isRed
-              ? "bg-red-500/20 text-red-300 border-red-500/40"
-              : "bg-pink-500/20 text-pink-300 border-pink-500/40";
-
             return (
               <div key={idx} className="w-full flex flex-col items-center">
                 {/* Section Separator Pill */}
-                <div className="mb-2 px-3.5 py-1 rounded-full text-xs font-bold border flex items-center space-x-2 shadow-sm"
+                <div
+                  className="mb-2 px-3.5 py-1 rounded-full text-xs font-bold border flex items-center space-x-2 shadow-sm"
                   style={{
                     backgroundColor: "rgba(15, 23, 42, 0.8)",
                     borderColor: headerBgColor,
@@ -468,40 +543,48 @@ export default function EventA4PrintModal({
                   </span>
                 </div>
 
-                {/* Scaled A4 Sheet Container (Mobile Horizontal Scrollable Wrapper) */}
-                <div className="w-full overflow-x-auto flex justify-center pb-2">
+                {/* Scaled A4 Sheet Container (Snug fit to screen width on mobile) */}
+                <div className="w-full flex justify-center pb-4 overflow-x-auto">
                   <div
-                    id={`a4-page-render-${page.pageNumber}`}
-                    className="bg-white text-slate-900 shadow-2xl p-6 sm:p-8 border border-slate-300 flex flex-col justify-between shrink-0"
                     style={{
-                      width: "794px",
-                      minHeight: "1123px",
-                      boxSizing: "border-box"
+                      width: `${794 * scale}px`,
+                      height: `${1123 * scale}px`,
+                      position: "relative",
+                      overflow: "hidden",
+                      boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5)",
+                      borderRadius: "6px"
                     }}
+                    className="shrink-0"
                   >
-                    {/* Top Sheet Header */}
-                    <div>
-                      <div className="flex items-start justify-between pb-2.5 border-b-2 border-slate-900">
-                        <div className="space-y-0.5">
-                          <div className="flex items-center space-x-2">
-                            <span
-                              className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider text-white"
-                              style={{ backgroundColor: headerBgColor }}
-                            >
-                              แผ่นที่ {page.pageNumber} จาก {a4Pages.length}
-                            </span>
+                    <div
+                      id={`a4-page-render-${page.pageNumber}`}
+                      className="bg-white text-slate-900 p-6 sm:p-8 flex flex-col justify-between"
+                      style={{
+                        width: "794px",
+                        height: "1123px",
+                        minHeight: "1123px",
+                        transform: `scale(${scale})`,
+                        transformOrigin: "top left",
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        boxSizing: "border-box"
+                      }}
+                    >
+                      {/* Top Sheet Header (Clean without duplicate top-left badge) */}
+                      <div>
+                        <div className="flex items-start justify-between pb-2.5 border-b-2 border-slate-900">
+                          <div className="space-y-0.5">
                             <h1 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
                               งานสังสรรค์ปีใหม่ SME FAN 2026
                             </h1>
+                            <h2 className="text-xs sm:text-sm font-extrabold text-slate-800">
+                              {page.categoryTitle}
+                            </h2>
+                            <p className="text-[10px] text-slate-500 font-medium">
+                              {page.categorySubtitle}
+                            </p>
                           </div>
-
-                          <h2 className="text-xs sm:text-sm font-extrabold text-slate-800">
-                            {page.categoryTitle}
-                          </h2>
-                          <p className="text-[10px] text-slate-500 font-medium">
-                            {page.categorySubtitle}
-                          </p>
-                        </div>
 
                         <div className="text-right space-y-0.5 shrink-0">
                           <div className="px-2 py-0.5 rounded bg-slate-100 border border-slate-300 font-mono text-[11px] font-bold text-slate-800">
@@ -719,9 +802,10 @@ export default function EventA4PrintModal({
                   </div>
                 </div>
               </div>
-            );
-          })}
-        </div>
+            </div>
+          );
+        })}
+      </div>
 
         {/* ========================================================= */}
         {/* BOTTOM SUMMARY & LINE SHARE INTENT BAR                    */}
@@ -786,18 +870,9 @@ export default function EventA4PrintModal({
               >
                 <div className="flex items-start justify-between pb-2.5 border-b-2 border-slate-900">
                   <div className="space-y-0.5">
-                    <div className="flex items-center space-x-2">
-                      <span
-                        className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider text-white"
-                        style={{ backgroundColor: headerBgColor }}
-                      >
-                        แผ่นที่ {pg.pageNumber} จาก {a4Pages.length}
-                      </span>
-                      <h1 className="text-lg font-black text-slate-900 tracking-tight">
-                        งานสังสรรค์ปีใหม่ SME FAN 2026
-                      </h1>
-                    </div>
-
+                    <h1 className="text-lg font-black text-slate-900 tracking-tight">
+                      งานสังสรรค์ปีใหม่ SME FAN 2026
+                    </h1>
                     <h2 className="text-sm font-extrabold text-slate-800">
                       {pg.categoryTitle}
                     </h2>
