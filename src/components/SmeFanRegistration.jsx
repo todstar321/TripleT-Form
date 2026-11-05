@@ -45,17 +45,21 @@ import {
   LogOut,
   Clock,
   Hourglass,
-  Flame
+  Flame,
+  HeartHandshake,
+  FileSpreadsheet
 } from 'lucide-react';
 import TicketModal from './TicketModal';
 import ImageCropperModal from './ImageCropperModal';
 import RegistrationCountdown from './RegistrationCountdown';
+import SponsorRegistrationModal from './SponsorRegistrationModal';
+import EventPublicDataSheetModal from './EventPublicDataSheetModal';
 import { themePresetsList } from '../data/smeFanData';
 import { uploadToCloudinary } from '../utils/cloudinary';
 import { analyzeSlipData } from '../utils/slipReader';
 import { formatPhoneNumber, cleanPhoneNumber } from '../utils/phoneFormatter';
 import { getScheduleStatus, formatThaiScheduleDateTime, formatThaiShortDateTime } from '../utils/scheduleHelper';
-import { fetchRegistrationsFromCloud } from '../utils/supabaseClient';
+import { fetchRegistrationsFromCloud, fetchSponsorsFromCloud } from '../utils/supabaseClient';
 
 const THAI_MONTHS_FULL = [
   "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
@@ -241,6 +245,19 @@ export default function SmeFanRegistration({
   const [findTicketSelected, setFindTicketSelected] = useState(null);
   const [findTicketPhone, setFindTicketPhone] = useState("");
   const [findTicketError, setFindTicketError] = useState("");
+
+  // Sponsorship & Public Data Sheet Modal States
+  const [isSponsorModalOpen, setIsSponsorModalOpen] = useState(false);
+  const [isDataSheetModalOpen, setIsDataSheetModalOpen] = useState(false);
+  const [sponsorsList, setSponsorsList] = useState([]);
+
+  useEffect(() => {
+    fetchSponsorsFromCloud()
+      .then((data) => {
+        if (Array.isArray(data)) setSponsorsList(data);
+      })
+      .catch((err) => console.error("Error loading sponsors:", err));
+  }, []);
 
   // Wrapper for recording download count and timestamps
   const handleRecordDownloadWrapper = (ticketNo) => {
@@ -1215,40 +1232,8 @@ export default function SmeFanRegistration({
                   </div>
                 )}
 
-                {/* T-Shirt Quota Notice - Horizontal on both mobile and desktop (only when not upcoming) */}
-                {scheduleStatus.status !== 'UPCOMING' && (
-                  <div className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-gradient-to-r from-amber-500/20 via-yellow-500/10 to-amber-500/20 border border-amber-500/40 text-amber-200 text-xs sm:text-sm flex flex-row items-center justify-between gap-2">
-                    <div className="flex items-center space-x-2 sm:space-x-2.5 text-left min-w-0">
-                      <Shirt className="w-5 h-5 sm:w-6 sm:h-6 text-amber-400 shrink-0" />
-                      <div className="min-w-0">
-                        <span className="font-bold text-white text-xs sm:text-sm block truncate">แจกเสื้อฟรีสำหรับ {maxShirtQuota} ท่านแรก!</span>
-                        <div className="text-[10px] sm:text-[11px] text-amber-300/80 truncate">เมื่อลงทะเบียนและแนบสลิปชำระเงินสำเร็จ</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-end space-x-2 sm:space-x-3 shrink-0">
-                      {isInlineEditing && (
-                        <div className="flex items-center space-x-1">
-                          <span className="text-[10px] sm:text-[11px] text-amber-300">โควตา:</span>
-                          <input
-                            type="number"
-                            min="0"
-                            value={eventConfig.shirtQuota?.maxQuota || 15}
-                            onChange={(e) => handleUpdateNested('shirtQuota', 'maxQuota', parseInt(e.target.value) || 0)}
-                            className="w-12 px-1.5 py-0.5 rounded-lg bg-slate-950 border border-dashed border-amber-400 text-amber-400 font-mono font-bold text-center text-xs focus:outline-none"
-                          />
-                        </div>
-                      )}
-                      <div className="text-right shrink-0 pl-1">
-                        <span className="text-[10px] sm:text-xs text-slate-400 block">คงเหลือ</span>
-                        <span className="font-mono text-base sm:text-lg font-bold text-amber-400">{remainingShirtQuota}</span>
-                        <span className="text-[10px] text-slate-400">/{maxShirtQuota}</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Big Action Button */}
-                <div className="pt-4">
+                {/* Big Action Button Area */}
+                <div className="pt-2">
                   {/* Admin Bypass Notice */}
                   {isAdmin && !scheduleStatus.isOpen && (
                     <div className="mb-3 p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-200 text-xs flex items-center justify-between gap-2">
@@ -1271,59 +1256,100 @@ export default function SmeFanRegistration({
                       <label className="text-[11px] text-amber-400 block mb-1">✏️ แก้ไขข้อความบนปุ่ม (Button Text):</label>
                       <input
                         type="text"
-                        value={eventConfig.landingButtonText || "กดลงทะเบียนเข้างาน"}
+                        value={eventConfig.landingButtonText === "กดลงทะเบียนเข้างาน" ? "ลงทะเบียนเข้างาน" : (eventConfig.landingButtonText || "ลงทะเบียนเข้างาน")}
                         onChange={(e) => handleUpdateConfig('landingButtonText', e.target.value)}
                         className="w-full text-xs bg-slate-950 border border-dashed border-amber-500/40 rounded-xl px-3 py-1.5 text-white focus:outline-none"
                       />
                     </div>
                   )}
 
-                  {/* Main Action Button States */}
-                  {scheduleStatus.isOpen ? (
-                    <button
-                      onClick={() => setStep(1)}
-                      style={primaryButtonStyle}
-                      className="w-full py-4 rounded-2xl text-base font-bold shadow-xl transition-all hover:scale-[1.02] hover:opacity-95 flex items-center justify-center space-x-2"
-                    >
-                      <span>{eventConfig.landingButtonText || "กดลงทะเบียนเข้างาน"}</span>
-                      <ArrowRight className="w-5 h-5" />
-                    </button>
-                  ) : scheduleStatus.status === 'UPCOMING' ? (
-                    <button
-                      type="button"
-                      disabled
-                      className="w-full py-4 rounded-2xl text-xs sm:text-sm font-bold bg-slate-900 border border-amber-500/40 text-amber-300/80 shadow-lg flex items-center justify-center space-x-2 cursor-not-allowed opacity-90"
-                    >
-                      <Clock className="w-4 h-4 text-amber-400 animate-spin-slow shrink-0" />
-                      <span>⏳ รอเปิดรับลงทะเบียน ({scheduleStatus.formattedShortOpenDate || 'เร็วๆ นี้'})</span>
-                      <Lock className="w-4 h-4 text-slate-500 shrink-0" />
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled
-                      className="w-full py-4 rounded-2xl text-xs sm:text-sm font-bold bg-rose-950/50 border border-rose-500/30 text-rose-300/80 shadow-lg flex items-center justify-center space-x-2 cursor-not-allowed opacity-90"
-                    >
-                      <Lock className="w-4 h-4 text-rose-400 shrink-0" />
-                      <span>🔒 ปิดรับลงทะเบียนแล้ว</span>
-                    </button>
-                  )}
+                  {/* Row 1: 80% Registration : 20% Sponsorship */}
+                  <div className="flex items-stretch gap-2 sm:gap-3">
+                    {/* 80% Main Registration Button */}
+                    <div className="flex-[4] min-w-0">
+                      {scheduleStatus.isOpen ? (
+                        <button
+                          type="button"
+                          onClick={() => setStep(1)}
+                          style={primaryButtonStyle}
+                          className="w-full h-full min-h-[52px] sm:min-h-[56px] py-3 sm:py-3.5 px-3 sm:px-4 rounded-2xl text-sm sm:text-base font-bold shadow-xl transition-all hover:scale-[1.01] hover:opacity-95 flex items-center justify-center space-x-2"
+                        >
+                          <span className="truncate">
+                            {(!eventConfig.landingButtonText || eventConfig.landingButtonText === "กดลงทะเบียนเข้างาน")
+                              ? "ลงทะเบียนเข้างาน"
+                              : eventConfig.landingButtonText}
+                          </span>
+                          <ArrowRight className="w-5 h-5 shrink-0" />
+                        </button>
+                      ) : scheduleStatus.status === 'UPCOMING' ? (
+                        <button
+                          type="button"
+                          disabled
+                          className="w-full h-full min-h-[52px] sm:min-h-[56px] py-3 sm:py-3.5 px-2 sm:px-4 rounded-2xl text-[11px] sm:text-sm font-bold bg-slate-900 border border-amber-500/40 text-amber-300/80 shadow-lg flex items-center justify-center space-x-1.5 sm:space-x-2 cursor-not-allowed opacity-90"
+                        >
+                          <Clock className="w-4 h-4 text-amber-400 animate-spin-slow shrink-0" />
+                          <span className="truncate">⏳ รอเปิดรับลงทะเบียน ({scheduleStatus.formattedShortOpenDate || 'เร็วๆ นี้'})</span>
+                          <Lock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled
+                          className="w-full h-full min-h-[52px] sm:min-h-[56px] py-3 sm:py-3.5 px-2 sm:px-4 rounded-2xl text-xs sm:text-sm font-bold bg-rose-950/50 border border-rose-500/30 text-rose-300/80 shadow-lg flex items-center justify-center space-x-1.5 sm:space-x-2 cursor-not-allowed opacity-90"
+                        >
+                          <Lock className="w-4 h-4 text-rose-400 shrink-0" />
+                          <span>🔒 ปิดรับลงทะเบียนแล้ว</span>
+                        </button>
+                      )}
+                    </div>
 
-                  {/* Secondary Action: Download Ticket for Registered Attendees */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsFindTicketModalOpen(true);
-                      setFindTicketSearch("");
-                      setFindTicketSelected(null);
-                      setFindTicketPhone("");
-                      setFindTicketError("");
-                    }}
-                    className="w-full mt-3.5 py-3.5 px-4 rounded-2xl text-xs sm:text-sm font-extrabold bg-slate-900/90 hover:bg-slate-800 border border-white/15 hover:border-amber-500/50 text-slate-200 hover:text-white transition-all shadow-lg flex items-center justify-center space-x-2 group hover:scale-[1.01]"
-                  >
-                    <Download className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
-                    <span>📥 สำหรับผู้ที่ลงทะเบียนแล้ว • ดาวน์โหลดบัตรเข้างาน</span>
-                  </button>
+                    {/* 20% Sponsorship Button */}
+                    <div className="flex-[1] min-w-[76px] sm:min-w-[95px]">
+                      <button
+                        type="button"
+                        onClick={() => setIsSponsorModalOpen(true)}
+                        className="w-full h-full min-h-[52px] sm:min-h-[56px] py-2 px-2 rounded-2xl text-xs sm:text-sm font-bold bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 shadow-lg shadow-amber-500/25 hover:shadow-amber-500/40 border border-amber-300 transition-all hover:scale-[1.02] active:scale-95 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 text-center leading-tight cursor-pointer"
+                        title="ร่วมเป็นผู้สนับสนุนกิจกรรม (เงินสด / ของสนับสนุน)"
+                      >
+                        <HeartHandshake className="w-4 h-4 sm:w-5 sm:h-5 text-slate-950 shrink-0" />
+                        <span className="font-extrabold whitespace-nowrap">ผู้สนับสนุน</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Row 2: 80% Download Ticket : 20% Public Data Sheet */}
+                  <div className="flex items-stretch gap-2 sm:gap-3 mt-3">
+                    {/* 80% Action: Download Ticket */}
+                    <div className="flex-[4] min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsFindTicketModalOpen(true);
+                          setFindTicketSearch("");
+                          setFindTicketSelected(null);
+                          setFindTicketPhone("");
+                          setFindTicketError("");
+                        }}
+                        className="w-full h-full min-h-[48px] sm:min-h-[50px] py-2.5 sm:py-3.5 px-3 sm:px-4 rounded-2xl text-xs sm:text-sm font-extrabold bg-slate-900/90 hover:bg-slate-800 border border-white/15 hover:border-amber-500/50 text-slate-200 hover:text-white transition-all shadow-lg flex items-center justify-center space-x-1.5 sm:space-x-2 group hover:scale-[1.01]"
+                      >
+                        <Download className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform shrink-0" />
+                        <span className="truncate">📥 สำหรับผู้ที่ลงทะเบียนแล้ว • ดาวน์โหลดบัตรเข้างาน</span>
+                      </button>
+                    </div>
+
+                    {/* 20% Action: Public Data Sheet (Excel / A4 View) */}
+                    <div className="flex-[1] min-w-[76px] sm:min-w-[95px]">
+                      <button
+                        type="button"
+                        onClick={() => setIsDataSheetModalOpen(true)}
+                        className="w-full h-full min-h-[48px] sm:min-h-[50px] py-2 px-2 rounded-2xl text-xs sm:text-sm font-bold bg-slate-900/90 hover:bg-slate-800 text-slate-200 hover:text-amber-300 border border-white/15 hover:border-amber-400/40 shadow-lg transition-all hover:scale-[1.02] active:scale-95 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 text-center leading-tight cursor-pointer"
+                        title="ดูสรุปข้อมูลผู้ลงทะเบียนและผู้สนับสนุนกิจกรรม (ตาราง Excel / A4)"
+                      >
+                        <FileSpreadsheet className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 shrink-0" />
+                        <span className="font-extrabold whitespace-nowrap">ข้อมูล</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -4197,6 +4223,31 @@ export default function SmeFanRegistration({
           }
           setCropperModalOpen(false);
         }}
+      />
+
+      {/* ==================================================== */}
+      {/* SPONSOR REGISTRATION MODAL                            */}
+      {/* ==================================================== */}
+      <SponsorRegistrationModal
+        isOpen={isSponsorModalOpen}
+        onClose={() => setIsSponsorModalOpen(false)}
+        eventConfig={eventConfig}
+        registrations={registrations}
+        existingSponsors={sponsorsList}
+        onSponsorSuccess={(newSponsor) => {
+          setSponsorsList((prev) => [newSponsor, ...(prev || [])]);
+        }}
+      />
+
+      {/* ==================================================== */}
+      {/* PUBLIC DATA SHEET MODAL (A4 / Excel View)             */}
+      {/* ==================================================== */}
+      <EventPublicDataSheetModal
+        isOpen={isDataSheetModalOpen}
+        onClose={() => setIsDataSheetModalOpen(false)}
+        registrations={registrations}
+        sponsors={sponsorsList}
+        eventConfig={eventConfig}
       />
 
     </div>

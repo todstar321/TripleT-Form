@@ -569,6 +569,63 @@ export async function saveEventConfigToCloud(config) {
   }
 }
 
+// Fetch Sponsors list from Cloud
+export async function fetchSponsorsFromCloud() {
+  const client = getSupabase();
+  if (!client) return [];
+
+  try {
+    const { data, error } = await client
+      .from('event_config')
+      .select('config')
+      .eq('id', 'sponsors_data')
+      .maybeSingle();
+
+    if (error || !data || !data.config) return [];
+    return Array.isArray(data.config.sponsors) ? data.config.sponsors : [];
+  } catch (err) {
+    console.warn('fetchSponsorsFromCloud warning:', err);
+    return [];
+  }
+}
+
+// Save Full Sponsors list to Cloud
+export async function saveSponsorsToCloud(sponsorsList) {
+  const client = getSupabase();
+  if (!client) return false;
+
+  try {
+    const { error } = await client
+      .from('event_config')
+      .upsert({
+        id: 'sponsors_data',
+        config: { sponsors: Array.isArray(sponsorsList) ? sponsorsList : [] },
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'id' });
+
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.error('saveSponsorsToCloud error:', err);
+    return false;
+  }
+}
+
+// Add a single Sponsor to Cloud
+export async function addSponsorToCloud(newSponsor) {
+  const client = getSupabase();
+  if (!client || !newSponsor) return false;
+
+  try {
+    const existing = await fetchSponsorsFromCloud();
+    const updated = [newSponsor, ...existing];
+    return await saveSponsorsToCloud(updated);
+  } catch (err) {
+    console.error('addSponsorToCloud error:', err);
+    return false;
+  }
+}
+
 /**
  * Completely wipe all registrations, contest votes, contest teams, and form responses from Supabase Cloud.
  */
