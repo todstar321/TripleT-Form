@@ -467,6 +467,13 @@ export default function SmeFanRegistration({
   const maxShirtQuota = eventConfig.shirtQuota?.maxQuota || 15;
   const remainingShirtQuota = Math.max(0, maxShirtQuota - shirtRecipientsCount);
 
+  // Attendee Capacity & Remaining Seats calculation (จำกัดคนไม่เกิน 70 คน หรือตามที่แอดมินกำหนด)
+  const maxSeats = Number(eventConfig.registrationSchedule?.maxSeats || eventConfig.maxSeats || 70);
+  const enableCapacityLimit = eventConfig.registrationSchedule?.enableCapacityLimit !== false;
+  const totalRegistrationsCount = registrations.length;
+  const remainingSeats = Math.max(0, maxSeats - totalRegistrationsCount);
+  const isCapacityFull = enableCapacityLimit && remainingSeats <= 0;
+
   // Age & Price calculation
   const calculatedFee = useMemo(() => {
     if (regType === 'member') {
@@ -825,6 +832,14 @@ export default function SmeFanRegistration({
       const match = (r.ticketNo || '').match(/\d+/);
       return match ? Math.max(max, parseInt(match[0], 10)) : max;
     }, 0);
+
+    // Guard against full capacity for new registrations (unless editing existing attendee)
+    if (!existingAttendee && enableCapacityLimit && currentRegs.length >= maxSeats) {
+      alert(`ขออภัย ขณะนี้มีผู้ลงทะเบียนครบตามจำนวนที่กำหนดแล้ว (${maxSeats} ท่าน) ขอขอบคุณทุกท่านที่ให้ความสนใจ`);
+      setIsSubmitting(false);
+      return;
+    }
+
     const ticketNumber = existingAttendee?.ticketNo || `SME-${String(maxNum + 1).padStart(3, '0')}`;
     const nowStr = new Date().toLocaleString('th-TH');
 
@@ -1206,16 +1221,24 @@ export default function SmeFanRegistration({
                     formattedDateText={scheduleStatus.formattedOpenDate}
                     remainingShirtQuota={remainingShirtQuota}
                     maxShirtQuota={maxShirtQuota}
+                    maxSeats={maxSeats}
+                    remainingSeats={remainingSeats}
+                    enableCapacityLimit={enableCapacityLimit}
+                    isCapacityFull={isCapacityFull}
                   />
                 )}
 
-                {scheduleStatus.status === 'OPEN' && scheduleStatus.targetDate && (
+                {scheduleStatus.status === 'OPEN' && (
                   <RegistrationCountdown
                     mode="closing"
                     targetDate={scheduleStatus.targetDate}
                     formattedDateText={scheduleStatus.formattedCloseDate}
                     remainingShirtQuota={remainingShirtQuota}
                     maxShirtQuota={maxShirtQuota}
+                    maxSeats={maxSeats}
+                    remainingSeats={remainingSeats}
+                    enableCapacityLimit={enableCapacityLimit}
+                    isCapacityFull={isCapacityFull}
                   />
                 )}
 
@@ -1236,11 +1259,11 @@ export default function SmeFanRegistration({
                 {/* Big Action Button Area */}
                 <div className="pt-2">
                   {/* Admin Bypass Notice */}
-                  {isAdmin && !scheduleStatus.isOpen && (
+                  {isAdmin && (!scheduleStatus.isOpen || isCapacityFull) && (
                     <div className="mb-3 p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-200 text-xs flex items-center justify-between gap-2">
                       <span className="font-semibold flex items-center space-x-1.5">
                         <ShieldCheck className="w-4 h-4 text-amber-400 shrink-0" />
-                        <span>👑 โหมดผู้ดูแลระบบ: ท่านสามารถทดสอบกรอกฟอร์มได้แม้ยังไม่เปิด/ปิดแล้ว</span>
+                        <span>👑 โหมดผู้ดูแลระบบ: ท่านสามารถทดสอบกรอกฟอร์มได้แม้ยังไม่เปิด/ปิดแล้ว หรือที่นั่งเต็ม</span>
                       </span>
                       <button
                         type="button"
@@ -1268,7 +1291,16 @@ export default function SmeFanRegistration({
                   <div className="flex items-stretch gap-2 sm:gap-3">
                     {/* 80% Main Registration Button */}
                     <div className="flex-[4] min-w-0">
-                      {scheduleStatus.isOpen ? (
+                      {isCapacityFull ? (
+                        <button
+                          type="button"
+                          disabled
+                          className="w-full h-full min-h-[52px] sm:min-h-[56px] py-3 sm:py-3.5 px-2 sm:px-4 rounded-2xl text-xs sm:text-sm font-bold bg-rose-950/70 border border-rose-500/50 text-rose-200 shadow-lg flex items-center justify-center space-x-1.5 sm:space-x-2 cursor-not-allowed opacity-95"
+                        >
+                          <User className="w-4 h-4 text-rose-400 shrink-0" />
+                          <span className="truncate">🔒 ขออภัย ที่นั่งเต็มจำนวนแล้ว ({maxSeats} ท่าน)</span>
+                        </button>
+                      ) : scheduleStatus.isOpen ? (
                         <button
                           type="button"
                           onClick={() => setStep(1)}

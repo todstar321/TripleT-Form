@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Clock, Sparkles, Shirt, Flame, Lock, Hourglass, ShieldCheck } from 'lucide-react';
+import { Clock, Sparkles, Shirt, Flame, Lock, Hourglass, ShieldCheck, User, Users } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { calculateRemainingTime } from '../utils/scheduleHelper';
 
 /**
  * RegistrationCountdown Component
- * Renders an animated, high-energy countdown timer for both pre-launch and closing windows.
+ * Renders an animated, high-energy countdown timer for both pre-launch and closing windows,
+ * with twin matched badges for time remaining and remaining attendee quota.
  * 
  * @param {'launch' | 'closing'} mode - Countdown mode ('launch' = before open, 'closing' = before close)
  * @param {Date} targetDate - The target Date object to count down to
@@ -13,6 +14,10 @@ import { calculateRemainingTime } from '../utils/scheduleHelper';
  * @param {number} [remainingShirtQuota] - Remaining VIP shirt quota
  * @param {number} [maxShirtQuota] - Total VIP shirt quota
  * @param {string} [formattedDateText] - Formatted Thai date string
+ * @param {number} [maxSeats] - Total capacity limit (default: 70)
+ * @param {number} [remainingSeats] - Remaining available seats
+ * @param {boolean} [enableCapacityLimit] - Whether capacity limit is enabled
+ * @param {boolean} [isCapacityFull] - Whether capacity has reached max
  */
 export default function RegistrationCountdown({
   mode = 'launch',
@@ -20,7 +25,11 @@ export default function RegistrationCountdown({
   onZero,
   remainingShirtQuota = 15,
   maxShirtQuota = 15,
-  formattedDateText = ''
+  formattedDateText = '',
+  maxSeats = 70,
+  remainingSeats = 49,
+  enableCapacityLimit = true,
+  isCapacityFull = false
 }) {
   const [time, setTime] = useState(() => calculateRemainingTime(targetDate));
 
@@ -64,11 +73,20 @@ export default function RegistrationCountdown({
 
         <div className="relative z-10 space-y-4 text-center">
           
-          {/* Top VIP Shirt Urgency Banner */}
-          <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-amber-500/30 via-rose-500/20 to-amber-500/30 border border-amber-400/50 text-amber-200 text-xs sm:text-sm font-extrabold shadow-lg animate-pulse">
-            <Flame className="w-4 h-4 text-amber-400 fill-amber-400 animate-bounce" />
-            <span>🔥 สิทธิพิเศษ 15 ท่านแรก รับเสื้อฟรีทันที!</span>
-            <Sparkles className="w-4 h-4 text-amber-300" />
+          {/* Top Badges */}
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-amber-500/30 via-rose-500/20 to-amber-500/30 border border-amber-400/50 text-amber-200 text-xs sm:text-sm font-extrabold shadow-lg animate-pulse">
+              <Flame className="w-4 h-4 text-amber-400 fill-amber-400 animate-bounce" />
+              <span>🔥 สิทธิพิเศษ 15 ท่านแรก รับเสื้อฟรีทันที!</span>
+              <Sparkles className="w-4 h-4 text-amber-300" />
+            </div>
+
+            {enableCapacityLimit && (
+              <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-cyan-950/60 border border-cyan-400/50 text-cyan-200 text-xs font-bold shadow-md">
+                <User className="w-3.5 h-3.5 text-cyan-400" />
+                <span>จำกัดเพียง {maxSeats} ท่านเท่านั้น</span>
+              </div>
+            )}
           </div>
 
           {/* Heading */}
@@ -136,34 +154,67 @@ export default function RegistrationCountdown({
   // MODE 2: CLOSING COUNTDOWN (เมื่อระบบกำลังเปิดรับสมัครอยู่ แต่นับถอยหลังสู่เวลาปิด)
   // -----------------------------------------------------------------------------------------
   return (
-    <div className="w-full max-w-lg mx-auto my-3 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-emerald-950/50 via-slate-900/90 to-amber-950/50 border border-emerald-500/40 shadow-lg backdrop-blur-md">
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
-        
-        {/* Left: Status & Thai Date */}
-        <div className="space-y-0.5 min-w-0">
-          <div className="flex items-center justify-center sm:justify-start space-x-2 text-xs font-bold text-emerald-400">
-            <span className="relative flex h-2.5 w-2.5 shrink-0">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400"></span>
-            </span>
-            <span>กำลังเปิดรับลงทะเบียน</span>
+    <div className="w-full max-w-xl mx-auto my-3 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-b from-slate-900/95 via-slate-900/90 to-slate-950/95 border border-emerald-500/40 shadow-xl backdrop-blur-md space-y-2.5">
+      
+      {/* Top Status & Thai Closing Schedule */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-1.5 text-center sm:text-left">
+        <div className="flex items-center justify-center sm:justify-start space-x-2 text-xs font-bold text-emerald-400">
+          <span className="relative flex h-2.5 w-2.5 shrink-0">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400"></span>
+          </span>
+          <span>กำลังเปิดรับลงทะเบียน</span>
+        </div>
+        {formattedDateText && (
+          <div className="text-[11px] text-slate-300">
+            ปิดรับสมัคร: <span className="text-amber-200 font-semibold">{formattedDateText}</span>
           </div>
-          {formattedDateText && (
-            <div className="text-[11px] text-slate-400">
-              ปิดรับสมัคร: <span className="text-slate-200 font-semibold">{formattedDateText}</span>
-            </div>
-          )}
+        )}
+      </div>
+
+      {/* Twin Counter Badges (สองป้ายขนาดเท่ากัน ติดกัน และใช้คนละสีอย่างสวยงาม) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
+        
+        {/* ป้ายที่ 1: นับเวลาถอยหลัง (โทนทอง-อำพัน Amber) */}
+        <div className="flex items-center justify-center space-x-1.5 font-mono text-xs font-black text-amber-300 bg-slate-950/90 px-3 py-2 rounded-xl border border-amber-500/40 shadow-inner min-h-[42px] transition-all hover:border-amber-400/80">
+          <Clock className="w-4 h-4 text-amber-400 animate-spin-slow shrink-0" />
+          <span className="text-slate-300 font-bold">เหลืออีก:</span>
+          {time.days > 0 && <span className="text-white font-extrabold">{time.days} วัน</span>}
+          <span className="text-amber-300 font-black tracking-wide">
+            {formatDigit(time.hours)}:{formatDigit(time.minutes)}:{formatDigit(time.seconds)}
+          </span>
         </div>
 
-        {/* Right: Live Ticking Countdown Badge */}
-        <div className="flex items-center space-x-1 font-mono text-xs font-black text-amber-300 bg-slate-950/80 px-3 py-1.5 rounded-xl border border-amber-500/30 shadow-inner shrink-0">
-          <Clock className="w-3.5 h-3.5 text-amber-400 animate-spin-slow shrink-0" />
-          <span>เหลืออีก:</span>
-          {time.days > 0 && <span className="text-white">{time.days} วัน</span>}
-          <span>{formatDigit(time.hours)}:{formatDigit(time.minutes)}:{formatDigit(time.seconds)}</span>
-        </div>
+        {/* ป้ายที่ 2: นับจำนวนที่นั่งคงเหลือ (โทนฟ้าคราม-ไซแอน Cyan พร้อมไอคอนคน) */}
+        {enableCapacityLimit ? (
+          <div className={`flex items-center justify-center space-x-1.5 font-mono text-xs font-black px-3 py-2 rounded-xl border shadow-inner min-h-[42px] transition-all ${
+            isCapacityFull || remainingSeats <= 0
+              ? 'bg-rose-950/70 border-rose-500/50 text-rose-300'
+              : 'bg-slate-950/90 border-cyan-500/40 text-cyan-300 hover:border-cyan-400/80'
+          }`}>
+            <User className={`w-4 h-4 shrink-0 ${isCapacityFull || remainingSeats <= 0 ? 'text-rose-400' : 'text-cyan-400'}`} />
+            {isCapacityFull || remainingSeats <= 0 ? (
+              <span className="text-rose-300 font-black">ที่นั่งเต็มแล้ว ({maxSeats} ท่าน)</span>
+            ) : (
+              <div className="flex items-center space-x-1">
+                <span className="text-slate-300 font-bold">เหลืออีก</span>
+                <span className="text-white font-black text-sm px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-200">
+                  {remainingSeats}
+                </span>
+                <span className="text-slate-300 font-bold">ท่านสุดท้าย</span>
+                <span className="text-cyan-300/80 text-[11px] font-medium">({`จาก ${maxSeats} ท่าน`})</span>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center justify-center space-x-1.5 font-mono text-xs font-black text-emerald-300 bg-slate-950/90 px-3 py-2 rounded-xl border border-emerald-500/40 shadow-inner min-h-[42px]">
+            <Users className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span className="text-slate-300">เปิดรับลงทะเบียนทั่วไป (ไม่จำกัดจำนวน)</span>
+          </div>
+        )}
 
       </div>
+
     </div>
   );
 }

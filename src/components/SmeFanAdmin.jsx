@@ -1,12 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { 
   Users, 
+  User,
   Shirt, 
   DollarSign, 
   Calendar, 
   Image as ImageIcon, 
   Crop, 
   Plus, 
+  Minus,
   Trash2, 
   CreditCard, 
   Sliders, 
@@ -1078,6 +1080,228 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
                     </div>
                   )}
 
+                  {/* ========================================================================= */}
+                  {/* ตารางตั้งค่าคำนวณจำนวนคน (Capacity & Seats Limit Table) ใต้กำหนดการ            */}
+                  {/* ========================================================================= */}
+                  {(() => {
+                    const currentMaxSeats = Number(currentSchedule.maxSeats ?? 70);
+                    const currentEnableLimit = currentSchedule.enableCapacityLimit !== false;
+                    const currentRemainingSeats = Math.max(0, currentMaxSeats - totalRegistrations);
+                    const currentPercent = currentMaxSeats > 0 ? Math.min(100, Math.round((totalRegistrations / currentMaxSeats) * 100)) : 0;
+
+                    return (
+                      <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-cyan-50/70 via-slate-50 to-amber-50/40 border-2 border-cyan-500/30 space-y-4">
+                        
+                        {/* Header of Capacity Table */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-cyan-200/60">
+                          <div className="flex items-center space-x-2.5">
+                            <div className="w-8 h-8 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-700 flex items-center justify-center">
+                              <Users className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <div className="flex items-center space-x-2">
+                                <h4 className="text-sm font-extrabold text-slate-900">
+                                  👥 ตารางตั้งค่าโควตาจำนวนผู้เข้าร่วมงาน (จำกัดจำนวนคน)
+                                </h4>
+                                <span className="px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-cyan-100 text-cyan-800 border border-cyan-300">
+                                  เป้าหมาย {currentMaxSeats} ท่าน
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-500">
+                                กำหนดจำนวนคนที่เปิดรับสมัคร เพื่อคำนวณและแสดงป้ายจำนวนที่นั่งคงเหลือคู่กับเวลานับถอยหลัง
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Enable/Disable Limit Switch */}
+                          <label className="flex items-center space-x-2 text-xs font-bold text-slate-700 cursor-pointer self-start sm:self-auto bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-xs hover:border-cyan-400">
+                            <input
+                              type="checkbox"
+                              checked={currentEnableLimit}
+                              onChange={(e) => handleUpdateSchedule('enableCapacityLimit', e.target.checked)}
+                              className="w-4 h-4 text-cyan-600 rounded focus:ring-cyan-500"
+                            />
+                            <span>เปิดใช้งานการจำกัดจำนวน</span>
+                          </label>
+                        </div>
+
+                        {/* Table View of Capacity Setting */}
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs">
+                            <thead>
+                              <tr className="border-b border-slate-200/80 text-slate-600 font-bold">
+                                <th className="pb-2 px-2">จำนวนเปิดรับสูงสุด (แอดมินกำหนด)</th>
+                                <th className="pb-2 px-2 text-center">ลงทะเบียนแล้ว</th>
+                                <th className="pb-2 px-2 text-center">ที่นั่งว่างคงเหลือ</th>
+                                <th className="pb-2 px-2 text-center">สถานะความจุ</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 font-medium">
+                              <tr className="bg-white/80 rounded-xl">
+                                {/* Column 1: Max Seats Controls */}
+                                <td className="py-3 px-2">
+                                  <div className="space-y-2">
+                                    <div className="flex items-center space-x-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleUpdateSchedule('maxSeats', Math.max(1, currentMaxSeats - 5))}
+                                        className="px-2 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-all"
+                                        title="ลด 5 คน"
+                                      >
+                                        -5
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleUpdateSchedule('maxSeats', Math.max(1, currentMaxSeats - 1))}
+                                        className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition-all"
+                                        title="ลด 1 คน"
+                                      >
+                                        <Minus className="w-3.5 h-3.5" />
+                                      </button>
+                                      <div className="relative">
+                                        <input
+                                          type="number"
+                                          min="1"
+                                          max="999"
+                                          value={currentMaxSeats}
+                                          onChange={(e) => handleUpdateSchedule('maxSeats', Math.max(1, parseInt(e.target.value) || 1))}
+                                          className="w-20 text-center font-black text-sm px-2 py-1.5 rounded-xl border-2 border-cyan-500 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-cyan-500/30"
+                                        />
+                                        <span className="text-[10px] text-slate-400 absolute right-2 top-2 pointer-events-none">ท่าน</span>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleUpdateSchedule('maxSeats', currentMaxSeats + 1)}
+                                        className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition-all"
+                                        title="เพิ่ม 1 คน"
+                                      >
+                                        <Plus className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleUpdateSchedule('maxSeats', currentMaxSeats + 5)}
+                                        className="px-2 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-all"
+                                        title="เพิ่ม 5 คน"
+                                      >
+                                        +5
+                                      </button>
+                                    </div>
+
+                                    {/* Quick Presets */}
+                                    <div className="flex items-center space-x-1.5 text-[11px]">
+                                      <span className="text-slate-400">ลัด:</span>
+                                      {[50, 70, 80, 100].map(preset => (
+                                        <button
+                                          key={preset}
+                                          type="button"
+                                          onClick={() => handleUpdateSchedule('maxSeats', preset)}
+                                          className={`px-2 py-0.5 rounded-md font-bold transition-all ${
+                                            currentMaxSeats === preset
+                                              ? 'bg-cyan-600 text-white shadow-xs'
+                                              : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                                          }`}
+                                        >
+                                          {preset} ท่าน
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </td>
+
+                                {/* Column 2: Total Registrations */}
+                                <td className="py-3 px-2 text-center align-middle">
+                                  <span className="font-mono text-base font-extrabold text-slate-800">
+                                    {totalRegistrations}
+                                  </span>
+                                  <span className="text-xs text-slate-500 ml-1">ท่าน</span>
+                                </td>
+
+                                {/* Column 3: Remaining Seats */}
+                                <td className="py-3 px-2 text-center align-middle">
+                                  <div className="inline-flex flex-col items-center">
+                                    <span className={`font-mono text-base font-black px-2.5 py-0.5 rounded-lg ${
+                                      currentRemainingSeats <= 0
+                                        ? 'bg-rose-100 text-rose-700'
+                                        : currentRemainingSeats <= 10
+                                        ? 'bg-amber-100 text-amber-800'
+                                        : 'bg-cyan-100 text-cyan-800'
+                                    }`}>
+                                      {currentRemainingSeats <= 0 ? 'เต็มแล้ว (0)' : `${currentRemainingSeats} ท่าน`}
+                                    </span>
+                                    <div className="w-24 h-1.5 rounded-full bg-slate-200 mt-1.5 overflow-hidden">
+                                      <div
+                                        className={`h-full rounded-full transition-all duration-500 ${
+                                          currentRemainingSeats <= 0 ? 'bg-rose-500' : 'bg-cyan-500'
+                                        }`}
+                                        style={{ width: `${currentPercent}%` }}
+                                      />
+                                    </div>
+                                    <span className="text-[10px] text-slate-400 mt-0.5 font-mono">{currentPercent}% เต็ม</span>
+                                  </div>
+                                </td>
+
+                                {/* Column 4: Quota Status */}
+                                <td className="py-3 px-2 text-center align-middle">
+                                  {currentRemainingSeats <= 0 ? (
+                                    <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-500/10 text-rose-700 border border-rose-200">
+                                      <span className="w-2 h-2 rounded-full bg-rose-500" />
+                                      <span>โควตาเต็มแล้ว</span>
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-700 border border-emerald-200">
+                                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                      <span>เปิดรับปกติ</span>
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Live Preview of Twin Badges (สิ่งที่ผู้ใช้เห็นบนหน้าแรก) */}
+                        <div className="pt-2 border-t border-cyan-200/50">
+                          <div className="text-[11px] font-bold text-slate-600 mb-2 flex items-center space-x-1.5">
+                            <Eye className="w-3.5 h-3.5 text-cyan-600" />
+                            <span>ตัวอย่างป้ายคู่ที่แสดงบนหน้าแรก (ขนาดเท่ากัน ติดกัน ใช้คนละสี):</span>
+                          </div>
+                          
+                          <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row items-center gap-2 max-w-lg mx-auto shadow-inner">
+                            {/* Preview Badge 1: Time */}
+                            <div className="flex-1 w-full flex items-center justify-center space-x-1.5 font-mono text-xs font-black text-amber-300 bg-slate-900/90 px-3 py-2 rounded-xl border border-amber-500/40 min-h-[42px]">
+                              <Clock className="w-3.5 h-3.5 text-amber-400 animate-spin-slow shrink-0" />
+                              <span className="text-slate-300 font-bold">เหลืออีก:</span>
+                              <span className="text-white font-extrabold">39 วัน</span>
+                              <span className="text-amber-200">13:39:23</span>
+                            </div>
+
+                            {/* Preview Badge 2: Quota */}
+                            <div className={`flex-1 w-full flex items-center justify-center space-x-1.5 font-mono text-xs font-black px-3 py-2 rounded-xl border min-h-[42px] ${
+                              currentRemainingSeats <= 0
+                                ? 'bg-rose-950/70 border-rose-500/50 text-rose-300'
+                                : 'bg-slate-900/90 border-cyan-500/40 text-cyan-300'
+                            }`}>
+                              <User className={`w-3.5 h-3.5 shrink-0 ${currentRemainingSeats <= 0 ? 'text-rose-400' : 'text-cyan-400'}`} />
+                              {currentRemainingSeats <= 0 ? (
+                                <span className="text-rose-300 font-black">ที่นั่งเต็มแล้ว ({currentMaxSeats} ท่าน)</span>
+                              ) : (
+                                <div className="flex items-center space-x-1">
+                                  <span className="text-slate-300 font-bold">เหลืออีก</span>
+                                  <span className="text-white font-black text-sm px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-200">
+                                    {currentRemainingSeats}
+                                  </span>
+                                  <span className="text-slate-300 font-bold">ท่านสุดท้าย</span>
+                                  <span className="text-cyan-300/80 text-[11px] font-medium">({`จาก ${currentMaxSeats} ท่าน`})</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                      </div>
+                    );
+                  })()}
+
                   {/* Status Summary Banner */}
                   <div className="p-3.5 rounded-xl bg-slate-900 text-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
                     <div className="flex items-center space-x-2.5 text-center sm:text-left">
@@ -1086,7 +1310,7 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
                         <span className="font-bold text-white">สิ่งที่ผู้ใช้เห็นขณะนี้: </span>
                         <span className="text-slate-300">
                           {currentStatus.status === 'UPCOMING' && `⏳ หน้านับถอยหลังรอเปิดระบบ (จะเปิดในวันที่ ${formatThaiScheduleDateTime(currentSchedule.openDateTime)})`}
-                          {currentStatus.status === 'OPEN' && `🟢 หน้าแบบฟอร์มเปิดให้ลงทะเบียนปกติ ${currentStatus.formattedCloseDate ? `(ปิดรับ ${currentStatus.formattedCloseDate})` : ''}`}
+                          {currentStatus.status === 'OPEN' && `🟢 หน้าแบบฟอร์มเปิดให้ลงทะเบียนปกติ ${currentStatus.formattedCloseDate ? `(ปิดรับ ${currentStatus.formattedCloseDate})` : ''} • โควตารับ ${Number(currentSchedule.maxSeats ?? 70)} ท่าน (เหลือ ${Math.max(0, Number(currentSchedule.maxSeats ?? 70) - totalRegistrations)} ท่าน)`}
                           {currentStatus.status === 'CLOSED' && `🔒 หน้าแจ้งเตือนปิดรับลงทะเบียนแล้ว`}
                         </span>
                       </div>

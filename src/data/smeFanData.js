@@ -17,7 +17,10 @@ export const initialSmeFanConfig = {
     closeDateTime: "2026-12-15T22:00",
     upcomingMessage: "ระบบจะเปิดรับลงทะเบียนในวันที่ 5 พฤศจิกายน 2569 เวลา 09:09 น.",
     closedMessage: "ระบบปิดรับลงทะเบียนเรียบร้อยแล้วเมื่อวันที่ 15 ธันวาคม 2569 เวลา 22:00 น. ขอขอบคุณทุกท่านที่ให้ความสนใจ",
-    allowExistingTicketDownload: true
+    allowExistingTicketDownload: true,
+    maxSeats: 70,
+    enableCapacityLimit: true,
+    autoCloseOnFull: true
   },
   
   // Images
