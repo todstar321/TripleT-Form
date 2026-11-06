@@ -25,7 +25,9 @@ export default async function handler(req, res) {
       isTest,
       remainingSeats,
       maxSeats,
-      totalRegistered
+      totalRegistered,
+      ticketPhoto,
+      photo
     } = req.body || {};
 
     const activeToken = (botToken || "").trim() || DEFAULT_BOT_TOKEN;
@@ -58,7 +60,7 @@ export default async function handler(req, res) {
         `✅ <b>สถานะ:</b> บอทเชื่อมต่อกับกลุ่มเรียบร้อยแล้ว\n` +
         `📢 <b>Chat ID:</b> <code>${escapeHtml(targetChatId)}</code>\n` +
         `⏰ <b>เวลาทดสอบ:</b> ${escapeHtml(nowThai)}\n\n` +
-        `✨ <i>ระบบพร้อมส่งการแจ้งเตือนอัตโนมัติฟรี 100% ทุกครั้งที่มีผู้ส่งใบสมัครใหม่แล้วครับ!</i>`;
+        `✨ <i>ระบบพร้อมส่งการแจ้งเตือนพร้อมรูปบัตรเข้างานอัตโนมัติฟรี 100% ทุกครั้งที่มีผู้ส่งใบสมัครใหม่แล้วครับ!</i>`;
     } 
     // ==========================================
     // CASE B: NEW ATTENDEE REGISTRATION
@@ -93,33 +95,106 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing ticket data" });
     }
 
-    // Telegram Bot API SendMessage URL
-    const telegramApiUrl = `https://api.telegram.org/bot${activeToken}/sendMessage`;
+    // Telegram Bot API SendMessage / SendPhoto
+    let telegramApiUrl = `https://api.telegram.org/bot${activeToken}/sendMessage`;
+    let requestOptions = {};
 
-    const payload = {
-      chat_id: targetChatId,
-      text: textMessage,
-      parse_mode: "HTML",
-      disable_web_page_preview: true,
-      reply_markup: {
-        inline_keyboard: [
-          [
-            {
-              text: "🌐 เปิดดูเว็บไซต์ / ตรวจสอบสลิป",
-              url: "https://triple-t-form.vercel.app"
-            }
+    const rawPhoto = ticketPhoto || photo;
+
+    // Check if photo (ticket card image) is attached
+    if (rawPhoto && typeof rawPhoto === "string") {
+      try {
+        const formData = new FormData();
+        formData.append("chat_id", targetChatId);
+
+        if (rawPhoto.startsWith("http://") || rawPhoto.startsWith("https://")) {
+          formData.append("photo", rawPhoto);
+        } else {
+          const base64Data = rawPhoto.replace(/^data:image\/\w+;base64,/, "");
+          const buffer = Buffer.from(base64Data, "base64");
+          const blob = new Blob([buffer], { type: "image/png" });
+          formData.append("photo", blob, `ticket_${ticket?.ticketNo || "card"}.png`);
+        }
+
+        formData.append("caption", textMessage);
+        formData.append("parse_mode", "HTML");
+        formData.append("reply_markup", JSON.stringify({
+          inline_keyboard: [
+            [
+              {
+                text: "🌐 เปิดดูเว็บไซต์ / ตรวจสอบสลิป",
+                url: "https://triple-t-form.vercel.app"
+              }
+            ]
           ]
-        ]
+        }));
+
+        telegramApiUrl = `https://api.telegram.org/bot${activeToken}/sendPhoto`;
+        requestOptions = {
+          method: "POST",
+          body: formData
+        };
+      } catch (photoErr) {
+        console.warn("Failed to prepare photo for Telegram, will fallback to text message:", photoErr);
       }
-    };
+    }
 
-    const response = await fetch(telegramApiUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
+    // Fallback to text message if photo not provided or failed to build
+    if (!requestOptions.body) {
+      telegramApiUrl = `https://api.telegram.org/bot${activeToken}/sendMessage`;
+      const payload = {
+        chat_id: targetChatId,
+        text: textMessage,
+        parse_mode: "HTML",
+        disable_web_page_preview: true,
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: "🌐 เปิดดูเว็บไซต์ / ตรวจสอบสลิป",
+                url: "https://triple-t-form.vercel.app"
+              }
+            ]
+          ]
+        }
+      };
+      requestOptions = {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      };
+    }
 
-    const data = await response.json().catch(() => null);
+    let response = await fetch(telegramApiUrl, requestOptions);
+    let data = await response.json().catch(() => null);
+
+    // If sendPhoto failed (e.g. payload too large or photo rejected), fallback automatically to text sendMessage
+    if ((!response.ok || !data?.ok) && telegramApiUrl.includes("/sendPhoto")) {
+      console.warn("Telegram sendPhoto failed, retrying with sendMessage:", data);
+      const fallbackUrl = `https://api.telegram.org/bot${activeToken}/sendMessage`;
+      const fallbackPayload = {
+        chat_id: targetChatId,
+        text: textMessage,
+        parse_mode: "HTML",
+        disable_web_page_preview: true,
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: "🌐 เปิดดูเว็บไซต์ / ตรวจสอบสลิป",
+                url: "https://triple-t-form.vercel.app"
+              }
+            ]
+          ]
+        }
+      };
+      response = await fetch(fallbackUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(fallbackPayload)
+      });
+      data = await response.json().catch(() => null);
+    }
 
     if (!response.ok || !data?.ok) {
       console.error("Telegram API Error:", response.status, data);

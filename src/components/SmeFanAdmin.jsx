@@ -47,6 +47,7 @@ import {
   RotateCcw,
   MessageSquare,
   Send,
+  Ticket,
   Bell
 } from 'lucide-react';
 import ImageCropperModal from './ImageCropperModal';
@@ -60,6 +61,7 @@ import { themePresetsList } from '../data/smeFanData';
 import { testSupabaseConnection, saveSupabaseConfig, getSupabaseConfig, isSupabaseConfigured, upsertRegistrationToCloud, saveEventConfigToCloud, formatThaiDisplayDateTime } from '../utils/supabaseClient';
 import { testCloudinaryConnection, saveCloudinaryConfig, getCloudinaryConfig, isCloudinaryConfigured } from '../utils/cloudinary';
 import { getScheduleStatus, formatThaiScheduleDateTime } from '../utils/scheduleHelper';
+import { generateTicketCardImage } from '../utils/ticketCardGenerator';
 
 export default function SmeFanAdmin({
   eventConfig,
@@ -549,6 +551,79 @@ export default function SmeFanAdmin({
     } catch (err) {
       setTelegramTestResult({ success: false, error: err.message });
       alert(`❌ เกิดข้อผิดพลาดในการเชื่อมต่อ: ${err.message}`);
+    } finally {
+      setIsTestingTelegram(false);
+    }
+  };
+
+  const handleTestTelegramTicketCard = async () => {
+    const tgCfg = eventConfig?.telegramConfig || {};
+    const token = (tgCfg.botToken || '').trim();
+    const targetChat = (tgCfg.chatId || '').trim();
+
+    if (!token) {
+      alert('กรุณาระบุ Telegram Bot Token ก่อนกดทดสอบครับ');
+      return;
+    }
+
+    if (!targetChat) {
+      alert('กรุณาระบุ Telegram Chat ID ก่อนกดทดสอบครับ');
+      return;
+    }
+
+    setIsTestingTelegram(true);
+    setTelegramTestResult(null);
+
+    try {
+      const sampleTicket = registrations?.[registrations.length - 1] || {
+        ticketNo: 'SME-023',
+        name: 'คุณพนธ์ณัฐ คันทะชา',
+        nickname: 'โอ๊ต',
+        regType: 'guest',
+        club: 'บางพระ',
+        phone: '081-888-9999',
+        paidAmount: 500,
+        hasShirt: true,
+        shirtSize: 'L',
+        shirtGender: 'ชาย',
+        timestamp: new Date().toLocaleString('th-TH')
+      };
+
+      let ticketPhotoDataUrl = null;
+      try {
+        const cardResult = await generateTicketCardImage(sampleTicket, eventConfig);
+        ticketPhotoDataUrl = cardResult?.dataUrl || null;
+      } catch (e) {
+        console.warn("Card generation warning:", e);
+      }
+
+      const resp = await fetch('/api/telegram-notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ticket: sampleTicket,
+          botToken: token,
+          chatId: targetChat,
+          ticketPhoto: ticketPhotoDataUrl,
+          remainingSeats: Math.max(0, (eventConfig?.capacitySettings?.maxSeats || 70) - (registrations?.length || 23)),
+          maxSeats: eventConfig?.capacitySettings?.maxSeats || 70,
+          totalRegistered: (registrations?.length || 23)
+        })
+      });
+
+      const data = await resp.json().catch(() => null);
+
+      if (resp.ok && data?.success) {
+        setTelegramTestResult({ success: true, message: 'ส่งรูปบัตรเข้างานตัวอย่างพร้อมรายละเอียดเข้ากลุ่ม Telegram สำเร็จแล้ว!' });
+        alert('🎉 ส่งรูปบัตรเข้างานตัวอย่างพร้อมรายละเอียดเข้ากลุ่ม Telegram สำเร็จแล้ว! กรุณาเปิดดูในแอป Telegram');
+      } else {
+        const errorMsg = data?.error || `Telegram API error (${resp.status})`;
+        setTelegramTestResult({ success: false, error: errorMsg });
+        alert(`❌ ไม่สามารถส่งรูปบัตรได้: ${errorMsg}`);
+      }
+    } catch (err) {
+      setTelegramTestResult({ success: false, error: err.message });
+      alert(`❌ เกิดข้อผิดพลาด: ${err.message}`);
     } finally {
       setIsTestingTelegram(false);
     }
@@ -2620,6 +2695,16 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
                             <span>🧪 ทดสอบส่งเข้ากลุ่ม Telegram</span>
                           </>
                         )}
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isTestingTelegram}
+                        onClick={handleTestTelegramTicketCard}
+                        className="px-4 py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-sm flex items-center space-x-2 transition-all disabled:opacity-50"
+                      >
+                        <Ticket className="w-3.5 h-3.5" />
+                        <span>🎟️ ทดสอบส่งรูปบัตรเข้างานตัวอย่าง</span>
                       </button>
 
                       <button

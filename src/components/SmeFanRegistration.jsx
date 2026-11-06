@@ -61,6 +61,7 @@ import { analyzeSlipData } from '../utils/slipReader';
 import { formatPhoneNumber, cleanPhoneNumber } from '../utils/phoneFormatter';
 import { getScheduleStatus, formatThaiScheduleDateTime, formatThaiShortDateTime } from '../utils/scheduleHelper';
 import { fetchRegistrationsFromCloud, fetchSponsorsFromCloud } from '../utils/supabaseClient';
+import { generateTicketCardImage } from '../utils/ticketCardGenerator';
 
 const THAI_MONTHS_FULL = [
   "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
@@ -931,22 +932,40 @@ export default function SmeFanRegistration({
 
         if (!isTgDisabled) {
           const remainingSeatsCount = enableCapacityLimit ? Math.max(0, maxSeats - (currentRegs.length + 1)) : null;
-          fetch('/api/telegram-notify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              ticket: newTicket,
-              botToken: tgToken || undefined,
-              chatId: tgChatId || undefined,
-              remainingSeats: remainingSeatsCount,
-              maxSeats: maxSeats,
-              totalRegistered: currentRegs.length + 1
+
+          // Render ticket card image in background and send with notification
+          const sendTelegram = async () => {
+            let ticketPhotoDataUrl = null;
+            try {
+              const cardResult = await generateTicketCardImage(newTicket, eventConfig);
+              ticketPhotoDataUrl = cardResult?.dataUrl || null;
+            } catch (cardErr) {
+              console.warn("Could not generate ticket image for Telegram:", cardErr);
+            }
+
+            return fetch('/api/telegram-notify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                ticket: newTicket,
+                botToken: tgToken || undefined,
+                chatId: tgChatId || undefined,
+                ticketPhoto: ticketPhotoDataUrl,
+                remainingSeats: remainingSeatsCount,
+                maxSeats: maxSeats,
+                totalRegistered: currentRegs.length + 1
+              })
+            });
+          };
+
+          sendTelegram()
+            .then(r => r.json())
+            .then(d => {
+              console.log("Telegram notification sent with ticket card:", d);
             })
-          }).then(r => r.json()).then(d => {
-            console.log("Telegram notification sent:", d);
-          }).catch(err => {
-            console.warn("Telegram notification error:", err);
-          });
+            .catch(err => {
+              console.warn("Telegram notification error:", err);
+            });
         }
       } catch (tgErr) {
         console.warn("Telegram notification dispatch error:", tgErr);
