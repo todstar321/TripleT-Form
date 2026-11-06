@@ -72,6 +72,14 @@ export const initialSmeFanConfig = {
     folderPrefix: "triple_t_forms/sme_fan_2026"
   },
 
+  // LINE Official Account (Messaging API) Configuration
+  lineConfig: {
+    enabled: true,
+    channelAccessToken: "XGJececS24KISZpzkTHpnTJo0f10vXRtNdOhtz3i4NMXqTmxjLk2cvGFrlsZ39KycLX4uqea82GZN1Y1wVx9bZRbQgca3shrIwViQH3pRJCVM5qyTfdTQEXGh8d8X0LVWrggMhkoIlVij0YDDLZysgdB04t89/1O/w1cDnyilFU=",
+    groupId: "",
+    notifyOnNewRegistration: true
+  },
+
   // Role-Based Admin Users (Email + Phone Number as Password)
   adminUsers: [
     {

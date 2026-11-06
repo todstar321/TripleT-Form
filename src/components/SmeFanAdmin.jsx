@@ -44,7 +44,10 @@ import {
   Server,
   HardDrive,
   RefreshCw,
-  RotateCcw
+  RotateCcw,
+  MessageSquare,
+  Send,
+  Bell
 } from 'lucide-react';
 import ImageCropperModal from './ImageCropperModal';
 import MemberSpreadsheet from './MemberSpreadsheet';
@@ -107,8 +110,13 @@ export default function SmeFanAdmin({
   const [sbTestResult, setSbTestResult] = useState(null);
   const [cldTestResult, setCldTestResult] = useState(null);
   const [isTestingSb, setIsTestingSb] = useState(false);
-  const [isTestingCld, setIsTestingCld] = useState(false);
   const [copiedSql, setCopiedSql] = useState(false);
+
+  // LINE Official Account Notification States
+  const [isTestingLine, setIsTestingLine] = useState(false);
+  const [lineTestResult, setLineTestResult] = useState(null);
+  const [copiedWebhookUrl, setCopiedWebhookUrl] = useState(false);
+  const [showLineToken, setShowLineToken] = useState(false);
 
   // Image cropper state
   const [cropperOpen, setCropperOpen] = useState(false);
@@ -422,6 +430,65 @@ export default function SmeFanAdmin({
     setIsTestingCld(false);
   };
 
+  // LINE Official Account Handlers
+  const handleUpdateLineConfig = (key, value) => {
+    setEventConfig(prev => ({
+      ...prev,
+      lineConfig: {
+        ...(prev.lineConfig || {}),
+        [key]: value
+      }
+    }));
+  };
+
+  const handleTestLineNotify = async () => {
+    const lineCfg = eventConfig?.lineConfig || {};
+    const targetGroup = (lineCfg.groupId || '').trim();
+    if (!targetGroup) {
+      alert('กรุณาระบุรหัสกลุ่ม LINE (Group ID) ก่อนกดทดสอบครับ\n\nคำแนะนำ: เชิญบอทเข้ากลุ่มแล้วพิมพ์ #id ในกลุ่ม บอทจะส่งรหัสกลุ่มกลับมาครับ');
+      return;
+    }
+
+    setIsTestingLine(true);
+    setLineTestResult(null);
+
+    try {
+      const resp = await fetch('/api/line-notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          isTest: true,
+          token: lineCfg.channelAccessToken,
+          groupId: targetGroup
+        })
+      });
+
+      const data = await resp.json().catch(() => null);
+
+      if (resp.ok && data?.success) {
+        setLineTestResult({ success: true, message: 'ส่งข้อความทดสอบสำเร็จเรียบร้อยแล้ว!' });
+        alert('🎉 ส่งข้อความทดสอบเข้ากลุ่ม LINE สำเร็จเรียบร้อยแล้ว! กรุณาเปิดดูในแอป LINE');
+      } else {
+        const errorMsg = data?.error || `LINE API error (${resp.status})`;
+        setLineTestResult({ success: false, error: errorMsg });
+        alert(`❌ ไม่สามารถส่งข้อความได้: ${errorMsg}\n\nคำแนะนำ: กรุณาตรวจสอบว่าเชิญบอทเข้ากลุ่มแล้ว และ Channel Access Token ถูกต้อง`);
+      }
+    } catch (err) {
+      setLineTestResult({ success: false, error: err.message });
+      alert(`❌ เกิดข้อผิดพลาดในการเชื่อมต่อ: ${err.message}`);
+    } finally {
+      setIsTestingLine(false);
+    }
+  };
+
+  const handleCopyWebhookUrl = () => {
+    const webhookUrl = `${window.location.origin}/api/line-webhook`;
+    navigator.clipboard.writeText(webhookUrl).then(() => {
+      setCopiedWebhookUrl(true);
+      setTimeout(() => setCopiedWebhookUrl(false), 2500);
+    });
+  };
+
   const handleCopySqlSchema = () => {
     const sqlScript = `-- TRIPLE T FORM & SME FAN 2026 - SUPABASE DATABASE SCHEMA
 CREATE TABLE IF NOT EXISTS public.registrations (
@@ -497,7 +564,7 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
     { id: 'forms_hub', label: 'จัดการแบบฟอร์ม 1-4', icon: Layers, badge: '4 ฟอร์ม' },
     { id: 'attendees', label: 'ผู้ลงทะเบียน', icon: Users, badge: totalRegistrations },
     { id: 'slips', label: 'คลังตรวจสอบสลิป', icon: FileImage, badge: totalSlips },
-    { id: 'cloud', label: 'คลาวด์ & คลังรูปภาพ', icon: Cloud, badge: isSupabaseConfigured() ? 'Supabase' : 'ตั้งค่า' },
+    { id: 'cloud', label: 'คลาวด์ & LINE แจ้งเตือน', icon: Cloud, badge: isSupabaseConfigured() ? 'Cloud/LINE' : 'ตั้งค่า' },
     { id: 'members', label: 'สังกัด & สมาชิกสนาม', icon: Database, badge: eventConfig.members?.length || 0 },
     { id: 'themes', label: 'ปรับแต่งธีม & โทนสี', icon: Palette, badge: 'New' },
     ...(isOwner ? [{ id: 'roles', label: 'จัดการสิทธิ์แอดมิน', icon: ShieldCheck, badge: 'Owner' }] : []),
@@ -1328,6 +1395,43 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
                 </div>
               );
             })()}
+
+            {/* LINE OA Notification Quick Status Bar in Overview */}
+            <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 flex items-center justify-center shrink-0">
+                  <MessageSquare className="w-5 h-5 text-emerald-600" />
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <h4 className="text-xs font-extrabold text-slate-900">
+                      ระบบแจ้งเตือนเข้ากลุ่ม LINE OA (SME FAN สงสพัท OA)
+                    </h4>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                      eventConfig?.lineConfig?.enabled && eventConfig?.lineConfig?.groupId
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : 'bg-amber-50 text-amber-700 border-amber-200'
+                    }`}>
+                      {eventConfig?.lineConfig?.enabled && eventConfig?.lineConfig?.groupId
+                        ? '🟢 พร้อมแจ้งเตือนกลุ่ม'
+                        : (eventConfig?.lineConfig?.enabled ? '🟡 ยังไม่ได้ระบุ Group ID' : '⚪ ปิดแจ้งเตือน')}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    แจ้งเตือนเข้ากลุ่มอัตโนมัติเฉพาะผู้ลงทะเบียนใหม่ • Token พร้อมใช้งาน
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('cloud')}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center space-x-1.5 transition-all self-start sm:self-auto shrink-0"
+              >
+                <Settings className="w-3.5 h-3.5 text-slate-500" />
+                <span>ตั้งค่า LINE OA</span>
+              </button>
+            </div>
 
             {/* Club Distribution & Status Cards */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -2312,7 +2416,218 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
 
             </div>
 
-            {/* CARD 3: Storage Purge Manager (Post-Event Photo Cleanup) */}
+            {/* CARD 3: LINE Messaging API Integration */}
+            {(() => {
+              const lineCfg = eventConfig?.lineConfig || {
+                enabled: true,
+                channelAccessToken: "XGJececS24KISZpzkTHpnTJo0f10vXRtNdOhtz3i4NMXqTmxjLk2cvGFrlsZ39KycLX4uqea82GZN1Y1wVx9bZRbQgca3shrIwViQH3pRJCVM5qyTfdTQEXGh8d8X0LVWrggMhkoIlVij0YDDLZysgdB04t89/1O/w1cDnyilFU=",
+                groupId: "",
+                notifyOnNewRegistration: true
+              };
+              const isLineActive = !!(lineCfg.enabled && lineCfg.groupId);
+
+              return (
+                <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold border border-emerald-200">
+                        <MessageSquare className="w-5 h-5 text-emerald-600" />
+                      </div>
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          <h3 className="text-base font-extrabold text-slate-900">
+                            3. ระบบแจ้งเตือนเข้ากลุ่ม LINE OA (LINE Messaging API)
+                          </h3>
+                          <span className={`text-[11px] px-2.5 py-0.5 rounded-full font-bold border ${
+                            isLineActive
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                              : (lineCfg.enabled ? 'bg-amber-50 text-amber-700 border-amber-300' : 'bg-slate-100 text-slate-500 border-slate-300')
+                          }`}>
+                            {isLineActive ? '🟢 พร้อมแจ้งเตือนกลุ่ม' : (lineCfg.enabled ? '🟡 ยังไม่ได้ระบุ Group ID' : '⚪ ปิดการแจ้งเตือน')}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500">
+                          ส่งข้อความแจ้งเตือนอัตโนมัติเข้ากลุ่ม LINE เมื่อมีผู้ส่งใบสมัครใหม่ (New Registrations Only)
+                        </p>
+                      </div>
+                    </div>
+
+                    <a
+                      href="https://developers.line.biz/console/"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center space-x-1.5 transition-all self-start sm:self-auto"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>LINE Developers Console</span>
+                    </a>
+                  </div>
+
+                  {/* Enable Switch */}
+                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                    <div>
+                      <div className="font-bold text-xs text-slate-800">
+                        เปิดระบบแจ้งเตือนเข้ากลุ่ม LINE อัตโนมัติ
+                      </div>
+                      <div className="text-[11px] text-slate-500">
+                        ส่งข้อมูลชื่อ เบอร์ ยอดชำระ ไซส์เสื้อ และที่นั่งคงเหลือ เข้ากลุ่ม LINE เมื่อมีผู้ส่งใบสมัครใหม่
+                      </div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={lineCfg.enabled ?? true}
+                        onChange={(e) => handleUpdateLineConfig('enabled', e.target.checked)}
+                        className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                      />
+                      <span className="ml-2 text-xs font-bold text-slate-700">
+                        {lineCfg.enabled ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}
+                      </span>
+                    </label>
+                  </div>
+
+                  {/* Inputs Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Channel Access Token */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-700 flex items-center space-x-1">
+                          <Lock className="w-3.5 h-3.5 text-slate-400" />
+                          <span>Channel Access Token (Long-lived)</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setShowLineToken(!showLineToken)}
+                          className="text-[11px] text-slate-500 hover:text-slate-700 flex items-center space-x-1"
+                        >
+                          <Eye className="w-3 h-3" />
+                          <span>{showLineToken ? 'ซ่อน' : 'แสดง'}</span>
+                        </button>
+                      </div>
+                      <input
+                        type={showLineToken ? "text" : "password"}
+                        value={lineCfg.channelAccessToken || ""}
+                        onChange={(e) => handleUpdateLineConfig('channelAccessToken', e.target.value)}
+                        placeholder="วาง Channel Access Token จาก LINE Developers Console"
+                        className="w-full text-xs font-mono px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                      />
+                      <p className="text-[10px] text-slate-400">
+                        Channel ID: 2007340782 (SME FAN สงสพัท OA)
+                      </p>
+                    </div>
+
+                    {/* Group ID */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 flex items-center space-x-1">
+                        <Users className="w-3.5 h-3.5 text-slate-400" />
+                        <span>รหัสกลุ่ม LINE (Group ID) <span className="text-rose-500">*</span></span>
+                      </label>
+                      <input
+                        type="text"
+                        value={lineCfg.groupId || ""}
+                        onChange={(e) => handleUpdateLineConfig('groupId', e.target.value.trim())}
+                        placeholder="ตัวอย่าง: Cxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                        className="w-full text-xs font-mono px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                      />
+                      <p className="text-[10px] text-slate-400">
+                        💡 เชิญบอทเข้ากลุ่มแล้วพิมพ์ <span className="font-mono font-bold text-emerald-600 bg-emerald-50 px-1 rounded">#id</span> ในกลุ่ม บอทจะตอบรหัสกลุ่มกลับมาครับ
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Actions & Test Result */}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={isTestingLine}
+                        onClick={handleTestLineNotify}
+                        className="px-4 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm flex items-center space-x-2 transition-all disabled:opacity-50"
+                      >
+                        {isTestingLine ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>กำลังส่งทดสอบ...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Send className="w-3.5 h-3.5" />
+                            <span>🧪 ทดสอบส่งเข้ากลุ่ม LINE</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isSavingConfig}
+                        onClick={handleSaveConfigToSupabase}
+                        className="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white shadow-sm transition-all disabled:opacity-50"
+                      >
+                        {isSavingConfig ? 'กำลังบันทึก...' : '💾 บันทึกการตั้งค่า LINE'}
+                      </button>
+                    </div>
+
+                    {/* Webhook Copy Button */}
+                    <button
+                      type="button"
+                      onClick={handleCopyWebhookUrl}
+                      className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center space-x-1.5 transition-all"
+                    >
+                      {copiedWebhookUrl ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          <span className="text-emerald-700 font-bold">คัดลอก Webhook URL แล้ว!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5 text-slate-500" />
+                          <span>คัดลอก Webhook URL</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Test Result Message Box */}
+                  {lineTestResult && (
+                    <div className={`p-3 rounded-xl text-xs flex items-center space-x-2 border ${
+                      lineTestResult.success
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                        : 'bg-rose-50 border-rose-200 text-rose-800'
+                    }`}>
+                      {lineTestResult.success ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      ) : (
+                        <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                      )}
+                      <span>{lineTestResult.message || lineTestResult.error}</span>
+                    </div>
+                  )}
+
+                  {/* Step-by-Step LINE Setup Guide */}
+                  <div className="p-4 rounded-xl bg-slate-900 text-slate-200 space-y-3 text-xs">
+                    <div className="flex items-center space-x-2 text-amber-400 font-bold">
+                      <Sparkles className="w-4 h-4" />
+                      <span>วิธีตั้งค่าและเปิดใช้งานใน 3 ขั้นตอน (สำหรับแอดมิน):</span>
+                    </div>
+                    
+                    <ol className="list-decimal list-inside space-y-2 text-slate-300 leading-relaxed text-[11px]">
+                      <li>
+                        <strong>ตั้งค่า Webhook ใน LINE Developers Console:</strong> เข้าไปที่ Channel <code className="text-amber-300 bg-slate-800 px-1 py-0.5 rounded">SME FAN สงสพัท OA</code> &gt; แท็บ <strong>Messaging API</strong> &gt; ที่หัวข้อ <strong>Webhook URL</strong> วางลิงก์ <code className="text-emerald-300 bg-slate-800 px-1 py-0.5 rounded font-mono">{typeof window !== 'undefined' ? `${window.location.origin}/api/line-webhook` : 'https://triple-t-form.vercel.app/api/line-webhook'}</code> แล้วเปิดสวิตช์ <strong>Use webhook: ON</strong>
+                      </li>
+                      <li>
+                        <strong>เปิดให้บอทเข้ากลุ่ม LINE:</strong> ในแท็บ Messaging API เลื่อนลงมาที่ <strong>LINE Official Account features</strong> &gt; ตรวจสอบว่า <strong>Allow bot to join group chats: Enabled</strong>
+                      </li>
+                      <li>
+                        <strong>ดึงรหัสกลุ่ม (Group ID):</strong> เชิญบอท <strong className="text-white">SME FAN สงสพัท OA</strong> เข้ากลุ่ม LINE ที่ต้องการรับแจ้งเตือน &gt; พิมพ์ <code className="text-cyan-300 font-bold bg-slate-800 px-1.5 py-0.5 rounded">#id</code> ในกลุ่ม &gt; บอทจะตอบรหัสกลุ่ม (ขึ้นต้นด้วยตัว C) &gt; นำรหัสมาวางในช่อง <strong>"รหัสกลุ่ม LINE"</strong> ด้านบน แล้วกด <strong>"บันทึกการตั้งค่า LINE"</strong>
+                      </li>
+                    </ol>
+                  </div>
+
+                </div>
+              );
+            })()}
+
+            {/* CARD 4: Storage Purge Manager (Post-Event Photo Cleanup) */}
             <div className="p-6 rounded-2xl bg-white border-2 border-rose-200 shadow-sm space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center space-x-3">

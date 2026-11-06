@@ -921,6 +921,32 @@ export default function SmeFanRegistration({
       onUpdateRegistration(newTicket);
     } else {
       onAddRegistration(newTicket);
+
+      // Trigger LINE OA Group Notification (New registrations only)
+      try {
+        const lineConfig = eventConfig?.lineConfig;
+        if (lineConfig?.enabled && lineConfig?.groupId) {
+          const remainingSeatsCount = enableCapacityLimit ? Math.max(0, maxSeats - (currentRegs.length + 1)) : null;
+          fetch('/api/line-notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ticket: newTicket,
+              token: lineConfig.channelAccessToken,
+              groupId: lineConfig.groupId,
+              remainingSeats: remainingSeatsCount,
+              maxSeats: maxSeats,
+              totalRegistered: currentRegs.length + 1
+            })
+          }).then(r => r.json()).then(d => {
+            console.log("LINE OA notification sent:", d);
+          }).catch(err => {
+            console.warn("LINE OA notification error:", err);
+          });
+        }
+      } catch (lineErr) {
+        console.warn("LINE notification dispatch error:", lineErr);
+      }
     }
 
     setCompletedTicket(newTicket);
