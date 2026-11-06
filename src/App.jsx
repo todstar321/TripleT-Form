@@ -394,6 +394,10 @@ export default function App() {
             lineConfig: {
               ...(prev.lineConfig || {}),
               ...(sanitizedCloud.lineConfig || {})
+            },
+            telegramConfig: {
+              ...(prev.telegramConfig || {}),
+              ...(sanitizedCloud.telegramConfig || {})
             }
           }));
           // Verify active user against cloud force-logout policy
@@ -470,6 +474,10 @@ export default function App() {
           lineConfig: {
             ...(prev.lineConfig || {}),
             ...(sanitizedCloud.lineConfig || {})
+          },
+          telegramConfig: {
+            ...(prev.telegramConfig || {}),
+            ...(sanitizedCloud.telegramConfig || {})
           }
         }));
         setCurrentUser(prevUser => {

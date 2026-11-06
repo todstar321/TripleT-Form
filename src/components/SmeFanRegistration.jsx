@@ -922,11 +922,41 @@ export default function SmeFanRegistration({
     } else {
       onAddRegistration(newTicket);
 
-      // Trigger LINE OA Group Notification (New registrations only)
+      // 1. Trigger Telegram Group Notification (100% Free & Unlimited - New registrations only)
+      try {
+        const tgConfig = eventConfig?.telegramConfig || {};
+        const isTgDisabled = tgConfig.enabled === false;
+        const tgToken = (tgConfig.botToken || "").trim();
+        const tgChatId = (tgConfig.chatId || "").trim();
+
+        if (!isTgDisabled && tgToken && tgChatId) {
+          const remainingSeatsCount = enableCapacityLimit ? Math.max(0, maxSeats - (currentRegs.length + 1)) : null;
+          fetch('/api/telegram-notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ticket: newTicket,
+              botToken: tgToken,
+              chatId: tgChatId,
+              remainingSeats: remainingSeatsCount,
+              maxSeats: maxSeats,
+              totalRegistered: currentRegs.length + 1
+            })
+          }).then(r => r.json()).then(d => {
+            console.log("Telegram notification sent:", d);
+          }).catch(err => {
+            console.warn("Telegram notification error:", err);
+          });
+        }
+      } catch (tgErr) {
+        console.warn("Telegram notification dispatch error:", tgErr);
+      }
+
+      // 2. Trigger LINE OA Group Notification (Optional fallback - New registrations only)
       try {
         const lineConfig = eventConfig?.lineConfig || {};
         const isLineDisabled = lineConfig.enabled === false;
-        const targetGroupId = (lineConfig.groupId || "Cd055ef2a26f73a3923db4c332a664fc7").trim();
+        const targetGroupId = (lineConfig.groupId || "").trim();
         const token = (lineConfig.channelAccessToken || "XGJececS24KISZpzkTHpnTJo0f10vXRtNdOhtz3i4NMXqTmxjLk2cvGFrlsZ39KycLX4uqea82GZN1Y1wVx9bZRbQgca3shrIwViQH3pRJCVM5qyTfdTQEXGh8d8X0LVWrggMhkoIlVij0YDDLZysgdB04t89/1O/w1cDnyilFU=").trim();
 
         if (!isLineDisabled && targetGroupId) {

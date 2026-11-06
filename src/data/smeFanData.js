@@ -76,7 +76,15 @@ export const initialSmeFanConfig = {
   lineConfig: {
     enabled: true,
     channelAccessToken: "XGJececS24KISZpzkTHpnTJo0f10vXRtNdOhtz3i4NMXqTmxjLk2cvGFrlsZ39KycLX4uqea82GZN1Y1wVx9bZRbQgca3shrIwViQH3pRJCVM5qyTfdTQEXGh8d8X0LVWrggMhkoIlVij0YDDLZysgdB04t89/1O/w1cDnyilFU=",
-    groupId: "",
+    groupId: "Cd055ef2a26f73a3923db4c332a664fc7",
+    notifyOnNewRegistration: true
+  },
+
+  // Telegram Bot Notification Configuration
+  telegramConfig: {
+    enabled: true,
+    botToken: "",
+    chatId: "",
     notifyOnNewRegistration: true
   },
 
