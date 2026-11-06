@@ -56,7 +56,7 @@ export default async function handler(req, res) {
       const nowThai = new Date().toLocaleString("th-TH", { timeZone: "Asia/Bangkok" });
       textMessage = 
         `🧪 <b>ทดสอบระบบแจ้งเตือน Telegram สำเร็จ!</b>\n` +
-        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `━━━━━━━━━━\n` +
         `✅ <b>สถานะ:</b> บอทเชื่อมต่อกับกลุ่มเรียบร้อยแล้ว\n` +
         `📢 <b>Chat ID:</b> <code>${escapeHtml(targetChatId)}</code>\n` +
         `⏰ <b>เวลาทดสอบ:</b> ${escapeHtml(nowThai)}\n\n` +
@@ -81,7 +81,7 @@ export default async function handler(req, res) {
 
       textMessage = 
         `🎉 <b>มีผู้ลงทะเบียนใหม่! [งานสังสรรค์ปีใหม่ SME FAN 2026]</b>\n` +
-        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `━━━━━━━━━━\n` +
         `🎟️ <b>รหัสบัตร:</b> <code>${escapeHtml(ticket.ticketNo || "SME")}</code>\n` +
         `👤 <b>ชื่อ-นามสกุล:</b> <b>${escapeHtml(ticket.name)}${nicknameDisplay}</b>\n` +
         `⛳ <b>สังกัด:</b> ${regTypeLabel}${memberCodeBadge} • สนาม${escapeHtml(ticket.club || "สงสพัท")}\n` +
@@ -89,7 +89,7 @@ export default async function handler(req, res) {
         `💰 <b>ยอดชำระ:</b> <b>${paidStr}</b>\n` +
         `👕 <b>เสื้อที่ระลึก:</b> ${shirtInfo}\n` +
         `⏰ <b>เวลาลงทะเบียน:</b> ${escapeHtml(ticket.timestamp || "-")}\n` +
-        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `━━━━━━━━━━\n` +
         `📊 <b>โควตาที่นั่ง:</b> <b>${remainingText}</b>`;
     } else {
       return res.status(400).json({ error: "Missing ticket data" });
