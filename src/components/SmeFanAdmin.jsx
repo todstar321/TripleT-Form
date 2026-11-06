@@ -443,6 +443,7 @@ export default function SmeFanAdmin({
   };
 
   const handleTestLineNotify = async () => {
+    const defaultLineToken = "XGJececS24KISZpzkTHpnTJo0f10vXRtNdOhtz3i4NMXqTmxjLk2cvGFrlsZ39KycLX4uqea82GZN1Y1wVx9bZRbQgca3shrIwViQH3pRJCVM5qyTfdTQEXGh8d8X0LVWrggMhkoIlVij0YDDLZysgdB04t89/1O/w1cDnyilFU=";
     const lineCfg = eventConfig?.lineConfig || {};
     const targetGroup = (lineCfg.groupId || '').trim();
     if (!targetGroup) {
@@ -459,7 +460,7 @@ export default function SmeFanAdmin({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           isTest: true,
-          token: lineCfg.channelAccessToken,
+          token: lineCfg.channelAccessToken || defaultLineToken,
           groupId: targetGroup
         })
       });
@@ -2419,11 +2420,12 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
 
             {/* CARD 3: LINE Messaging API Integration */}
             {(() => {
-              const lineCfg = eventConfig?.lineConfig || {
-                enabled: true,
-                channelAccessToken: "XGJececS24KISZpzkTHpnTJo0f10vXRtNdOhtz3i4NMXqTmxjLk2cvGFrlsZ39KycLX4uqea82GZN1Y1wVx9bZRbQgca3shrIwViQH3pRJCVM5qyTfdTQEXGh8d8X0LVWrggMhkoIlVij0YDDLZysgdB04t89/1O/w1cDnyilFU=",
-                groupId: "",
-                notifyOnNewRegistration: true
+              const defaultLineToken = "XGJececS24KISZpzkTHpnTJo0f10vXRtNdOhtz3i4NMXqTmxjLk2cvGFrlsZ39KycLX4uqea82GZN1Y1wVx9bZRbQgca3shrIwViQH3pRJCVM5qyTfdTQEXGh8d8X0LVWrggMhkoIlVij0YDDLZysgdB04t89/1O/w1cDnyilFU=";
+              const lineCfg = {
+                enabled: eventConfig?.lineConfig?.enabled ?? true,
+                channelAccessToken: eventConfig?.lineConfig?.channelAccessToken || defaultLineToken,
+                groupId: eventConfig?.lineConfig?.groupId || "",
+                notifyOnNewRegistration: eventConfig?.lineConfig?.notifyOnNewRegistration ?? true
               };
               const isLineActive = !!(lineCfg.enabled && lineCfg.groupId);
 

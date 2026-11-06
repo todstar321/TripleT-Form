@@ -73,8 +73,7 @@ export default async function handler(req, res) {
                   text: "🧪 TEST NOTIFICATION",
                   weight: "bold",
                   size: "xxs",
-                  color: "#f59e0b",
-                  letterSpacing: "1px"
+                  color: "#f59e0b"
                 },
                 {
                   type: "text",
@@ -381,16 +380,28 @@ export default async function handler(req, res) {
       console.error("LINE Push failed:", lineResponse.status, respData);
       
       // Fallback: If Flex message had schema issues, try sending simple text message
-      if (ticket && !isTest) {
-        const fallbackText = `🎉 มีผู้ลงทะเบียนใหม่!\n` +
+      let fallbackText = "";
+      if (isTest) {
+        fallbackText = `🧪 ทดสอบการเชื่อมต่อ LINE สำเร็จ 100%!\n\n` +
+          `✅ บอท SME FAN สงสพัท OA เชื่อมต่อกับกลุ่ม LINE นี้เรียบร้อยแล้ว\n` +
+          `📢 รหัสกลุ่ม: ${targetId}\n` +
+          `⏰ เวลาทดสอบ: ${new Date().toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })}\n\n` +
+          `✨ ระบบจะแจ้งเตือนอัตโนมัติเฉพาะเมื่อมีผู้ส่งใบสมัครใหม่ครับ`;
+      } else if (ticket) {
+        const remainingStr = (remainingSeats !== null && remainingSeats !== undefined)
+          ? ` (เหลืออีก ${remainingSeats} ท่านสุดท้าย)` : '';
+        fallbackText = `🎉 มีผู้ลงทะเบียนใหม่!\n` +
           `🎟️ รหัสบัตร: ${ticket.ticketNo}\n` +
           `👤 ชื่อ: ${ticket.name} ${ticket.nickname ? `(${ticket.nickname})` : ''}\n` +
           `⛳ สังกัด: สนาม${ticket.club || 'สงสพัท'}\n` +
           `📞 โทร: ${ticket.phone}\n` +
           `💰 ยอดชำระ: ${ticket.paidAmount || ticket.amount || 0} บาท\n` +
+          `📊 โควตา: ${totalRegistered || 1}/${maxSeats || 70} ท่าน${remainingStr}\n` +
           `⏰ เวลา: ${ticket.timestamp}\n` +
           `🌐 ดูเพิ่มเติม: https://triple-t-form.vercel.app`;
+      }
 
+      if (fallbackText) {
         const fallbackResp = await fetch("https://api.line.me/v2/bot/message/push", {
           method: "POST",
           headers: {
@@ -407,7 +418,7 @@ export default async function handler(req, res) {
           return res.status(200).json({
             success: true,
             fallbackUsed: true,
-            message: "Sent via fallback text format"
+            message: isTest ? "Test message sent successfully" : "Sent via fallback text format"
           });
         }
       }
