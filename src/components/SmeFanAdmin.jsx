@@ -51,6 +51,7 @@ import MemberSpreadsheet from './MemberSpreadsheet';
 import TicketScannerModal from './TicketScannerModal';
 import StoragePurgeModal from './StoragePurgeModal';
 import ResetRegistrationsModal from './ResetRegistrationsModal';
+import ClearSecurityModal from './ClearSecurityModal';
 import AttendeeInspectionModal from './AttendeeInspectionModal';
 import { themePresetsList } from '../data/smeFanData';
 import { testSupabaseConnection, saveSupabaseConfig, getSupabaseConfig, isSupabaseConfigured, upsertRegistrationToCloud, saveEventConfigToCloud, formatThaiDisplayDateTime } from '../utils/supabaseClient';
@@ -97,6 +98,8 @@ export default function SmeFanAdmin({
   const [copiedLink, setCopiedLink] = useState(false);
   const [isAdminScannerOpen, setIsAdminScannerOpen] = useState(false);
 
+  // High-Security Clear Modal State
+  const [isClearSecurityOpen, setIsClearSecurityOpen] = useState(false);
   // Cloud & Purge States
   const [isPurgeModalOpen, setIsPurgeModalOpen] = useState(false);
   const [sbConfig, setSbConfig] = useState(() => getSupabaseConfig());
@@ -758,12 +761,11 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
             {onResetAllRegistrations && (
               <button
                 type="button"
-                onClick={() => setIsResetModalOpen(true)}
-                className="flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-rose-600/30 hover:bg-rose-600/50 text-rose-200 hover:text-white border border-rose-500/40 shadow-sm transition-all hover:scale-105"
-                title="ล้างข้อมูลการลงทะเบียนและคะแนนการประกวดทั้งหมด (รายชื่อ 95 สมาชิกและสังกัดปลอดภัย 100%)"
+                onClick={() => setIsClearSecurityOpen(true)}
+                className="flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-rose-950/90 to-red-950/80 hover:from-rose-900 hover:to-red-900 text-rose-200 hover:text-white border border-rose-500/50 hover:border-rose-400 shadow-md shadow-rose-950/50 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                title="ระบบความปลอดภัย: เคลียร์ข้อมูล (ลบรูปหลังจบงาน / ล้างข้อมูลลงทะเบียน)"
               >
-                <RotateCcw className="w-3.5 h-3.5 text-rose-400" />
-                <span>🗑️ ล้างข้อมูลลงทะเบียน</span>
+                <span>⛔ Clear</span>
               </button>
             )}
 
@@ -3100,6 +3102,16 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
           registrations={registrations}
         />
       )}
+
+      {/* High-Security Multi-step Clear Modal */}
+      <ClearSecurityModal
+        isOpen={isClearSecurityOpen}
+        onClose={() => setIsClearSecurityOpen(false)}
+        currentUser={currentUser}
+        totalRegistrations={registrations.length}
+        onSelectPurgePhotos={() => setIsPurgeModalOpen(true)}
+        onSelectResetRegistrations={() => setIsResetModalOpen(true)}
+      />
 
       {/* Storage Purge Modal (Post-Event Photo Cleanup) */}
       <StoragePurgeModal

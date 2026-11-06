@@ -52,6 +52,7 @@ import ShirtPresentationModal from "./ShirtPresentationModal";
 import ContestJudgeModal from "./ContestJudgeModal";
 import StoragePurgeModal from "./StoragePurgeModal";
 import ResetRegistrationsModal from "./ResetRegistrationsModal";
+import ClearSecurityModal from "./ClearSecurityModal";
 import AttendeeInspectionModal from "./AttendeeInspectionModal";
 import { formatThaiDisplayDateTime } from "../utils/supabaseClient";
 import { cleanPhoneNumber } from "../utils/phoneFormatter";
@@ -121,6 +122,8 @@ export default function EventCheckInHub({
     return registrations.find(r => r.ticketNo === inspectingAttendee.ticketNo) || inspectingAttendee;
   }, [inspectingAttendee, registrations]);
 
+  // High-Security Clear Modal State (Encloses purge & reset under multi-step safety flow)
+  const [isClearSecurityOpen, setIsClearSecurityOpen] = useState(false);
   // Storage Purge Modal State (Delete photos/slips after event)
   const [isPurgeModalOpen, setIsPurgeModalOpen] = useState(false);
   // Dedicated Reset Registrations & Scores Modal State
@@ -858,27 +861,16 @@ export default function EventCheckInHub({
             {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
           </button>
 
+          {/* High-Security Clear Button (แทนที่ปุ่มลบรูปและล้างข้อมูลเดิม ป้องกันการกดพลาด) */}
           <button
             type="button"
-            onClick={() => setIsPurgeModalOpen(true)}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/30 text-xs font-semibold text-rose-300 hover:text-white transition-all shadow-sm"
-            title="ล้างรูปภาพและสลิปหลังจบงานเพื่อประหยัดพื้นที่"
+            onClick={() => setIsClearSecurityOpen(true)}
+            className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-gradient-to-r from-rose-950/90 to-red-950/80 hover:from-rose-900 hover:to-red-900 border border-rose-500/50 hover:border-rose-400 text-xs font-black text-rose-200 hover:text-white transition-all shadow-md shadow-rose-950/50 hover:scale-105 active:scale-95 cursor-pointer"
+            title="ระบบความปลอดภัย: เคลียร์ข้อมูล (ลบรูปหลังจบงาน / ล้างข้อมูลลงทะเบียน)"
           >
-            <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-            <span className="hidden sm:inline">ลบรูปหลังจบงาน</span>
+            <span className="text-xs">⛔</span>
+            <span>Clear</span>
           </button>
-
-          {onResetAllRegistrations && (
-            <button
-              type="button"
-              onClick={() => setIsResetModalOpen(true)}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-rose-600/30 hover:bg-rose-600/50 border border-rose-500/50 text-xs font-bold text-rose-200 hover:text-white transition-all shadow-sm"
-              title="ล้างข้อมูลการลงทะเบียนและคะแนนการประกวดทั้งหมด (รายชื่อ 95 สมาชิกและสังกัดปลอดภัย 100%)"
-            >
-              <RotateCcw className="w-3.5 h-3.5 text-rose-400" />
-              <span>ล้างข้อมูลลงทะเบียน</span>
-            </button>
-          )}
 
           {onForceSyncCloud && (
             <button
@@ -3870,6 +3862,16 @@ export default function EventCheckInHub({
             triggerConfetti();
           } catch (e) {}
         }}
+      />
+
+      {/* High-Security Multi-step Clear Modal */}
+      <ClearSecurityModal
+        isOpen={isClearSecurityOpen}
+        onClose={() => setIsClearSecurityOpen(false)}
+        currentUser={currentUser}
+        totalRegistrations={registrations.length}
+        onSelectPurgePhotos={() => setIsPurgeModalOpen(true)}
+        onSelectResetRegistrations={() => setIsResetModalOpen(true)}
       />
 
       {/* Storage Purge Modal (Post-Event Photo Cleanup) */}
