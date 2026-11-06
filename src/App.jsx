@@ -388,7 +388,14 @@ export default function App() {
           ) {
             sanitizedCloud.bannerImage = initialSmeFanConfig.bannerImage;
           }
-          setEventConfig(prev => ({ ...prev, ...sanitizedCloud }));
+          setEventConfig(prev => ({
+            ...prev,
+            ...sanitizedCloud,
+            lineConfig: {
+              ...(prev.lineConfig || {}),
+              ...(sanitizedCloud.lineConfig || {})
+            }
+          }));
           // Verify active user against cloud force-logout policy
           setCurrentUser(prevUser => {
             if (prevUser && !isValidAdminSession(prevUser, cloudConfig)) {
@@ -457,7 +464,14 @@ export default function App() {
         ) {
           sanitizedCloud.bannerImage = initialSmeFanConfig.bannerImage;
         }
-        setEventConfig(prev => ({ ...prev, ...sanitizedCloud }));
+        setEventConfig(prev => ({
+          ...prev,
+          ...sanitizedCloud,
+          lineConfig: {
+            ...(prev.lineConfig || {}),
+            ...(sanitizedCloud.lineConfig || {})
+          }
+        }));
         setCurrentUser(prevUser => {
           if (prevUser && !isValidAdminSession(prevUser, cloudConfig)) {
             console.warn("🔒 Cloud Realtime: Session revoked by server policy");

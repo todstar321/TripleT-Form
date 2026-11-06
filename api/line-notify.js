@@ -4,6 +4,8 @@
 const DEFAULT_LINE_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN || 
   "XGJececS24KISZpzkTHpnTJo0f10vXRtNdOhtz3i4NMXqTmxjLk2cvGFrlsZ39KycLX4uqea82GZN1Y1wVx9bZRbQgca3shrIwViQH3pRJCVM5qyTfdTQEXGh8d8X0LVWrggMhkoIlVij0YDDLZysgdB04t89/1O/w1cDnyilFU=";
 
+const DEFAULT_GROUP_ID = process.env.LINE_GROUP_ID || "Cd055ef2a26f73a3923db4c332a664fc7";
+
 export default async function handler(req, res) {
   if (req.method === "GET") {
     return res.status(200).json({
@@ -29,7 +31,7 @@ export default async function handler(req, res) {
     } = req.body || {};
 
     const accessToken = (token || "").trim() || DEFAULT_LINE_ACCESS_TOKEN;
-    const targetId = (groupId || "").trim();
+    const targetId = (groupId || "").trim() || DEFAULT_GROUP_ID;
 
     if (!targetId) {
       return res.status(400).json({
