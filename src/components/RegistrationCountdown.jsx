@@ -176,35 +176,40 @@ export default function RegistrationCountdown({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
         
         {/* ป้ายที่ 1: นับเวลาถอยหลัง (โทนทอง-อำพัน Amber) */}
-        <div className="flex items-center justify-center space-x-1.5 font-mono text-xs font-black text-amber-300 bg-slate-950/90 px-3 py-2 rounded-xl border border-amber-500/40 shadow-inner min-h-[42px] transition-all hover:border-amber-400/80">
-          <Clock className="w-4 h-4 text-amber-400 animate-spin-slow shrink-0" />
-          <span className="text-slate-300 font-bold">เหลืออีก:</span>
-          {time.days > 0 && <span className="text-white font-extrabold">{time.days} วัน</span>}
-          <span className="text-amber-300 font-black tracking-wide">
-            {formatDigit(time.hours)}:{formatDigit(time.minutes)}:{formatDigit(time.seconds)}
-          </span>
+        <div className="flex items-center justify-center font-mono text-xs font-black text-amber-300 bg-slate-950/90 px-3 py-2 rounded-xl border border-amber-500/40 shadow-inner min-h-[42px] transition-all hover:border-amber-400/80">
+          <div className="w-[220px] flex items-center space-x-1.5 text-left">
+            <Clock className="w-4 h-4 text-amber-400 animate-spin-slow shrink-0" />
+            <span className="text-slate-300 font-bold shrink-0">เหลืออีก</span>
+            <span className="truncate">
+              {time.days > 0 && <span className="text-white font-extrabold">{time.days} วัน </span>}
+              <span className="text-amber-300 font-black tracking-wide">
+                {formatDigit(time.hours)}:{formatDigit(time.minutes)}:{formatDigit(time.seconds)}
+              </span>
+            </span>
+          </div>
         </div>
 
         {/* ป้ายที่ 2: นับจำนวนที่นั่งคงเหลือ (โทนฟ้าคราม-ไซแอน Cyan พร้อมไอคอนคน) */}
         {enableCapacityLimit ? (
-          <div className={`flex items-center justify-center space-x-1.5 font-mono text-xs font-black px-3 py-2 rounded-xl border shadow-inner min-h-[42px] transition-all ${
+          <div className={`flex items-center justify-center font-mono text-xs font-black px-3 py-2 rounded-xl border shadow-inner min-h-[42px] transition-all ${
             isCapacityFull || remainingSeats <= 0
               ? 'bg-rose-950/70 border-rose-500/50 text-rose-300'
               : 'bg-slate-950/90 border-cyan-500/40 text-cyan-300 hover:border-cyan-400/80'
           }`}>
-            <User className={`w-4 h-4 shrink-0 ${isCapacityFull || remainingSeats <= 0 ? 'text-rose-400' : 'text-cyan-400'}`} />
-            {isCapacityFull || remainingSeats <= 0 ? (
-              <span className="text-rose-300 font-black">ที่นั่งเต็มแล้ว ({maxSeats} ท่าน)</span>
-            ) : (
-              <div className="flex items-center space-x-1">
-                <span className="text-slate-300 font-bold">เหลืออีก</span>
-                <span className="text-white font-black text-sm px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-200">
-                  {remainingSeats}
-                </span>
-                <span className="text-slate-300 font-bold">ท่านสุดท้าย</span>
-                <span className="text-cyan-300/80 text-[11px] font-medium">({`จาก ${maxSeats} ท่าน`})</span>
-              </div>
-            )}
+            <div className="w-[220px] flex items-center space-x-1.5 text-left">
+              <User className={`w-4 h-4 shrink-0 ${isCapacityFull || remainingSeats <= 0 ? 'text-rose-400' : 'text-cyan-400'}`} />
+              {isCapacityFull || remainingSeats <= 0 ? (
+                <span className="text-rose-300 font-black">ที่นั่งเต็มแล้ว ({maxSeats} ท่าน)</span>
+              ) : (
+                <>
+                  <span className="text-slate-300 font-bold shrink-0">เหลืออีก</span>
+                  <span className="text-white font-black text-sm px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-200 shrink-0">
+                    {remainingSeats}
+                  </span>
+                  <span className="text-slate-300 font-bold truncate">ท่านสุดท้าย</span>
+                </>
+              )}
+            </div>
           </div>
         ) : (
           <div className="flex items-center justify-center space-x-1.5 font-mono text-xs font-black text-emerald-300 bg-slate-950/90 px-3 py-2 rounded-xl border border-emerald-500/40 shadow-inner min-h-[42px]">

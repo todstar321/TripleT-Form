@@ -1268,32 +1268,35 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
                           
                           <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row items-center gap-2 max-w-lg mx-auto shadow-inner">
                             {/* Preview Badge 1: Time */}
-                            <div className="flex-1 w-full flex items-center justify-center space-x-1.5 font-mono text-xs font-black text-amber-300 bg-slate-900/90 px-3 py-2 rounded-xl border border-amber-500/40 min-h-[42px]">
-                              <Clock className="w-3.5 h-3.5 text-amber-400 animate-spin-slow shrink-0" />
-                              <span className="text-slate-300 font-bold">เหลืออีก:</span>
-                              <span className="text-white font-extrabold">39 วัน</span>
-                              <span className="text-amber-200">13:39:23</span>
+                            <div className="flex-1 w-full flex items-center justify-center font-mono text-xs font-black text-amber-300 bg-slate-900/90 px-3 py-2 rounded-xl border border-amber-500/40 min-h-[42px]">
+                              <div className="w-[220px] flex items-center space-x-1.5 text-left">
+                                <Clock className="w-4 h-4 text-amber-400 animate-spin-slow shrink-0" />
+                                <span className="text-slate-300 font-bold shrink-0">เหลืออีก</span>
+                                <span className="text-white font-extrabold">39 วัน </span>
+                                <span className="text-amber-200">13:39:23</span>
+                              </div>
                             </div>
 
                             {/* Preview Badge 2: Quota */}
-                            <div className={`flex-1 w-full flex items-center justify-center space-x-1.5 font-mono text-xs font-black px-3 py-2 rounded-xl border min-h-[42px] ${
+                            <div className={`flex-1 w-full flex items-center justify-center font-mono text-xs font-black px-3 py-2 rounded-xl border min-h-[42px] ${
                               currentRemainingSeats <= 0
                                 ? 'bg-rose-950/70 border-rose-500/50 text-rose-300'
                                 : 'bg-slate-900/90 border-cyan-500/40 text-cyan-300'
                             }`}>
-                              <User className={`w-3.5 h-3.5 shrink-0 ${currentRemainingSeats <= 0 ? 'text-rose-400' : 'text-cyan-400'}`} />
-                              {currentRemainingSeats <= 0 ? (
-                                <span className="text-rose-300 font-black">ที่นั่งเต็มแล้ว ({currentMaxSeats} ท่าน)</span>
-                              ) : (
-                                <div className="flex items-center space-x-1">
-                                  <span className="text-slate-300 font-bold">เหลืออีก</span>
-                                  <span className="text-white font-black text-sm px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-200">
-                                    {currentRemainingSeats}
-                                  </span>
-                                  <span className="text-slate-300 font-bold">ท่านสุดท้าย</span>
-                                  <span className="text-cyan-300/80 text-[11px] font-medium">({`จาก ${currentMaxSeats} ท่าน`})</span>
-                                </div>
-                              )}
+                              <div className="w-[220px] flex items-center space-x-1.5 text-left">
+                                <User className={`w-4 h-4 shrink-0 ${currentRemainingSeats <= 0 ? 'text-rose-400' : 'text-cyan-400'}`} />
+                                {currentRemainingSeats <= 0 ? (
+                                  <span className="text-rose-300 font-black">ที่นั่งเต็มแล้ว ({currentMaxSeats} ท่าน)</span>
+                                ) : (
+                                  <>
+                                    <span className="text-slate-300 font-bold shrink-0">เหลืออีก</span>
+                                    <span className="text-white font-black text-sm px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-200 shrink-0">
+                                      {currentRemainingSeats}
+                                    </span>
+                                    <span className="text-slate-300 font-bold truncate">ท่านสุดท้าย</span>
+                                  </>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
