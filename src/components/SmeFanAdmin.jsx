@@ -110,6 +110,7 @@ export default function SmeFanAdmin({
   const [sbTestResult, setSbTestResult] = useState(null);
   const [cldTestResult, setCldTestResult] = useState(null);
   const [isTestingSb, setIsTestingSb] = useState(false);
+  const [isTestingCld, setIsTestingCld] = useState(false);
   const [copiedSql, setCopiedSql] = useState(false);
 
   // LINE Official Account Notification States
