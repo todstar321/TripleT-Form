@@ -85,7 +85,9 @@ export const initialSmeFanConfig = {
     enabled: true,
     botToken: "7577840608:AAH_m0LWjRk3916GSvBcTsp1YLdaJXFlIy0",
     chatId: "-5413358910",
-    notifyOnNewRegistration: true
+    notifyOnNewRegistration: true,
+    dailyReportEnabled: true,
+    dailyReportTime: "20:00"
   },
 
   // Role-Based Admin Users (Email + Phone Number as Password)

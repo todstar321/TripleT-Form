@@ -27,7 +27,11 @@ export default async function handler(req, res) {
       maxSeats,
       totalRegistered,
       ticketPhoto,
-      photo
+      photo,
+      caption,
+      text,
+      message,
+      filename
     } = req.body || {};
 
     const activeToken = (botToken || "").trim() || DEFAULT_BOT_TOKEN;
@@ -91,8 +95,10 @@ export default async function handler(req, res) {
         `⏰ <b>เวลาลงทะเบียน:</b> ${escapeHtml(ticket.timestamp || "-")}\n` +
         `━━━━━━━━━━\n` +
         `📊 <b>โควตาที่นั่ง:</b> <b>${remainingText}</b>`;
+    } else if (caption || text || message) {
+      textMessage = caption || text || message;
     } else {
-      return res.status(400).json({ error: "Missing ticket data" });
+      return res.status(400).json({ error: "Missing ticket data or message content" });
     }
 
     // Telegram Bot API SendMessage / SendPhoto
@@ -113,7 +119,7 @@ export default async function handler(req, res) {
           const base64Data = rawPhoto.replace(/^data:image\/\w+;base64,/, "");
           const buffer = Buffer.from(base64Data, "base64");
           const blob = new Blob([buffer], { type: "image/png" });
-          formData.append("photo", blob, `ticket_${ticket?.ticketNo || "card"}.png`);
+          formData.append("photo", blob, filename || `doc_${ticket?.ticketNo || "image"}.png`);
         }
 
         formData.append("caption", textMessage);

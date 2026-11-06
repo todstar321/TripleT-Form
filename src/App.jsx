@@ -17,6 +17,7 @@ import BackgroundMusicPlayer from './components/BackgroundMusicPlayer';
 import { initialSmeFanConfig, initialRegistrations } from './data/smeFanData';
 import { initialFormsList, FORMS_STORAGE_KEY } from './data/formsData';
 import { defaultFormData } from './data/defaultForm';
+import EventA4PrintModal from './components/EventA4PrintModal';
 import { submitSmeFanTicketToSheets } from './utils/googleSheets';
 import { 
   getSupabase,
@@ -26,6 +27,7 @@ import {
   wipeRegistrationsFromCloud,
   fetchEventConfigFromCloud,
   saveEventConfigToCloud,
+  fetchSponsorsFromCloud,
   subscribeToRegistrations,
   subscribeToEventConfig
 } from './utils/supabaseClient';
@@ -240,6 +242,16 @@ export default function App() {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [verifiedTicket, setVerifiedTicket] = useState(null);
+  const [directA4Print, setDirectA4Print] = useState(() => {
+    return typeof window !== 'undefined' && window.location.search.includes('view=a4_print');
+  });
+  const [appSponsors, setAppSponsors] = useState([]);
+
+  useEffect(() => {
+    fetchSponsorsFromCloud().then(data => {
+      if (Array.isArray(data) && data.length > 0) setAppSponsors(data);
+    }).catch(() => {});
+  }, []);
 
   // Auto-sync currentTab to URL Hash and localStorage
   useEffect(() => {
@@ -1196,6 +1208,17 @@ export default function App() {
 
       {/* Ambient Background Music Player (Fixed Bottom-Right Toggle) */}
       <BackgroundMusicPlayer />
+
+      {/* Direct A4 Print View Trigger (?view=a4_print) */}
+      {directA4Print && (
+        <EventA4PrintModal
+          isOpen={true}
+          onClose={() => setDirectA4Print(false)}
+          registrations={registrations}
+          sponsors={appSponsors}
+          eventConfig={eventConfig}
+        />
+      )}
 
     </div>
   );

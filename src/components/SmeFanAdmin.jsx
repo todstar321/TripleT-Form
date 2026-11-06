@@ -57,8 +57,9 @@ import StoragePurgeModal from './StoragePurgeModal';
 import ResetRegistrationsModal from './ResetRegistrationsModal';
 import ClearSecurityModal from './ClearSecurityModal';
 import AttendeeInspectionModal from './AttendeeInspectionModal';
+import EventA4PrintModal from './EventA4PrintModal';
 import { themePresetsList } from '../data/smeFanData';
-import { testSupabaseConnection, saveSupabaseConfig, getSupabaseConfig, isSupabaseConfigured, upsertRegistrationToCloud, saveEventConfigToCloud, formatThaiDisplayDateTime } from '../utils/supabaseClient';
+import { testSupabaseConnection, saveSupabaseConfig, getSupabaseConfig, isSupabaseConfigured, upsertRegistrationToCloud, saveEventConfigToCloud, fetchSponsorsFromCloud, formatThaiDisplayDateTime } from '../utils/supabaseClient';
 import { testCloudinaryConnection, saveCloudinaryConfig, getCloudinaryConfig, isCloudinaryConfigured } from '../utils/cloudinary';
 import { getScheduleStatus, formatThaiScheduleDateTime } from '../utils/scheduleHelper';
 import { generateTicketCardImage } from '../utils/ticketCardGenerator';
@@ -125,6 +126,9 @@ export default function SmeFanAdmin({
   const [isTestingTelegram, setIsTestingTelegram] = useState(false);
   const [telegramTestResult, setTelegramTestResult] = useState(null);
   const [showTelegramToken, setShowTelegramToken] = useState(false);
+  const [isAdminA4ModalOpen, setIsAdminA4ModalOpen] = useState(false);
+  const [adminA4Sponsors, setAdminA4Sponsors] = useState([]);
+  const [adminA4AutoSend, setAdminA4AutoSend] = useState(false);
 
   // Image cropper state
   const [cropperOpen, setCropperOpen] = useState(false);
@@ -627,6 +631,17 @@ export default function SmeFanAdmin({
     } finally {
       setIsTestingTelegram(false);
     }
+  };
+
+  const handleTriggerAdminDailyA4Report = async () => {
+    try {
+      const sp = await fetchSponsorsFromCloud();
+      setAdminA4Sponsors(Array.isArray(sp) ? sp : []);
+    } catch (e) {
+      console.warn("Failed to fetch sponsors for A4 telegram report", e);
+    }
+    setAdminA4AutoSend(true);
+    setIsAdminA4ModalOpen(true);
   };
 
   const handleCopySqlSchema = () => {
@@ -2675,6 +2690,86 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
                     </div>
                   </div>
 
+                  {/* Daily A4 Report Automation & Manual Trigger Section */}
+                  <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-50/70 via-sky-50/50 to-white border border-indigo-100 shadow-sm space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center space-x-2">
+                          <Clock className="w-4 h-4 text-indigo-600" />
+                          <h4 className="text-xs font-bold text-slate-900">
+                            ⏰ ระบบส่งรายงาน A4 สรุปยอดอัตโนมัติประจำวัน (เวลา 20.00 น.)
+                          </h4>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                            ส่งแยก 4 รูปต่อเนื่อง
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500">
+                          ส่งสรุปข้อมูลงาน 4 หน้า A4 (รวมทุกสังกัด, สงสพัท, โรตารี่, ผู้สนับสนุน) เข้ากลุ่ม Telegram อัตโนมัติทุกวันเวลา 20.00 น.
+                        </p>
+                      </div>
+
+                      {/* Manual Pause / Stop Toggle Switch */}
+                      <label className="relative inline-flex items-center cursor-pointer shrink-0 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm hover:border-indigo-300 transition-all">
+                        <input
+                          type="checkbox"
+                          checked={tgCfg.dailyReportEnabled ?? true}
+                          onChange={(e) => handleUpdateTelegramConfig('dailyReportEnabled', e.target.checked)}
+                          className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                        />
+                        <span className={`ml-2 text-xs font-bold ${
+                          (tgCfg.dailyReportEnabled ?? true) ? 'text-emerald-700' : 'text-rose-600'
+                        }`}>
+                          {(tgCfg.dailyReportEnabled ?? true) ? '🟢 เปิดส่งเวลา 20.00 น.' : '🔴 ปิดส่ง (หยุดส่งชั่วคราว)'}
+                        </span>
+                      </label>
+                    </div>
+
+                    {/* 3 Stop Conditions Reminder */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-[11px]">
+                      <div className="p-2.5 rounded-xl bg-white/80 border border-slate-200/80 space-y-1">
+                        <div className="font-bold text-slate-700 flex items-center space-x-1.5">
+                          <span>⏰ เงื่อนไข 1: กำหนดการปิด</span>
+                        </div>
+                        <p className="text-slate-500 text-[10px] leading-relaxed">
+                          หยุดส่งอัตโนมัติทันทีเมื่อถึงวัน-เวลาปิดรับลงทะเบียนตามที่ตั้งไว้ในระบบ
+                        </p>
+                      </div>
+
+                      <div className="p-2.5 rounded-xl bg-white/80 border border-slate-200/80 space-y-1">
+                        <div className="font-bold text-slate-700 flex items-center space-x-1.5">
+                          <span>👥 เงื่อนไข 2: ยอดเต็มความจุ</span>
+                        </div>
+                        <p className="text-slate-500 text-[10px] leading-relaxed">
+                          หยุดส่งอัตโนมัติทันทีหากมียอดลงทะเบียนครบตามจำนวนที่นั่งกำหนด (เช่น 70 ที่นั่ง)
+                        </p>
+                      </div>
+
+                      <div className="p-2.5 rounded-xl bg-white/80 border border-slate-200/80 space-y-1">
+                        <div className="font-bold text-slate-700 flex items-center space-x-1.5">
+                          <span>🛑 เงื่อนไข 3: สวิตช์แอดมิน</span>
+                        </div>
+                        <p className="text-slate-500 text-[10px] leading-relaxed">
+                          หากแอดมินต้องการหยุดส่งก่อนแบบฟอร์มปิด สามารถสลับสวิตช์ด้านบนเป็น "ปิดส่ง" ได้ตลอดเวลา
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Instant Trigger Button */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-indigo-100/60">
+                      <button
+                        type="button"
+                        onClick={handleTriggerAdminDailyA4Report}
+                        className="px-4 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-500 hover:to-sky-500 text-white shadow-sm flex items-center space-x-2 transition-all hover:shadow"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>📢 ส่งรายงาน A4 (4 แผ่น) เข้า Telegram ทันที</span>
+                      </button>
+                      <span className="text-[11px] text-indigo-700/80 font-medium">
+                        ✨ เรนเดอร์ 4 แผ่นส่งเข้าห้องแชทต่อเนื่องทันที (ไม่บันทึกภาพลงเซิร์ฟเวอร์)
+                      </span>
+                    </div>
+                  </div>
+
                   {/* Actions & Test Result */}
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
                     <div className="flex flex-wrap items-center gap-2">
@@ -3607,6 +3702,21 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
         }}
         eventConfig={eventConfig}
       />
+
+      {/* Event A4 Print Modal for Telegram Share / Admin Preview */}
+      {isAdminA4ModalOpen && (
+        <EventA4PrintModal
+          isOpen={isAdminA4ModalOpen}
+          onClose={() => {
+            setIsAdminA4ModalOpen(false);
+            setAdminA4AutoSend(false);
+          }}
+          registrations={registrations}
+          sponsors={adminA4Sponsors}
+          eventConfig={eventConfig}
+          autoSendTelegram={adminA4AutoSend}
+        />
+      )}
 
     </div>
   );

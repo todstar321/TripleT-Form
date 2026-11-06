@@ -16,7 +16,8 @@ import {
   RefreshCw,
   ExternalLink,
   Layers,
-  ArrowDown
+  ArrowDown,
+  Send
 } from "lucide-react";
 import html2canvas from "html2canvas";
 
@@ -49,7 +50,8 @@ export default function EventA4PrintModal({
   onClose,
   registrations = [],
   sponsors = [],
-  eventConfig = {}
+  eventConfig = {},
+  autoSendTelegram = false
 }) {
   if (!isOpen) return null;
 
@@ -88,6 +90,16 @@ export default function EventA4PrintModal({
       window.removeEventListener("resize", updateWidth);
     };
   }, [isOpen]);
+
+  // Auto-trigger Telegram send if requested by caller
+  useEffect(() => {
+    if (isOpen && autoSendTelegram) {
+      const timer = setTimeout(() => {
+        handleShareToTelegramSeparated();
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, autoSendTelegram]);
 
   // Responsive scale factor: snug fit to screen on mobile, 1.0 on large screens
   const scale = useMemo(() => {
@@ -464,6 +476,99 @@ export default function EventA4PrintModal({
     }
   };
 
+  // Helper to escape HTML tags for Telegram parse_mode: 'HTML'
+  const escapeHtml = (str) => {
+    if (!str) return "";
+    return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  };
+
+  // 3.1 Share All 4 Pages to Telegram Sequentially (ส่งแยก 4 รูปต่อเนื่อง 1 -> 4)
+  const handleShareToTelegramSeparated = async () => {
+    if (isProcessing) return;
+    setIsProcessing(true);
+
+    const tgCfg = eventConfig?.telegramConfig || {};
+    const botToken = (tgCfg.botToken || "").trim();
+    const chatId = (tgCfg.chatId || "").trim();
+
+    const maxSeats = Number(eventConfig?.registrationSchedule?.maxSeats || eventConfig?.maxSeats || 70);
+    const totalRegs = sortedRegistrations.length;
+    const remainingSeats = Math.max(0, maxSeats - totalRegs);
+
+    const cashSponsorsTotal = sponsors
+      .filter((s) => s.sponsorType === "cash")
+      .reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
+    const itemSponsorsCount = sponsors.filter((s) => s.sponsorType === "item").length;
+
+    try {
+      for (let i = 0; i < a4Pages.length; i++) {
+        const page = a4Pages[i];
+        setProgressText(`กำลังเตรียมรูป A4 แผ่นที่ ${i + 1}/${a4Pages.length} ส่งเข้า Telegram...`);
+        const el = document.getElementById(`a4-page-render-${page.pageNumber}`);
+        if (!el) continue;
+
+        const canvas = await renderA4PageCanvas(el, 1.8);
+        const dataUrl = canvas.toDataURL("image/png");
+        releaseCanvas(canvas);
+
+        let specificDetail = "";
+        if (page.categoryId === 1) {
+          specificDetail = `👥 <b>ยอดรวมผู้ลงทะเบียน:</b> ${totalRegs} ท่าน (เหลืออีก ${remainingSeats} ที่นั่ง)`;
+        } else if (page.categoryId === 2) {
+          specificDetail = `⛳ <b>สมาชิกและแขกผู้มีเกียรติ สโมสรสงสพัท:</b> ${page.items.length} ท่าน`;
+        } else if (page.categoryId === 3) {
+          specificDetail = `⛳ <b>สมาชิกและแขกผู้มีเกียรติ สโมสรโรตารี่:</b> ${page.items.length} ท่าน`;
+        } else if (page.categoryId === 4) {
+          specificDetail = `🎁 <b>ผู้สนับสนุนกิจกรรม:</b> ${sponsors.length} ราย (เงินสด ${cashSponsorsTotal.toLocaleString()} บาท • สิ่งของ ${itemSponsorsCount} รายการ)`;
+        } else {
+          specificDetail = `📋 <b>จำนวนรายการ:</b> ${page.items.length} รายการ`;
+        }
+
+        const pageCaption = 
+          `📄 <b>[แผ่นที่ ${page.pageNumber}/${a4Pages.length}] ${escapeHtml(page.categoryTitle)}</b>\n` +
+          `━━━━━━━━━━\n` +
+          `🎉 <b>งานสังสรรค์ปีใหม่ SME FAN 2026</b>\n` +
+          `⏰ ${escapeHtml(printTimestamp.dateStr)} ${escapeHtml(printTimestamp.timeStr)}\n` +
+          `${specificDetail}\n` +
+          `━━━━━━━━━━\n` +
+          `🌐 <b>ดูข้อมูลสด:</b> https://triple-t-form.vercel.app`;
+
+        setProgressText(`กำลังส่งแผ่นที่ ${i + 1}/${a4Pages.length} เข้ากลุ่ม Telegram...`);
+
+        const resp = await fetch("/api/telegram-notify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            photo: dataUrl,
+            caption: pageCaption,
+            botToken: botToken || undefined,
+            chatId: chatId || undefined,
+            filename: `a4_page_${page.pageNumber}.png`
+          })
+        });
+
+        const resData = await resp.json().catch(() => null);
+        if (!resp.ok || !resData?.success) {
+          console.warn(`Error sending page ${page.pageNumber}:`, resData);
+        }
+
+        if (i < a4Pages.length - 1) {
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+      }
+
+      setProgressText("ส่งรายงานครบทั้ง 4 แผ่นเข้า Telegram สำเร็จเรียบร้อย!");
+      await new Promise((r) => setTimeout(r, 800));
+      alert("🎉 ส่งรูปเอกสาร A4 ครบทั้ง 4 แผ่นเข้ากลุ่ม Telegram สำเร็จเรียบร้อยแล้ว!");
+    } catch (err) {
+      console.error("Share to Telegram error:", err);
+      alert("เกิดข้อผิดพลาดในการส่งเข้า Telegram: " + err.message);
+    } finally {
+      setIsProcessing(false);
+      setProgressText("");
+    }
+  };
+
   // 4. Download Single Page Image
   const handleDownloadSinglePage = async (page) => {
     if (isProcessing) return;
@@ -700,6 +805,22 @@ export default function EventA4PrintModal({
                 <Share2 className="w-3.5 h-3.5" />
               )}
               <span>แชร์เข้า LINE</span>
+            </button>
+
+            {/* Share to Telegram (ส่งแยก 4 รูปต่อเนื่อง) */}
+            <button
+              type="button"
+              onClick={handleShareToTelegramSeparated}
+              disabled={isProcessing}
+              className="py-1.5 px-2.5 sm:px-3 rounded-xl bg-sky-500 hover:bg-sky-400 text-white font-bold text-xs flex items-center space-x-1 sm:space-x-1.5 shadow-md shadow-sky-950 transition-all hover:scale-105 active:scale-95 cursor-pointer disabled:opacity-50"
+              title="ส่งรายงาน A4 ทั้ง 4 รูปเข้า Telegram (เด้งแยก 4 รูป)"
+            >
+              {isProcessing ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Send className="w-3.5 h-3.5" />
+              )}
+              <span>แชร์เข้า Telegram</span>
             </button>
 
             {/* Save Merged Long Image */}
@@ -1442,6 +1563,36 @@ export default function EventA4PrintModal({
                 </div>
                 <div className="mt-3 flex items-center justify-between text-xs font-bold text-slate-300 pt-2 border-t border-white/10">
                   <span>กดแชร์แยก {a4Pages.length} รูป</span>
+                  <span>➔</span>
+                </div>
+              </div>
+
+              {/* Option 3: Send directly to Telegram Group */}
+              <div
+                onClick={() => {
+                  setShowShareModal(false);
+                  handleShareToTelegramSeparated();
+                }}
+                className="group p-3.5 rounded-2xl bg-gradient-to-r from-sky-950/70 via-slate-800 to-slate-800/90 border-2 border-sky-500/60 hover:border-sky-400 transition-all cursor-pointer hover:scale-[1.02] shadow-lg"
+              >
+                <div className="space-y-1.5">
+                  <div className="flex items-center space-x-1.5">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-sky-500 text-slate-950 uppercase tracking-wider">
+                      ✈️ TELEGRAM
+                    </span>
+                  </div>
+                  <h4 className="font-bold text-sm text-white group-hover:text-sky-300 transition-colors flex items-center space-x-1.5">
+                    <span>แชร์ส่งเข้ากลุ่ม Telegram (ส่งแยก {a4Pages.length} รูปต่อเนื่อง)</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                    ส่งรูปเอกสาร A4 ทั้ง {a4Pages.length} แผ่นเรียงลำดับ 01 ถึง 0{a4Pages.length} ตรงเข้ากลุ่ม <strong>"กิจกรรมปีใหม่ SME FAN"</strong> ทันที พร้อมแคปชันสรุปยอด Real-time
+                  </p>
+                </div>
+                <div className="mt-3 flex items-center justify-between text-xs font-bold text-sky-400 pt-2 border-t border-sky-500/20">
+                  <span className="flex items-center space-x-1">
+                    <Send className="w-3.5 h-3.5" />
+                    <span>กดส่งเข้ากลุ่ม Telegram ทันที</span>
+                  </span>
                   <span>➔</span>
                 </div>
               </div>
