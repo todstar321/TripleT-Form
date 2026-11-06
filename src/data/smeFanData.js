@@ -74,17 +74,17 @@ export const initialSmeFanConfig = {
 
   // LINE Official Account (Messaging API) Configuration
   lineConfig: {
-    enabled: true,
+    enabled: false,
     channelAccessToken: "XGJececS24KISZpzkTHpnTJo0f10vXRtNdOhtz3i4NMXqTmxjLk2cvGFrlsZ39KycLX4uqea82GZN1Y1wVx9bZRbQgca3shrIwViQH3pRJCVM5qyTfdTQEXGh8d8X0LVWrggMhkoIlVij0YDDLZysgdB04t89/1O/w1cDnyilFU=",
     groupId: "Cd055ef2a26f73a3923db4c332a664fc7",
-    notifyOnNewRegistration: true
+    notifyOnNewRegistration: false
   },
 
   // Telegram Bot Notification Configuration
   telegramConfig: {
     enabled: true,
-    botToken: "",
-    chatId: "",
+    botToken: "7577840608:AAH_m0LWjRk3916GSvBcTsp1YLdaJXFlIy0",
+    chatId: "-5413358910",
     notifyOnNewRegistration: true
   },
 

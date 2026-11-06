@@ -929,15 +929,15 @@ export default function SmeFanRegistration({
         const tgToken = (tgConfig.botToken || "").trim();
         const tgChatId = (tgConfig.chatId || "").trim();
 
-        if (!isTgDisabled && tgToken && tgChatId) {
+        if (!isTgDisabled) {
           const remainingSeatsCount = enableCapacityLimit ? Math.max(0, maxSeats - (currentRegs.length + 1)) : null;
           fetch('/api/telegram-notify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               ticket: newTicket,
-              botToken: tgToken,
-              chatId: tgChatId,
+              botToken: tgToken || undefined,
+              chatId: tgChatId || undefined,
               remainingSeats: remainingSeatsCount,
               maxSeats: maxSeats,
               totalRegistered: currentRegs.length + 1

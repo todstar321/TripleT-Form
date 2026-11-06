@@ -1,8 +1,8 @@
 // Vercel Serverless Function: Push Notification to Telegram Group / Channel
 // Sends beautifully formatted HTML message to Telegram using Telegram Bot API
 
-const DEFAULT_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
-const DEFAULT_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "";
+const DEFAULT_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "7577840608:AAH_m0LWjRk3916GSvBcTsp1YLdaJXFlIy0";
+const DEFAULT_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "-5413358910";
 
 export default async function handler(req, res) {
   if (req.method === "GET") {
