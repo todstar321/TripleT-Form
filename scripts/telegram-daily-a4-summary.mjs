@@ -50,6 +50,7 @@ function formatThaiTimestamp(d = getBangkokDate()) {
 
 function findChromeExecutable() {
   const possiblePaths = [
+    process.env.CHROME_PATH,
     process.env.PUPPETEER_EXECUTABLE_PATH,
     process.env.CHROME_BIN,
     '/usr/bin/google-chrome',

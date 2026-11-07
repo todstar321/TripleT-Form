@@ -2,8 +2,9 @@ name: Daily Telegram A4 Summary (รายงานสรุปยอด A4 ป�
 
 on:
   schedule:
-    # 13:00 UTC = 20:00 Bangkok Time (UTC+7) every day
-    - cron: '0 13 * * *'
+    # 13:02 UTC = 20:02 Bangkok Time (UTC+7)
+    # Using minute 2 avoids GitHub Actions :00 top-of-the-hour queue delay spikes
+    - cron: '2 13 * * *'
   workflow_dispatch:
     inputs:
       force_run:
@@ -27,14 +28,20 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      - name: Install Dependencies
-        run: |
-          npm ci || npm install
+      - name: Setup Google Chrome
+        id: setup-chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: 'stable'
 
       - name: Verify Google Chrome on Runner
         run: |
-          which google-chrome || true
-          google-chrome --version || true
+          echo "Chrome Path: ${{ steps.setup-chrome.outputs.chrome-path }}"
+          "${{ steps.setup-chrome.outputs.chrome-path }}" --version || true
+
+      - name: Install Dependencies
+        run: |
+          npm ci || npm install
 
       - name: Run Daily A4 Telegram Reporter
         env:
@@ -43,7 +50,8 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || '7577840608:AAH_m0LWjRk3916GSvBcTsp1YLdaJXFlIy0' }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID || '-5413358910' }}
           APP_URL: 'https://triple-t-form.vercel.app'
-          PUPPETEER_EXECUTABLE_PATH: '/usr/bin/google-chrome'
+          PUPPETEER_EXECUTABLE_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
+          CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
           FORCE_RUN: ${{ github.event.inputs.force_run || 'false' }}
         run: |
           node scripts/telegram-daily-a4-summary.mjs
