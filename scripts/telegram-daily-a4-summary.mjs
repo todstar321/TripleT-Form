@@ -259,6 +259,8 @@ async function main() {
     if (!el) {
       throw new Error(`Could not find DOM element #a4-page-render-${i}`);
     }
+    await el.scrollIntoView();
+    await new Promise((r) => setTimeout(r, 300));
     const buf = await el.screenshot({ type: 'png', omitBackground: false });
     pageBuffers.push({ pageNum: i, buffer: buf });
     console.log(`📸 Page ${i}/4 captured in RAM (${buf.length} bytes)`);

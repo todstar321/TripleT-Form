@@ -973,6 +973,22 @@ export default function App() {
   // Active Form Object for Viewer
   const currentViewingForm = formsList.find(f => f.id === activeFormId) || formsList[1];
 
+  // Direct A4 Print View (?view=a4_print): Render ONLY the A4 document view!
+  if (directA4Print) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+        <EventA4PrintModal
+          isOpen={true}
+          onClose={() => setDirectA4Print(false)}
+          registrations={registrations}
+          sponsors={appSponsors}
+          eventConfig={eventConfig}
+          isDirectPrintView={true}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
       
@@ -1208,17 +1224,6 @@ export default function App() {
 
       {/* Ambient Background Music Player (Fixed Bottom-Right Toggle) */}
       <BackgroundMusicPlayer />
-
-      {/* Direct A4 Print View Trigger (?view=a4_print) */}
-      {directA4Print && (
-        <EventA4PrintModal
-          isOpen={true}
-          onClose={() => setDirectA4Print(false)}
-          registrations={registrations}
-          sponsors={appSponsors}
-          eventConfig={eventConfig}
-        />
-      )}
 
     </div>
   );

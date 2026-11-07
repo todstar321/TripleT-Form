@@ -51,9 +51,10 @@ export default function EventA4PrintModal({
   registrations = [],
   sponsors = [],
   eventConfig = {},
-  autoSendTelegram = false
+  autoSendTelegram = false,
+  isDirectPrintView = false
 }) {
-  if (!isOpen) return null;
+  if (!isOpen && !isDirectPrintView) return null;
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [progressText, setProgressText] = useState("");
@@ -709,8 +710,256 @@ export default function EventA4PrintModal({
     window.print();
   };
 
+  const renderPageBody = (page) => {
+    const headerBgColor =
+      page.headerColorType === "pink"
+        ? "#ec4899"
+        : page.headerColorType === "blue"
+        ? "#2563eb"
+        : "#dc2626";
+
+    return (
+      <>
+        {/* Top Sheet Header (Clean without duplicate top-left badge) */}
+        <div>
+          <div className="flex items-start justify-between pb-2.5 border-b-2 border-slate-900">
+            <div className="space-y-0.5">
+              <h1 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                งานสังสรรค์ปีใหม่ SME FAN 2026
+              </h1>
+              <h2 className="text-xs sm:text-sm font-extrabold text-slate-800">
+                {page.categoryTitle}
+              </h2>
+              <p className="text-[10px] text-slate-500 font-medium">
+                {page.categorySubtitle}
+              </p>
+            </div>
+
+            <div className="text-right space-y-0.5 shrink-0">
+              <div className="px-2 py-0.5 rounded bg-slate-100 border border-slate-300 font-mono text-[11px] font-bold text-slate-800">
+                {page.pageLabel}
+              </div>
+              <div className="text-[10px] font-mono text-slate-600 leading-tight">
+                <div>{printTimestamp.dateStr}</div>
+                <div className="font-bold text-slate-800">{printTimestamp.timeStr}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Status bar */}
+          <div className="py-1.5 px-0.5 flex items-center justify-between text-[11px] text-slate-600 border-b border-slate-200 mb-2">
+            <span>
+              หมวดหมู่: <strong className="text-slate-900">{page.categoryTitle}</strong> (ทั้งหมด {page.totalItemsCount} รายการ)
+            </span>
+            <span className="font-mono text-[10px]">
+              แสดงรายการที่ {page.startIndex} - {page.startIndex + page.items.length - 1}
+            </span>
+          </div>
+
+          {/* TABLE: REGISTRATION DATA */}
+          {page.dataType === "registration" && (
+            <table className="w-full text-[10.5px] border-collapse">
+              <thead>
+                <tr
+                  className="text-white text-left font-bold"
+                  style={{ backgroundColor: headerBgColor }}
+                >
+                  <th className="py-1.5 px-1.5 text-center w-10 border border-slate-300">ลำดับ</th>
+                  <th className="py-1.5 px-1.5 text-center w-16 border border-slate-300">เลขที่บัตร</th>
+                  <th className="py-1.5 px-2.5 border border-slate-300">ชื่อ - นามสกุล (ชื่อเล่น)</th>
+                  <th className="py-1.5 px-1.5 text-center w-24 border border-slate-300">เบอร์โทรศัพท์</th>
+                  <th className="py-1.5 px-1.5 text-center w-20 border border-slate-300">ประเภท / สังกัด</th>
+                  <th className="py-1.5 px-1.5 text-center w-28 border border-slate-300 whitespace-nowrap">สถานะ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {page.items.map((row, rIdx) => {
+                  const rowNum = page.startIndex + rIdx;
+                  const isRotary = (row.club || "").includes("โรตารี่");
+
+                  return (
+                    <tr
+                      key={row.ticketNo || rIdx}
+                      className={`border-b border-slate-300 ${
+                        rIdx % 2 === 0 ? "bg-white" : "bg-slate-50"
+                      } hover:bg-amber-50/40`}
+                    >
+                      <td className="py-1 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200">
+                        {rowNum}
+                      </td>
+                      <td className="py-1 px-1.5 text-center font-bold font-mono text-slate-800 border-r border-slate-200">
+                        {row.ticketNo}
+                      </td>
+                      <td className="py-1 px-2.5 border-r border-slate-200">
+                        <span className="font-bold text-slate-900 block leading-tight">
+                          {row.name}
+                          {row.nickname && (
+                            <span className="font-semibold text-slate-600 ml-1">
+                              ({row.nickname})
+                            </span>
+                          )}
+                        </span>
+                        {row.email && (
+                          <span className="text-[9.5px] text-slate-500 block truncate leading-tight">
+                            {row.email}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-1 px-1.5 text-center font-mono text-slate-700 text-[10px] border-r border-slate-200">
+                        {row.phone || "-"}
+                      </td>
+                      <td className="py-1 px-1.5 text-center border-r border-slate-200">
+                        <span
+                          className={`inline-block px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
+                            isRotary
+                              ? "bg-rose-100 text-rose-700 border border-rose-300"
+                              : "bg-blue-100 text-blue-700 border border-blue-300"
+                          }`}
+                        >
+                          {row.club || "สงสพัท"}
+                        </span>
+                      </td>
+                      <td className="py-1 px-1.5 text-center whitespace-nowrap">
+                        <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          ✓ ลงทะเบียนแล้ว
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+
+          {/* TABLE: SPONSORS DATA */}
+          {page.dataType === "sponsor" && (
+            <table className="w-full text-[10.5px] border-collapse">
+              <thead>
+                <tr
+                  className="text-white text-left font-bold"
+                  style={{ backgroundColor: headerBgColor }}
+                >
+                  <th className="py-1.5 px-1.5 text-center w-10 border border-slate-300">ลำดับ</th>
+                  <th className="py-1.5 px-2.5 border border-slate-300">ผู้สนับสนุน / องค์กร</th>
+                  <th className="py-1.5 px-2.5 border border-slate-300">รายการสนับสนุน</th>
+                  <th className="py-1.5 px-1.5 text-center w-28 border border-slate-300">หมวดหมู่</th>
+                </tr>
+              </thead>
+              <tbody>
+                {page.items.map((row, rIdx) => {
+                  const rowNum = page.startIndex + rIdx;
+                  const isCash = row.sponsorType === "cash";
+
+                  return (
+                    <tr
+                      key={row.id || rIdx}
+                      className={`border-b border-slate-300 ${
+                        rIdx % 2 === 0 ? "bg-white" : "bg-slate-50"
+                      } hover:bg-amber-50/40`}
+                    >
+                      <td className="py-1.5 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200">
+                        {rowNum}
+                      </td>
+                      <td className="py-1.5 px-2.5 border-r border-slate-200">
+                        <span className="font-bold text-slate-900 block leading-tight">
+                          {row.name}
+                        </span>
+                        {row.organization && (
+                          <span className="text-[9.5px] text-slate-600 block leading-tight">
+                            {row.organization}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-1.5 px-2.5 border-r border-slate-200">
+                        {isCash ? (
+                          <span className="font-bold text-emerald-700 font-mono text-xs">
+                            ฿{Number(row.amount || 0).toLocaleString()} บาท
+                          </span>
+                        ) : (
+                          <div>
+                            <span className="font-bold text-purple-900 block leading-tight">
+                              {row.itemName}
+                            </span>
+                            {row.itemQuantity && (
+                              <span className="text-[9.5px] text-slate-600 block leading-tight">
+                                จำนวน: {row.itemQuantity}
+                              </span>
+                            )}
+                            {row.itemNote && (
+                              <span className="text-[9.5px] text-slate-500 italic block leading-tight">
+                                {row.itemNote}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-1.5 px-1.5 text-center text-[9.5px] font-medium text-slate-600 whitespace-nowrap">
+                        {row.source || "สนับสนุนกิจกรรม"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Bottom Sheet Footer */}
+        <div className="pt-3 mt-4 border-t border-slate-300 flex items-center justify-between text-[11px] text-slate-500">
+          <div className="space-y-0.5">
+            <span className="font-semibold text-slate-700 block">
+              สรุปแผ่นที่ {page.pageNumber}: {page.categoryTitle} ({page.pageLabel})
+            </span>
+            <span className="text-[9.5px] text-slate-500 block">
+              ระบบลงทะเบียนออนไลน์ Triple T Form • จัดการข้อมูลอัตโนมัติ
+            </span>
+          </div>
+
+          <div className="text-right">
+            <span className="font-mono text-xs font-bold text-slate-800">
+              แผ่นที่ {page.pageNumber} จาก {a4Pages.length}
+            </span>
+            <span className="text-[9.5px] text-slate-400 block font-mono">
+              {printTimestamp.timeStr}
+            </span>
+          </div>
+        </div>
+      </>
+    );
+  };
+
+  if (isDirectPrintView) {
+    return (
+      <div id="direct-a4-print-root" className="min-h-screen bg-slate-900 py-8 px-4 flex flex-col items-center">
+        <style>{`
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #0f172a !important;
+          }
+        `}</style>
+        {a4Pages.map((page) => (
+          <div key={page.pageNumber} className="mb-8 shadow-2xl rounded">
+            <div
+              id={`a4-page-render-${page.pageNumber}`}
+              className="bg-white text-slate-900 p-6 sm:p-8 flex flex-col justify-between"
+              style={{
+                width: "794px",
+                height: "1123px",
+                minHeight: "1123px",
+                boxSizing: "border-box"
+              }}
+            >
+              {renderPageBody(page)}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center p-1 sm:p-4 bg-slate-950/95 backdrop-blur-xl animate-fadeIn overflow-y-auto">
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-1 sm:p-4 bg-slate-950/95 backdrop-blur-xl animate-fadeIn overflow-y-auto">
       {/* ========================================================= */}
       {/* PRINT CSS STYLING: Exact A4 Page-break                    */}
       {/* ========================================================= */}
@@ -962,239 +1211,12 @@ export default function EventA4PrintModal({
                         boxSizing: "border-box"
                       }}
                     >
-                      {/* Top Sheet Header (Clean without duplicate top-left badge) */}
-                      <div>
-                        <div className="flex items-start justify-between pb-2.5 border-b-2 border-slate-900">
-                          <div className="space-y-0.5">
-                            <h1 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
-                              งานสังสรรค์ปีใหม่ SME FAN 2026
-                            </h1>
-                            <h2 className="text-xs sm:text-sm font-extrabold text-slate-800">
-                              {page.categoryTitle}
-                            </h2>
-                            <p className="text-[10px] text-slate-500 font-medium">
-                              {page.categorySubtitle}
-                            </p>
-                          </div>
-
-                        <div className="text-right space-y-0.5 shrink-0">
-                          <div className="px-2 py-0.5 rounded bg-slate-100 border border-slate-300 font-mono text-[11px] font-bold text-slate-800">
-                            {page.pageLabel}
-                          </div>
-                          <div className="text-[10px] font-mono text-slate-600 leading-tight">
-                            <div>{printTimestamp.dateStr}</div>
-                            <div className="font-bold text-slate-800">{printTimestamp.timeStr}</div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Status bar */}
-                      <div className="py-1.5 px-0.5 flex items-center justify-between text-[11px] text-slate-600 border-b border-slate-200 mb-2">
-                        <span>
-                          หมวดหมู่: <strong className="text-slate-900">{page.categoryTitle}</strong> (ทั้งหมด {page.totalItemsCount} รายการ)
-                        </span>
-                        <span className="font-mono text-[10px]">
-                          แสดงรายการที่ {page.startIndex} - {page.startIndex + page.items.length - 1}
-                        </span>
-                      </div>
-
-                      {/* ======================================================= */}
-                      {/* TABLE: REGISTRATION DATA (หมวด 1, 2, 3) - SLIM & COMPACT */}
-                      {/* ======================================================= */}
-                      {page.dataType === "registration" && (
-                        <table className="w-full text-[10.5px] border-collapse">
-                          <thead>
-                            <tr
-                              className="text-white text-left font-bold"
-                              style={{ backgroundColor: headerBgColor }}
-                            >
-                              <th className="py-1.5 px-1.5 text-center w-10 border border-slate-300">ลำดับ</th>
-                              <th className="py-1.5 px-1.5 text-center w-16 border border-slate-300">เลขที่บัตร</th>
-                              <th className="py-1.5 px-2.5 border border-slate-300">ชื่อ - นามสกุล (ชื่อเล่น)</th>
-                              <th className="py-1.5 px-1.5 text-center w-24 border border-slate-300">เบอร์โทรศัพท์</th>
-                              <th className="py-1.5 px-1.5 text-center w-20 border border-slate-300">ประเภท / สังกัด</th>
-                              <th className="py-1.5 px-1.5 text-center w-28 border border-slate-300 whitespace-nowrap">สถานะ</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {page.items.map((row, rIdx) => {
-                              const rowNum = page.startIndex + rIdx;
-                              const isRotary = (row.club || "").includes("โรตารี่");
-
-                              return (
-                                <tr
-                                  key={row.ticketNo || rIdx}
-                                  className={`border-b border-slate-300 ${
-                                    rIdx % 2 === 0 ? "bg-white" : "bg-slate-50"
-                                  } hover:bg-amber-50/40`}
-                                >
-                                  <td className="py-1 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200">
-                                    {rowNum}
-                                  </td>
-                                  <td className="py-1 px-1.5 text-center font-bold font-mono text-slate-800 border-r border-slate-200">
-                                    {row.ticketNo}
-                                  </td>
-                                  <td className="py-1 px-2.5 border-r border-slate-200">
-                                    <span className="font-bold text-slate-900 block leading-tight">
-                                      {row.name}
-                                      {row.nickname && (
-                                        <span className="font-semibold text-slate-600 ml-1">
-                                          ({row.nickname})
-                                        </span>
-                                      )}
-                                    </span>
-                                    {row.email && (
-                                      <span className="text-[9.5px] text-slate-500 block truncate leading-tight">
-                                        {row.email}
-                                      </span>
-                                    )}
-                                  </td>
-                                  <td className="py-1 px-1.5 text-center font-mono text-slate-700 font-medium border-r border-slate-200 whitespace-nowrap">
-                                    {row.phone || "-"}
-                                  </td>
-                                  <td className="py-1 px-1.5 text-center border-r border-slate-200 whitespace-nowrap">
-                                    <span
-                                      className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
-                                        isRotary
-                                          ? "bg-red-100 text-red-700 border border-red-300"
-                                          : "bg-blue-100 text-blue-700 border border-blue-300"
-                                      }`}
-                                    >
-                                      {isRotary ? "โรตารี่" : "สงสพัท"}
-                                    </span>
-                                  </td>
-                                  <td className="py-1 px-1.5 text-center whitespace-nowrap">
-                                    <span className="text-[9.5px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 whitespace-nowrap inline-block">
-                                      ✓ ลงทะเบียนแล้ว
-                                    </span>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      )}
-
-                      {/* ======================================================= */}
-                      {/* TABLE: SPONSORS DATA (หมวด 4) - SLIM & COMPACT          */}
-                      {/* ======================================================= */}
-                      {page.dataType === "sponsor" && (
-                        <table className="w-full text-[10.5px] border-collapse">
-                          <thead>
-                            <tr className="bg-pink-600 text-white text-left font-bold">
-                              <th className="py-1.5 px-1.5 text-center w-10 border border-slate-300">ลำดับ</th>
-                              <th className="py-1.5 px-2.5 border border-slate-300">ชื่อผู้สนับสนุน / หน่วยงาน</th>
-                              <th className="py-1.5 px-1.5 text-center w-20 border border-slate-300">สังกัด</th>
-                              <th className="py-1.5 px-1.5 text-center w-22 border border-slate-300">ประเภท</th>
-                              <th className="py-1.5 px-2.5 border border-slate-300">รายละเอียดการสนับสนุน</th>
-                              <th className="py-1.5 px-1.5 text-center w-26 border border-slate-300">แหล่งที่มา</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {page.items.map((row, rIdx) => {
-                              const rowNum = page.startIndex + rIdx;
-                              const isCash = row.sponsorType === "cash";
-
-                              return (
-                                <tr
-                                  key={row.id || rIdx}
-                                  className={`border-b border-slate-300 ${
-                                    rIdx % 2 === 0 ? "bg-white" : "bg-slate-50"
-                                  } hover:bg-pink-50/40`}
-                                >
-                                  <td className="py-1.5 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200">
-                                    {rowNum}
-                                  </td>
-                                  <td className="py-1.5 px-2.5 border-r border-slate-200">
-                                    <span className="font-bold text-slate-900 block leading-tight">
-                                      {row.name}
-                                      {row.nickname && (
-                                        <span className="font-semibold text-slate-600 ml-1">
-                                          ({row.nickname})
-                                        </span>
-                                      )}
-                                    </span>
-                                    {row.organization && (
-                                      <span className="text-[9.5px] text-slate-500 block leading-tight">
-                                        {row.organization}
-                                      </span>
-                                    )}
-                                  </td>
-                                  <td className="py-1.5 px-1.5 text-center border-r border-slate-200 whitespace-nowrap">
-                                    <span className="px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
-                                      {row.club || "ทั่วไป"}
-                                    </span>
-                                  </td>
-                                  <td className="py-1.5 px-1.5 text-center border-r border-slate-200 whitespace-nowrap">
-                                    <span
-                                      className={`px-1.5 py-0.5 rounded-full text-[9.5px] font-bold whitespace-nowrap ${
-                                        isCash
-                                          ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                                          : "bg-purple-100 text-purple-800 border border-purple-300"
-                                      }`}
-                                    >
-                                      {isCash ? "💵 เงินสด" : "🎁 ของสนับสนุน"}
-                                    </span>
-                                  </td>
-                                  <td className="py-1.5 px-2.5 border-r border-slate-200">
-                                    {isCash ? (
-                                      <span className="font-bold text-emerald-700 font-mono text-xs">
-                                        ฿{Number(row.amount || 0).toLocaleString()} บาท
-                                      </span>
-                                    ) : (
-                                      <div>
-                                        <span className="font-bold text-purple-900 block leading-tight">
-                                          {row.itemName}
-                                        </span>
-                                        {row.itemQuantity && (
-                                          <span className="text-[9.5px] text-slate-600 block leading-tight">
-                                            จำนวน: {row.itemQuantity}
-                                          </span>
-                                        )}
-                                        {row.itemNote && (
-                                          <span className="text-[9.5px] text-slate-500 italic block leading-tight">
-                                            {row.itemNote}
-                                          </span>
-                                        )}
-                                      </div>
-                                    )}
-                                  </td>
-                                  <td className="py-1.5 px-1.5 text-center text-[9.5px] font-medium text-slate-600 whitespace-nowrap">
-                                    {row.source || "สนับสนุนกิจกรรม"}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      )}
-                    </div>
-
-                    {/* Bottom Sheet Footer */}
-                    <div className="pt-3 mt-4 border-t border-slate-300 flex items-center justify-between text-[11px] text-slate-500">
-                      <div className="space-y-0.5">
-                        <span className="font-semibold text-slate-700 block">
-                          สรุปแผ่นที่ {page.pageNumber}: {page.categoryTitle} ({page.pageLabel})
-                        </span>
-                        <span className="text-[9.5px] text-slate-500 block">
-                          ระบบลงทะเบียนออนไลน์ Triple T Form • จัดการข้อมูลอัตโนมัติ
-                        </span>
-                      </div>
-
-                      <div className="text-right">
-                        <span className="font-mono text-xs font-bold text-slate-800">
-                          แผ่นที่ {page.pageNumber} จาก {a4Pages.length}
-                        </span>
-                        <span className="text-[9.5px] text-slate-400 block font-mono">
-                          {printTimestamp.timeStr}
-                        </span>
-                      </div>
+                      {renderPageBody(page)}
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          );
+            );
         })}
       </div>
 
