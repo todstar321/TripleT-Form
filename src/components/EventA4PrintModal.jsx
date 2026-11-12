@@ -961,39 +961,51 @@ export default function EventA4PrintModal({
                       } hover:bg-amber-50/40`}
                     >
                       <td className="py-1 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200 align-middle">
-                        {rowNum}
+                        <div className="flex items-center justify-center min-h-[22px] leading-tight">
+                          {rowNum}
+                        </div>
                       </td>
                       <td className="py-1 px-1.5 text-center font-bold font-mono text-slate-800 border-r border-slate-200 align-middle">
-                        {row.ticketNo}
+                        <div className="flex items-center justify-center min-h-[22px] leading-tight">
+                          {row.ticketNo}
+                        </div>
                       </td>
                       <td className="py-1 px-2.5 border-r border-slate-200 align-middle">
-                        <span className="font-bold text-slate-900 block leading-tight">
-                          {row.name}
-                          {row.nickname && (
-                            <span className="font-semibold text-slate-600 ml-1">
-                              ({row.nickname})
-                            </span>
-                          )}
-                        </span>
+                        <div className="flex items-center min-h-[22px] leading-tight">
+                          <span className="font-bold text-slate-900 block leading-tight">
+                            {row.name}
+                            {row.nickname && (
+                              <span className="font-semibold text-slate-600 ml-1">
+                                ({row.nickname})
+                              </span>
+                            )}
+                          </span>
+                        </div>
                       </td>
                       <td className="py-1 px-1.5 text-center font-mono text-slate-700 text-[10px] border-r border-slate-200 align-middle">
-                        {row.phone || "-"}
+                        <div className="flex items-center justify-center min-h-[22px] leading-tight">
+                          {row.phone || "-"}
+                        </div>
                       </td>
                       <td className="py-1 px-1.5 text-center border-r border-slate-200 align-middle">
-                        <span
-                          className={`inline-block px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
-                            isRotary
-                              ? "bg-rose-100 text-rose-700 border border-rose-300"
-                              : "bg-blue-100 text-blue-700 border border-blue-300"
-                          }`}
-                        >
-                          {row.club || "สงสพัท"}
-                        </span>
+                        <div className="flex items-center justify-center min-h-[22px]">
+                          <span
+                            className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
+                              isRotary
+                                ? "bg-rose-100 text-rose-700 border border-rose-300"
+                                : "bg-blue-100 text-blue-700 border border-blue-300"
+                            }`}
+                          >
+                            {row.club || "สงสพัท"}
+                          </span>
+                        </div>
                       </td>
                       <td className="py-1 px-1.5 text-center whitespace-nowrap align-middle">
-                        <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                          ✓ ลงทะเบียนแล้ว
-                        </span>
+                        <div className="flex items-center justify-center min-h-[22px]">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            ✓ ลงทะเบียนแล้ว
+                          </span>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1033,39 +1045,51 @@ export default function EventA4PrintModal({
                         } hover:bg-amber-50/40`}
                       >
                         <td className="py-1 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200 align-middle">
-                          {rowNum}
+                          <div className="flex items-center justify-center min-h-[22px] leading-tight">
+                            {rowNum}
+                          </div>
                         </td>
                         <td className="py-1 px-1.5 text-center font-bold font-mono text-purple-700 border-r border-slate-200 align-middle whitespace-nowrap">
-                          {row.ticketNo}
+                          <div className="flex items-center justify-center min-h-[22px] leading-tight">
+                            {row.ticketNo}
+                          </div>
                         </td>
                         <td className="py-1 px-2.5 border-r border-slate-200 align-middle">
-                          <span className="font-bold text-slate-900 block leading-tight">
-                            {row.name}
-                            {row.nickname && (
-                              <span className="font-semibold text-slate-600 ml-1">
-                                ({row.nickname})
-                              </span>
-                            )}
-                          </span>
+                          <div className="flex items-center min-h-[22px] leading-tight">
+                            <span className="font-bold text-slate-900 block leading-tight">
+                              {row.name}
+                              {row.nickname && (
+                                <span className="font-semibold text-slate-600 ml-1">
+                                  ({row.nickname})
+                                </span>
+                              )}
+                            </span>
+                          </div>
                         </td>
                         <td className="py-1 px-2.5 border-r border-slate-200 align-middle">
-                          <span className="font-semibold text-slate-800 block leading-tight">
-                            {recommenderDisplay}
-                          </span>
+                          <div className="flex items-center min-h-[22px] leading-tight">
+                            <span className="font-semibold text-slate-800 block leading-tight">
+                              {recommenderDisplay}
+                            </span>
+                          </div>
                         </td>
                         <td className="py-1 px-1.5 text-center border-r border-slate-200 align-middle whitespace-nowrap">
-                          <span
-                            className={`inline-block px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
-                              isRotary
-                                ? "bg-rose-100 text-rose-700 border border-rose-300"
-                                : "bg-blue-100 text-blue-700 border border-blue-300"
-                            }`}
-                          >
-                            {row.club || "สงสพัท"}
-                          </span>
+                          <div className="flex items-center justify-center min-h-[22px]">
+                            <span
+                              className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
+                                isRotary
+                                  ? "bg-rose-100 text-rose-700 border border-rose-300"
+                                  : "bg-blue-100 text-blue-700 border border-blue-300"
+                              }`}
+                            >
+                              {row.club || "สงสพัท"}
+                            </span>
+                          </div>
                         </td>
                         <td className="py-1 px-1.5 text-center font-mono text-slate-700 text-[10px] align-middle whitespace-nowrap">
-                          {row.phone || "-"}
+                          <div className="flex items-center justify-center min-h-[22px] leading-tight">
+                            {row.phone || "-"}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1109,28 +1133,30 @@ export default function EventA4PrintModal({
                           rIdx % 2 === 0 ? "bg-white" : "bg-slate-50"
                         } hover:bg-amber-50/40`}
                       >
-                        {/* อันดับ */}
-                        <td className="py-1.5 px-1.5 text-center font-bold font-mono border-r border-slate-200 align-middle">
-                          {rank === 1 ? (
-                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-100 text-amber-800 border border-amber-300 font-extrabold text-[11px] shadow-sm">
-                              🥇 1
-                            </span>
-                          ) : rank === 2 ? (
-                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-200 text-slate-800 border border-slate-300 font-extrabold text-[11px] shadow-sm">
-                              🥈 2
-                            </span>
-                          ) : rank === 3 ? (
-                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-orange-100 text-orange-800 border border-orange-300 font-extrabold text-[11px] shadow-sm">
-                              🥉 3
-                            </span>
-                          ) : (
-                            <span className="text-slate-500 font-semibold">{rank}</span>
-                          )}
+                        {/* อันดับ - กึ่งกลางแนวตั้ง */}
+                        <td className="py-2 px-1.5 text-center font-bold font-mono border-r border-slate-200 align-middle">
+                          <div className="flex items-center justify-center min-h-[28px]">
+                            {rank === 1 ? (
+                              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-100 text-amber-800 border border-amber-300 font-extrabold text-[11px] shadow-sm">
+                                🥇 1
+                              </span>
+                            ) : rank === 2 ? (
+                              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-200 text-slate-800 border border-slate-300 font-extrabold text-[11px] shadow-sm">
+                                🥈 2
+                              </span>
+                            ) : rank === 3 ? (
+                              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-orange-100 text-orange-800 border border-orange-300 font-extrabold text-[11px] shadow-sm">
+                                🥉 3
+                              </span>
+                            ) : (
+                              <span className="text-slate-500 font-semibold">{rank}</span>
+                            )}
+                          </div>
                         </td>
 
-                        {/* ชื่อ - นามสกุล (ชื่อเล่น) ผู้เชิญ */}
-                        <td className="py-1.5 px-2.5 border-r border-slate-200 align-middle">
-                          <span className="font-bold text-slate-900 block leading-tight">
+                        {/* ชื่อ - นามสกุล (ชื่อเล่น) ผู้เชิญ - ติดแถวบนแนวตั้ง */}
+                        <td className="py-2 px-2.5 border-r border-slate-200 align-top">
+                          <span className="font-bold text-slate-900 block leading-tight pt-0.5">
                             {row.inviterName}
                             {row.inviterNickname && (
                               <span className="font-semibold text-indigo-700 ml-1">
@@ -1140,29 +1166,33 @@ export default function EventA4PrintModal({
                           </span>
                         </td>
 
-                        {/* สังกัด */}
-                        <td className="py-1.5 px-1.5 text-center border-r border-slate-200 align-middle whitespace-nowrap">
-                          <span
-                            className={`inline-block px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
-                              isRotary
-                                ? "bg-rose-100 text-rose-700 border border-rose-300"
-                                : "bg-blue-100 text-blue-700 border border-blue-300"
-                            }`}
-                          >
-                            {row.club || "สงสพัท"}
-                          </span>
+                        {/* สังกัด - ติดแถวบนแนวตั้ง */}
+                        <td className="py-2 px-1.5 text-center border-r border-slate-200 align-top whitespace-nowrap">
+                          <div className="pt-0.5">
+                            <span
+                              className={`inline-block px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
+                                isRotary
+                                  ? "bg-rose-100 text-rose-700 border border-rose-300"
+                                  : "bg-blue-100 text-blue-700 border border-blue-300"
+                              }`}
+                            >
+                              {row.club || "สงสพัท"}
+                            </span>
+                          </div>
                         </td>
 
-                        {/* จำนวน */}
-                        <td className="py-1.5 px-1.5 text-center border-r border-slate-200 align-middle whitespace-nowrap">
-                          <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-indigo-100 text-indigo-800 border border-indigo-200">
-                            {row.count} คน
-                          </span>
+                        {/* จำนวน - ติดแถวบนแนวตั้ง */}
+                        <td className="py-2 px-1.5 text-center border-r border-slate-200 align-top whitespace-nowrap">
+                          <div className="pt-0.5">
+                            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-indigo-100 text-indigo-800 border border-indigo-200">
+                              {row.count} คน
+                            </span>
+                          </div>
                         </td>
 
-                        {/* รายชื่อแขกรับเชิญที่เชิญมา */}
-                        <td className="py-1.5 px-2.5 align-middle">
-                          <div className="space-y-1">
+                        {/* รายชื่อแขกรับเชิญที่เชิญมา - ติดแถวบนแนวตั้ง */}
+                        <td className="py-2 px-2.5 align-top">
+                          <div className="space-y-1 pt-0.5">
                             {row.guests.map((g, gIdx) => (
                               <div
                                 key={g.ticketNo || gIdx}
@@ -1227,43 +1257,51 @@ export default function EventA4PrintModal({
                       } hover:bg-amber-50/40`}
                     >
                       <td className="py-1.5 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200 align-middle">
-                        {rowNum}
+                        <div className="flex items-center justify-center min-h-[22px] leading-tight">
+                          {rowNum}
+                        </div>
                       </td>
                       <td className="py-1.5 px-2.5 border-r border-slate-200 align-middle">
-                        <span className="font-bold text-slate-900 block leading-tight">
-                          {row.name}
-                        </span>
-                        {row.organization && (
-                          <span className="text-[9.5px] text-slate-600 block leading-tight">
-                            {row.organization}
+                        <div className="flex flex-col justify-center min-h-[22px]">
+                          <span className="font-bold text-slate-900 block leading-tight">
+                            {row.name}
                           </span>
-                        )}
-                      </td>
-                      <td className="py-1.5 px-2.5 border-r border-slate-200 align-middle">
-                        {isCash ? (
-                          <span className="font-bold text-emerald-700 font-mono text-xs">
-                            ฿{Number(row.amount || 0).toLocaleString()} บาท
-                          </span>
-                        ) : (
-                          <div>
-                            <span className="font-bold text-purple-900 block leading-tight">
-                              {row.itemName}
+                          {row.organization && (
+                            <span className="text-[9.5px] text-slate-600 block leading-tight">
+                              {row.organization}
                             </span>
-                            {row.itemQuantity && (
-                              <span className="text-[9.5px] text-slate-600 block leading-tight">
-                                จำนวน: {row.itemQuantity}
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-1.5 px-2.5 border-r border-slate-200 align-middle">
+                        <div className="flex flex-col justify-center min-h-[22px]">
+                          {isCash ? (
+                            <span className="font-bold text-emerald-700 font-mono text-xs">
+                              ฿{Number(row.amount || 0).toLocaleString()} บาท
+                            </span>
+                          ) : (
+                            <div>
+                              <span className="font-bold text-purple-900 block leading-tight">
+                                {row.itemName}
                               </span>
-                            )}
-                            {row.itemNote && (
-                              <span className="text-[9.5px] text-slate-500 italic block leading-tight">
-                                {row.itemNote}
-                              </span>
-                            )}
-                          </div>
-                        )}
+                              {row.itemQuantity && (
+                                <span className="text-[9.5px] text-slate-600 block leading-tight">
+                                  จำนวน: {row.itemQuantity}
+                                </span>
+                              )}
+                              {row.itemNote && (
+                                <span className="text-[9.5px] text-slate-500 italic block leading-tight">
+                                  {row.itemNote}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </td>
                       <td className="py-1.5 px-1.5 text-center text-[9.5px] font-medium text-slate-600 whitespace-nowrap align-middle">
-                        {row.source || "สนับสนุนกิจกรรม"}
+                        <div className="flex items-center justify-center min-h-[22px]">
+                          {row.source || "สนับสนุนกิจกรรม"}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1722,39 +1760,51 @@ export default function EventA4PrintModal({
                             }`}
                           >
                             <td className="py-1 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200 align-middle">
-                              {rowNum}
+                              <div className="flex items-center justify-center min-h-[22px] leading-tight">
+                                {rowNum}
+                              </div>
                             </td>
                             <td className="py-1 px-1.5 text-center font-bold font-mono text-slate-800 border-r border-slate-200 align-middle">
-                              {row.ticketNo}
+                              <div className="flex items-center justify-center min-h-[22px] leading-tight">
+                                {row.ticketNo}
+                              </div>
                             </td>
                             <td className="py-1 px-2.5 border-r border-slate-200 align-middle">
-                              <span className="font-bold text-slate-900 block leading-tight">
-                                {row.name}
-                                {row.nickname && (
-                                  <span className="font-semibold text-slate-600 ml-1">
-                                    ({row.nickname})
-                                  </span>
-                                )}
-                              </span>
+                              <div className="flex items-center min-h-[22px] leading-tight">
+                                <span className="font-bold text-slate-900 block leading-tight">
+                                  {row.name}
+                                  {row.nickname && (
+                                    <span className="font-semibold text-slate-600 ml-1">
+                                      ({row.nickname})
+                                    </span>
+                                  )}
+                                </span>
+                              </div>
                             </td>
                             <td className="py-1 px-1.5 text-center font-mono text-slate-700 font-medium border-r border-slate-200 whitespace-nowrap align-middle">
-                              {row.phone || "-"}
+                              <div className="flex items-center justify-center min-h-[22px] leading-tight">
+                                {row.phone || "-"}
+                              </div>
                             </td>
                             <td className="py-1 px-1.5 text-center border-r border-slate-200 whitespace-nowrap align-middle">
-                              <span
-                                className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
-                                  isRotary
-                                    ? "bg-red-100 text-red-700 border border-red-300"
-                                    : "bg-blue-100 text-blue-700 border border-blue-300"
-                                }`}
-                              >
-                                {isRotary ? "โรตารี่" : "สงสพัท"}
-                              </span>
+                              <div className="flex items-center justify-center min-h-[22px]">
+                                <span
+                                  className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
+                                    isRotary
+                                      ? "bg-red-100 text-red-700 border border-red-300"
+                                      : "bg-blue-100 text-blue-700 border border-blue-300"
+                                  }`}
+                                >
+                                  {isRotary ? "โรตารี่" : "สงสพัท"}
+                                </span>
+                              </div>
                             </td>
                             <td className="py-1 px-1.5 text-center whitespace-nowrap align-middle">
-                              <span className="text-[9.5px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 whitespace-nowrap inline-block">
-                                ✓ ลงทะเบียนแล้ว
-                              </span>
+                              <div className="flex items-center justify-center min-h-[22px]">
+                                <span className="text-[9.5px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 whitespace-nowrap inline-block">
+                                  ✓ ลงทะเบียนแล้ว
+                                </span>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -1794,39 +1844,51 @@ export default function EventA4PrintModal({
                               }`}
                             >
                               <td className="py-1 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200 align-middle">
-                                {rowNum}
+                                <div className="flex items-center justify-center min-h-[22px] leading-tight">
+                                  {rowNum}
+                                </div>
                               </td>
                               <td className="py-1 px-1.5 text-center font-bold font-mono text-purple-700 border-r border-slate-200 align-middle whitespace-nowrap">
-                                {row.ticketNo}
+                                <div className="flex items-center justify-center min-h-[22px] leading-tight">
+                                  {row.ticketNo}
+                                </div>
                               </td>
                               <td className="py-1 px-2.5 border-r border-slate-200 align-middle">
-                                <span className="font-bold text-slate-900 block leading-tight">
-                                  {row.name}
-                                  {row.nickname && (
-                                    <span className="font-semibold text-slate-600 ml-1">
-                                      ({row.nickname})
-                                    </span>
-                                  )}
-                                </span>
+                                <div className="flex items-center min-h-[22px] leading-tight">
+                                  <span className="font-bold text-slate-900 block leading-tight">
+                                    {row.name}
+                                    {row.nickname && (
+                                      <span className="font-semibold text-slate-600 ml-1">
+                                        ({row.nickname})
+                                      </span>
+                                    )}
+                                  </span>
+                                </div>
                               </td>
                               <td className="py-1 px-2.5 border-r border-slate-200 align-middle">
-                                <span className="font-semibold text-slate-800 block leading-tight">
-                                  {recommenderDisplay}
-                                </span>
+                                <div className="flex items-center min-h-[22px] leading-tight">
+                                  <span className="font-semibold text-slate-800 block leading-tight">
+                                    {recommenderDisplay}
+                                  </span>
+                                </div>
                               </td>
                               <td className="py-1 px-1.5 text-center border-r border-slate-200 whitespace-nowrap align-middle">
-                                <span
-                                  className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
-                                    isRotary
-                                      ? "bg-red-100 text-red-700 border border-red-300"
-                                      : "bg-blue-100 text-blue-700 border border-blue-300"
-                                  }`}
-                                >
-                                  {row.club || "สงสพัท"}
-                                </span>
+                                <div className="flex items-center justify-center min-h-[22px]">
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
+                                      isRotary
+                                        ? "bg-red-100 text-red-700 border border-red-300"
+                                        : "bg-blue-100 text-blue-700 border border-blue-300"
+                                    }`}
+                                  >
+                                    {row.club || "สงสพัท"}
+                                  </span>
+                                </div>
                               </td>
                               <td className="py-1 px-1.5 text-center font-mono text-slate-700 font-medium whitespace-nowrap align-middle">
-                                {row.phone || "-"}
+                                <div className="flex items-center justify-center min-h-[22px] leading-tight">
+                                  {row.phone || "-"}
+                                </div>
                               </td>
                             </tr>
                           );
@@ -1870,25 +1932,30 @@ export default function EventA4PrintModal({
                                 rIdx % 2 === 0 ? "bg-white" : "bg-slate-50"
                               }`}
                             >
-                              <td className="py-1.5 px-1.5 text-center font-bold font-mono border-r border-slate-200 align-middle">
-                                {rank === 1 ? (
-                                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-100 text-amber-800 border border-amber-300 font-extrabold text-[11px]">
-                                    🥇 1
-                                  </span>
-                                ) : rank === 2 ? (
-                                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-200 text-slate-800 border border-slate-300 font-extrabold text-[11px]">
-                                    🥈 2
-                                  </span>
-                                ) : rank === 3 ? (
-                                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-orange-100 text-orange-800 border border-orange-300 font-extrabold text-[11px]">
-                                    🥉 3
-                                  </span>
-                                ) : (
-                                  <span className="text-slate-600 font-semibold">{rank}</span>
-                                )}
+                              {/* อันดับ - กึ่งกลางแนวตั้ง */}
+                              <td className="py-2 px-1.5 text-center font-bold font-mono border-r border-slate-200 align-middle">
+                                <div className="flex items-center justify-center min-h-[28px]">
+                                  {rank === 1 ? (
+                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-100 text-amber-800 border border-amber-300 font-extrabold text-[11px]">
+                                      🥇 1
+                                    </span>
+                                  ) : rank === 2 ? (
+                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-200 text-slate-800 border border-slate-300 font-extrabold text-[11px]">
+                                      🥈 2
+                                    </span>
+                                  ) : rank === 3 ? (
+                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-orange-100 text-orange-800 border border-orange-300 font-extrabold text-[11px]">
+                                      🥉 3
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-600 font-semibold">{rank}</span>
+                                  )}
+                                </div>
                               </td>
-                              <td className="py-1.5 px-2.5 border-r border-slate-200 align-middle">
-                                <span className="font-bold text-slate-900 block leading-tight">
+
+                              {/* ชื่อ - นามสกุล (ชื่อเล่น) ผู้เชิญ - ติดแถวบนแนวตั้ง */}
+                              <td className="py-2 px-2.5 border-r border-slate-200 align-top">
+                                <span className="font-bold text-slate-900 block leading-tight pt-0.5">
                                   {row.inviterName}
                                   {row.inviterNickname && (
                                     <span className="font-semibold text-indigo-700 ml-1">
@@ -1897,24 +1964,34 @@ export default function EventA4PrintModal({
                                   )}
                                 </span>
                               </td>
-                              <td className="py-1.5 px-1.5 text-center border-r border-slate-200 whitespace-nowrap align-middle">
-                                <span
-                                  className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
-                                    isRotary
-                                      ? "bg-red-100 text-red-700 border border-red-300"
-                                      : "bg-blue-100 text-blue-700 border border-blue-300"
-                                  }`}
-                                >
-                                  {row.club || "สงสพัท"}
-                                </span>
+
+                              {/* สังกัด - ติดแถวบนแนวตั้ง */}
+                              <td className="py-2 px-1.5 text-center border-r border-slate-200 whitespace-nowrap align-top">
+                                <div className="pt-0.5">
+                                  <span
+                                    className={`inline-block px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
+                                      isRotary
+                                        ? "bg-red-100 text-red-700 border border-red-300"
+                                        : "bg-blue-100 text-blue-700 border border-blue-300"
+                                    }`}
+                                  >
+                                    {row.club || "สงสพัท"}
+                                  </span>
+                                </div>
                               </td>
-                              <td className="py-1.5 px-1.5 text-center border-r border-slate-200 whitespace-nowrap align-middle">
-                                <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-indigo-100 text-indigo-800 border border-indigo-200">
-                                  {row.count} คน
-                                </span>
+
+                              {/* จำนวน - ติดแถวบนแนวตั้ง */}
+                              <td className="py-2 px-1.5 text-center border-r border-slate-200 whitespace-nowrap align-top">
+                                <div className="pt-0.5">
+                                  <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-indigo-100 text-indigo-800 border border-indigo-200">
+                                    {row.count} คน
+                                  </span>
+                                </div>
                               </td>
-                              <td className="py-1.5 px-2.5 align-middle">
-                                <div className="space-y-1">
+
+                              {/* รายชื่อแขกรับเชิญที่เชิญมา - ติดแถวบนแนวตั้ง */}
+                              <td className="py-2 px-2.5 align-top">
+                                <div className="space-y-1 pt-0.5">
                                   {row.guests.map((g, gIdx) => (
                                     <div
                                       key={g.ticketNo || gIdx}
@@ -1978,59 +2055,71 @@ export default function EventA4PrintModal({
                             }`}
                           >
                             <td className="py-1.5 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200 align-middle">
-                              {rowNum}
+                              <div className="flex items-center justify-center min-h-[22px] leading-tight">
+                                {rowNum}
+                              </div>
                             </td>
                             <td className="py-1.5 px-2.5 border-r border-slate-200 align-middle">
-                              <span className="font-bold text-slate-900 block leading-tight">
-                                {row.name}
-                              </span>
-                              {row.organization && (
-                                <span className="text-[9.5px] text-slate-500 block leading-tight">
-                                  {row.organization}
+                              <div className="flex flex-col justify-center min-h-[22px]">
+                                <span className="font-bold text-slate-900 block leading-tight">
+                                  {row.name}
                                 </span>
-                              )}
-                            </td>
-                            <td className="py-1.5 px-1.5 text-center border-r border-slate-200 whitespace-nowrap align-middle">
-                              <span className="px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
-                                {row.club || "ทั่วไป"}
-                              </span>
-                            </td>
-                            <td className="py-1.5 px-1.5 text-center border-r border-slate-200 whitespace-nowrap align-middle">
-                              <span
-                                className={`px-1.5 py-0.5 rounded-full text-[9.5px] font-bold whitespace-nowrap ${
-                                  isCash
-                                    ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                                    : "bg-purple-100 text-purple-800 border border-purple-300"
-                                }`}
-                              >
-                                {isCash ? "💵 เงินสด" : "🎁 ของสนับสนุน"}
-                              </span>
-                            </td>
-                            <td className="py-1.5 px-2.5 border-r border-slate-200 align-middle">
-                              {isCash ? (
-                                <span className="font-bold text-emerald-700 font-mono text-xs">
-                                  ฿{Number(row.amount || 0).toLocaleString()} บาท
-                                </span>
-                              ) : (
-                                <div>
-                                  <span className="font-bold text-purple-900 block leading-tight">
-                                    {row.itemName}
+                                {row.organization && (
+                                  <span className="text-[9.5px] text-slate-500 block leading-tight">
+                                    {row.organization}
                                   </span>
-                                  {row.itemQuantity && (
-                                    <span className="text-[9.5px] text-slate-600 block leading-tight">
-                                      จำนวน: {row.itemQuantity}
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-1.5 px-1.5 text-center border-r border-slate-200 whitespace-nowrap align-middle">
+                              <div className="flex items-center justify-center min-h-[22px]">
+                                <span className="px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                                  {row.club || "ทั่วไป"}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-1.5 px-1.5 text-center border-r border-slate-200 whitespace-nowrap align-middle">
+                              <div className="flex items-center justify-center min-h-[22px]">
+                                <span
+                                  className={`px-1.5 py-0.5 rounded-full text-[9.5px] font-bold whitespace-nowrap ${
+                                    isCash
+                                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                      : "bg-purple-100 text-purple-800 border border-purple-300"
+                                  }`}
+                                >
+                                  {isCash ? "💵 เงินสด" : "🎁 ของสนับสนุน"}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-1.5 px-2.5 border-r border-slate-200 align-middle">
+                              <div className="flex flex-col justify-center min-h-[22px]">
+                                {isCash ? (
+                                  <span className="font-bold text-emerald-700 font-mono text-xs">
+                                    ฿{Number(row.amount || 0).toLocaleString()} บาท
+                                  </span>
+                                ) : (
+                                  <div>
+                                    <span className="font-bold text-purple-900 block leading-tight">
+                                      {row.itemName}
                                     </span>
-                                  )}
-                                  {row.itemNote && (
-                                    <span className="text-[9.5px] text-slate-500 italic block leading-tight">
-                                      {row.itemNote}
-                                    </span>
-                                  )}
-                                </div>
-                              )}
+                                    {row.itemQuantity && (
+                                      <span className="text-[9.5px] text-slate-600 block leading-tight">
+                                        จำนวน: {row.itemQuantity}
+                                      </span>
+                                    )}
+                                    {row.itemNote && (
+                                      <span className="text-[9.5px] text-slate-500 italic block leading-tight">
+                                        {row.itemNote}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
                             </td>
                             <td className="py-1.5 px-1.5 text-center text-[9.5px] font-medium text-slate-600 whitespace-nowrap align-middle">
-                              {row.source || "สนับสนุนกิจกรรม"}
+                              <div className="flex items-center justify-center min-h-[22px]">
+                                {row.source || "สนับสนุนกิจกรรม"}
+                              </div>
                             </td>
                           </tr>
                         );

@@ -762,8 +762,8 @@ export default function EventPublicDataSheetModal({
                               <span className="text-slate-400">{idx + 1}</span>
                             )}
                           </td>
-                          <td className="py-2.5 px-4 font-semibold text-white border-r border-white/5 print:border-gray-300 print:text-gray-900 align-middle">
-                            <div className="flex items-center space-x-1.5">
+                          <td className="py-2.5 px-4 font-semibold text-white border-r border-white/5 print:border-gray-300 print:text-gray-900 align-top">
+                            <div className="flex items-center space-x-1.5 pt-0.5">
                               <span>{row.inviterName}</span>
                               {row.inviterNickname && (
                                 <span className="text-indigo-300 font-normal text-[11px] print:text-gray-700">
@@ -772,18 +772,22 @@ export default function EventPublicDataSheetModal({
                               )}
                             </div>
                           </td>
-                          <td className="py-2.5 px-3.5 text-center border-r border-white/5 print:border-gray-300 whitespace-nowrap align-middle">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 print:bg-indigo-100 print:text-indigo-900 print:border-indigo-300">
-                              {row.club || "สงสพัท"}
-                            </span>
+                          <td className="py-2.5 px-3.5 text-center border-r border-white/5 print:border-gray-300 whitespace-nowrap align-top">
+                            <div className="pt-0.5">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 print:bg-indigo-100 print:text-indigo-900 print:border-indigo-300">
+                                {row.club || "สงสพัท"}
+                              </span>
+                            </div>
                           </td>
-                          <td className="py-2.5 px-3.5 text-center border-r border-white/5 print:border-gray-300 whitespace-nowrap align-middle">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold font-mono bg-indigo-500/30 text-indigo-200 border border-indigo-500/40">
-                              {row.count} คน
-                            </span>
+                          <td className="py-2.5 px-3.5 text-center border-r border-white/5 print:border-gray-300 whitespace-nowrap align-top">
+                            <div className="pt-0.5">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold font-mono bg-indigo-500/30 text-indigo-200 border border-indigo-500/40">
+                                {row.count} คน
+                              </span>
+                            </div>
                           </td>
-                          <td className="py-2.5 px-4 align-middle">
-                            <div className="space-y-1">
+                          <td className="py-2.5 px-4 align-top">
+                            <div className="space-y-1 pt-0.5">
                               {row.guests.map((g, gIdx) => (
                                 <div key={g.ticketNo || gIdx} className="flex items-center space-x-1.5 text-xs text-slate-200">
                                   <span className="font-mono text-slate-500 text-[11px] w-4 text-right shrink-0">{gIdx + 1}.</span>
