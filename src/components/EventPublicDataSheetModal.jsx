@@ -745,22 +745,8 @@ export default function EventPublicDataSheetModal({
                           key={row.inviterName || idx}
                           className="hover:bg-white/5 transition-colors print:hover:bg-transparent"
                         >
-                          <td className="py-2.5 px-3 text-center font-mono font-bold border-r border-white/5 print:border-gray-300 align-middle">
-                            {idx === 0 ? (
-                              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold text-xs">
-                                🥇 1
-                              </span>
-                            ) : idx === 1 ? (
-                              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-400/20 text-slate-200 border border-slate-400/30 font-bold text-xs">
-                                🥈 2
-                              </span>
-                            ) : idx === 2 ? (
-                              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30 font-bold text-xs">
-                                🥉 3
-                              </span>
-                            ) : (
-                              <span className="text-slate-400">{idx + 1}</span>
-                            )}
+                          <td className="py-2.5 px-3 text-center font-mono font-bold text-slate-300 text-xs border-r border-white/5 print:border-gray-300 print:text-gray-800 align-middle">
+                            {idx + 1}
                           </td>
                           <td className="py-2.5 px-4 font-semibold text-white border-r border-white/5 print:border-gray-300 print:text-gray-900 align-top">
                             <div className="flex items-center space-x-1.5 pt-0.5">

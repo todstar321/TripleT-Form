@@ -421,15 +421,25 @@ export default function EventA4PrintModal({
     }
   };
 
-  // Convert A4 element to Canvas (Offscreen Clone at exact 794x1123 for maximum crispness)
+  // Convert A4 element to Canvas (Cloned at exact 794x1123 for maximum crispness and baseline fidelity)
   const renderA4PageCanvas = async (pageElement, scaleFactor = 2) => {
+    if (document.fonts) {
+      try {
+        await document.fonts.ready;
+      } catch (e) {
+        // ignore font ready errors
+      }
+    }
+
     const offscreenContainer = document.createElement("div");
     offscreenContainer.style.position = "fixed";
-    offscreenContainer.style.left = "-9999px";
+    offscreenContainer.style.left = "0";
     offscreenContainer.style.top = "0";
     offscreenContainer.style.width = "794px";
     offscreenContainer.style.height = "1123px";
     offscreenContainer.style.zIndex = "-9999";
+    offscreenContainer.style.opacity = "0";
+    offscreenContainer.style.pointerEvents = "none";
 
     const clone = pageElement.cloneNode(true);
     clone.style.transform = "none";
@@ -444,6 +454,10 @@ export default function EventA4PrintModal({
     offscreenContainer.appendChild(clone);
     document.body.appendChild(offscreenContainer);
 
+    // Allow browser layout engine to paint and calculate font metrics
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await new Promise((resolve) => setTimeout(resolve, 60));
+
     try {
       return await html2canvas(clone, {
         scale: scaleFactor,
@@ -453,7 +467,15 @@ export default function EventA4PrintModal({
         width: 794,
         height: 1123,
         windowWidth: 794,
-        windowHeight: 1123
+        windowHeight: 1123,
+        onclone: (clonedDoc) => {
+          const style = clonedDoc.createElement("style");
+          style.innerHTML = `
+            img { display: inline-block !important; }
+            body, table, td, th, span, div { font-family: 'Prompt', 'Plus Jakarta Sans', sans-serif !important; }
+          `;
+          clonedDoc.head.appendChild(style);
+        }
       });
     } finally {
       if (offscreenContainer.parentNode) {
@@ -960,52 +982,40 @@ export default function EventA4PrintModal({
                         rIdx % 2 === 0 ? "bg-white" : "bg-slate-50"
                       } hover:bg-amber-50/40`}
                     >
-                      <td className="py-1 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200 align-middle">
-                        <div className="flex items-center justify-center min-h-[22px] leading-tight">
-                          {rowNum}
-                        </div>
+                      <td className="pt-1.5 pb-2.5 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200 align-middle">
+                        {rowNum}
                       </td>
-                      <td className="py-1 px-1.5 text-center font-bold font-mono text-slate-800 border-r border-slate-200 align-middle">
-                        <div className="flex items-center justify-center min-h-[22px] leading-tight">
-                          {row.ticketNo}
-                        </div>
+                      <td className="pt-1.5 pb-2.5 px-1.5 text-center font-bold font-mono text-slate-800 border-r border-slate-200 align-middle">
+                        {row.ticketNo}
                       </td>
-                      <td className="py-1 px-2.5 border-r border-slate-200 align-middle">
-                        <div className="flex items-center min-h-[22px] leading-tight">
-                          <span className="font-bold text-slate-900 block leading-tight">
-                            {row.name}
-                            {row.nickname && (
-                              <span className="font-semibold text-slate-600 ml-1">
-                                ({row.nickname})
-                              </span>
-                            )}
-                          </span>
-                        </div>
+                      <td className="pt-1.5 pb-2.5 px-2.5 border-r border-slate-200 align-middle">
+                        <span className="font-bold text-slate-900 block leading-tight">
+                          {row.name}
+                          {row.nickname && (
+                            <span className="font-semibold text-slate-600 ml-1">
+                              ({row.nickname})
+                            </span>
+                          )}
+                        </span>
                       </td>
-                      <td className="py-1 px-1.5 text-center font-mono text-slate-700 text-[10px] border-r border-slate-200 align-middle">
-                        <div className="flex items-center justify-center min-h-[22px] leading-tight">
-                          {row.phone || "-"}
-                        </div>
+                      <td className="pt-1.5 pb-2.5 px-1.5 text-center font-mono text-slate-700 text-[10px] border-r border-slate-200 align-middle">
+                        {row.phone || "-"}
                       </td>
-                      <td className="py-1 px-1.5 text-center border-r border-slate-200 align-middle">
-                        <div className="flex items-center justify-center min-h-[22px]">
-                          <span
-                            className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
-                              isRotary
-                                ? "bg-rose-100 text-rose-700 border border-rose-300"
-                                : "bg-blue-100 text-blue-700 border border-blue-300"
-                            }`}
-                          >
-                            {row.club || "สงสพัท"}
-                          </span>
-                        </div>
+                      <td className="pt-1.5 pb-2.5 px-1.5 text-center border-r border-slate-200 align-middle">
+                        <span
+                          className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
+                            isRotary
+                              ? "bg-rose-100 text-rose-700 border border-rose-300"
+                              : "bg-blue-100 text-blue-700 border border-blue-300"
+                          }`}
+                        >
+                          {row.club || "สงสพัท"}
+                        </span>
                       </td>
-                      <td className="py-1 px-1.5 text-center whitespace-nowrap align-middle">
-                        <div className="flex items-center justify-center min-h-[22px]">
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                            ✓ ลงทะเบียนแล้ว
-                          </span>
-                        </div>
+                      <td className="pt-1.5 pb-2.5 px-1.5 text-center whitespace-nowrap align-middle">
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          ✓ ลงทะเบียนแล้ว
+                        </span>
                       </td>
                     </tr>
                   );
@@ -1044,52 +1054,40 @@ export default function EventA4PrintModal({
                           rIdx % 2 === 0 ? "bg-white" : "bg-slate-50"
                         } hover:bg-amber-50/40`}
                       >
-                        <td className="py-1 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200 align-middle">
-                          <div className="flex items-center justify-center min-h-[22px] leading-tight">
-                            {rowNum}
-                          </div>
+                        <td className="pt-1.5 pb-2.5 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200 align-middle">
+                          {rowNum}
                         </td>
-                        <td className="py-1 px-1.5 text-center font-bold font-mono text-purple-700 border-r border-slate-200 align-middle whitespace-nowrap">
-                          <div className="flex items-center justify-center min-h-[22px] leading-tight">
-                            {row.ticketNo}
-                          </div>
+                        <td className="pt-1.5 pb-2.5 px-1.5 text-center font-bold font-mono text-purple-700 border-r border-slate-200 align-middle whitespace-nowrap">
+                          {row.ticketNo}
                         </td>
-                        <td className="py-1 px-2.5 border-r border-slate-200 align-middle">
-                          <div className="flex items-center min-h-[22px] leading-tight">
-                            <span className="font-bold text-slate-900 block leading-tight">
-                              {row.name}
-                              {row.nickname && (
-                                <span className="font-semibold text-slate-600 ml-1">
-                                  ({row.nickname})
-                                </span>
-                              )}
-                            </span>
-                          </div>
+                        <td className="pt-1.5 pb-2.5 px-2.5 border-r border-slate-200 align-middle">
+                          <span className="font-bold text-slate-900 block leading-tight">
+                            {row.name}
+                            {row.nickname && (
+                              <span className="font-semibold text-slate-600 ml-1">
+                                ({row.nickname})
+                              </span>
+                            )}
+                          </span>
                         </td>
-                        <td className="py-1 px-2.5 border-r border-slate-200 align-middle">
-                          <div className="flex items-center min-h-[22px] leading-tight">
-                            <span className="font-semibold text-slate-800 block leading-tight">
-                              {recommenderDisplay}
-                            </span>
-                          </div>
+                        <td className="pt-1.5 pb-2.5 px-2.5 border-r border-slate-200 align-middle">
+                          <span className="font-semibold text-slate-800 block leading-tight">
+                            {recommenderDisplay}
+                          </span>
                         </td>
-                        <td className="py-1 px-1.5 text-center border-r border-slate-200 align-middle whitespace-nowrap">
-                          <div className="flex items-center justify-center min-h-[22px]">
-                            <span
-                              className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
-                                isRotary
-                                  ? "bg-rose-100 text-rose-700 border border-rose-300"
-                                  : "bg-blue-100 text-blue-700 border border-blue-300"
-                              }`}
-                            >
-                              {row.club || "สงสพัท"}
-                            </span>
-                          </div>
+                        <td className="pt-1.5 pb-2.5 px-1.5 text-center border-r border-slate-200 align-middle whitespace-nowrap">
+                          <span
+                            className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
+                              isRotary
+                                ? "bg-rose-100 text-rose-700 border border-rose-300"
+                                : "bg-blue-100 text-blue-700 border border-blue-300"
+                            }`}
+                          >
+                            {row.club || "สงสพัท"}
+                          </span>
                         </td>
-                        <td className="py-1 px-1.5 text-center font-mono text-slate-700 text-[10px] align-middle whitespace-nowrap">
-                          <div className="flex items-center justify-center min-h-[22px] leading-tight">
-                            {row.phone || "-"}
-                          </div>
+                        <td className="pt-1.5 pb-2.5 px-1.5 text-center font-mono text-slate-700 text-[10px] align-middle whitespace-nowrap">
+                          {row.phone || "-"}
                         </td>
                       </tr>
                     );
@@ -1134,24 +1132,8 @@ export default function EventA4PrintModal({
                         } hover:bg-amber-50/40`}
                       >
                         {/* อันดับ - กึ่งกลางแนวตั้ง */}
-                        <td className="py-2 px-1.5 text-center font-bold font-mono border-r border-slate-200 align-middle">
-                          <div className="flex items-center justify-center min-h-[28px]">
-                            {rank === 1 ? (
-                              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-100 text-amber-800 border border-amber-300 font-extrabold text-[11px] shadow-sm">
-                                🥇 1
-                              </span>
-                            ) : rank === 2 ? (
-                              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-200 text-slate-800 border border-slate-300 font-extrabold text-[11px] shadow-sm">
-                                🥈 2
-                              </span>
-                            ) : rank === 3 ? (
-                              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-orange-100 text-orange-800 border border-orange-300 font-extrabold text-[11px] shadow-sm">
-                                🥉 3
-                              </span>
-                            ) : (
-                              <span className="text-slate-500 font-semibold">{rank}</span>
-                            )}
-                          </div>
+                        <td className="pt-2 pb-2.5 px-1.5 text-center font-bold font-mono text-slate-700 text-xs border-r border-slate-200 align-middle">
+                          {rank}
                         </td>
 
                         {/* ชื่อ - นามสกุล (ชื่อเล่น) ผู้เชิญ - ติดแถวบนแนวตั้ง */}
@@ -1256,52 +1238,44 @@ export default function EventA4PrintModal({
                         rIdx % 2 === 0 ? "bg-white" : "bg-slate-50"
                       } hover:bg-amber-50/40`}
                     >
-                      <td className="py-1.5 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200 align-middle">
-                        <div className="flex items-center justify-center min-h-[22px] leading-tight">
-                          {rowNum}
-                        </div>
+                      <td className="pt-1.5 pb-2.5 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200 align-middle">
+                        {rowNum}
                       </td>
-                      <td className="py-1.5 px-2.5 border-r border-slate-200 align-middle">
-                        <div className="flex flex-col justify-center min-h-[22px]">
-                          <span className="font-bold text-slate-900 block leading-tight">
-                            {row.name}
+                      <td className="pt-1.5 pb-2.5 px-2.5 border-r border-slate-200 align-middle">
+                        <span className="font-bold text-slate-900 block leading-tight">
+                          {row.name}
+                        </span>
+                        {row.organization && (
+                          <span className="text-[9.5px] text-slate-600 block leading-tight mt-0.5">
+                            {row.organization}
                           </span>
-                          {row.organization && (
-                            <span className="text-[9.5px] text-slate-600 block leading-tight">
-                              {row.organization}
-                            </span>
-                          )}
-                        </div>
+                        )}
                       </td>
-                      <td className="py-1.5 px-2.5 border-r border-slate-200 align-middle">
-                        <div className="flex flex-col justify-center min-h-[22px]">
-                          {isCash ? (
-                            <span className="font-bold text-emerald-700 font-mono text-xs">
-                              ฿{Number(row.amount || 0).toLocaleString()} บาท
+                      <td className="pt-1.5 pb-2.5 px-2.5 border-r border-slate-200 align-middle">
+                        {isCash ? (
+                          <span className="font-bold text-emerald-700 font-mono text-xs">
+                            ฿{Number(row.amount || 0).toLocaleString()} บาท
+                          </span>
+                        ) : (
+                          <div>
+                            <span className="font-bold text-purple-900 block leading-tight">
+                              {row.itemName}
                             </span>
-                          ) : (
-                            <div>
-                              <span className="font-bold text-purple-900 block leading-tight">
-                                {row.itemName}
+                            {row.itemQuantity && (
+                              <span className="text-[9.5px] text-slate-600 block leading-tight mt-0.5">
+                                จำนวน: {row.itemQuantity}
                               </span>
-                              {row.itemQuantity && (
-                                <span className="text-[9.5px] text-slate-600 block leading-tight">
-                                  จำนวน: {row.itemQuantity}
-                                </span>
-                              )}
-                              {row.itemNote && (
-                                <span className="text-[9.5px] text-slate-500 italic block leading-tight">
-                                  {row.itemNote}
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </div>
+                            )}
+                            {row.itemNote && (
+                              <span className="text-[9.5px] text-slate-500 italic block leading-tight mt-0.5">
+                                {row.itemNote}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </td>
-                      <td className="py-1.5 px-1.5 text-center text-[9.5px] font-medium text-slate-600 whitespace-nowrap align-middle">
-                        <div className="flex items-center justify-center min-h-[22px]">
-                          {row.source || "สนับสนุนกิจกรรม"}
-                        </div>
+                      <td className="pt-1.5 pb-2.5 px-1.5 text-center text-[9.5px] font-medium text-slate-600 whitespace-nowrap align-middle">
+                        {row.source || "สนับสนุนกิจกรรม"}
                       </td>
                     </tr>
                   );
@@ -1453,7 +1427,7 @@ export default function EventA4PrintModal({
               onClick={() => setShowShareModal(true)}
               disabled={isProcessing}
               className="py-1.5 px-2.5 sm:px-3 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white font-bold text-xs flex items-center space-x-1 sm:space-x-1.5 shadow-md shadow-emerald-950 transition-all hover:scale-105 active:scale-95 cursor-pointer disabled:opacity-50"
-              title="แชร์เข้า LINE (เลือกรวม 1 รูปยาว หรือ แยก 4 รูป)"
+              title="แชร์เข้า LINE (ส่งแยกรูป A4 ทุกแผ่น)"
             >
               {isProcessing ? (
                 <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -1463,13 +1437,13 @@ export default function EventA4PrintModal({
               <span>แชร์เข้า LINE</span>
             </button>
 
-            {/* Share to Telegram (ส่งแยก 4 รูปต่อเนื่อง) */}
+            {/* Share to Telegram (ส่งแยกทุกรูปต่อเนื่อง) */}
             <button
               type="button"
               onClick={handleShareToTelegramSeparated}
               disabled={isProcessing}
               className="py-1.5 px-2.5 sm:px-3 rounded-xl bg-sky-500 hover:bg-sky-400 text-white font-bold text-xs flex items-center space-x-1 sm:space-x-1.5 shadow-md shadow-sky-950 transition-all hover:scale-105 active:scale-95 cursor-pointer disabled:opacity-50"
-              title="ส่งรายงาน A4 ทั้ง 4 รูปเข้า Telegram (เด้งแยก 4 รูป)"
+              title="ส่งรายงาน A4 ทุกแผ่นเข้า Telegram"
             >
               {isProcessing ? (
                 <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -1759,52 +1733,40 @@ export default function EventA4PrintModal({
                               rIdx % 2 === 0 ? "bg-white" : "bg-slate-50"
                             }`}
                           >
-                            <td className="py-1 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200 align-middle">
-                              <div className="flex items-center justify-center min-h-[22px] leading-tight">
-                                {rowNum}
-                              </div>
+                            <td className="pt-1.5 pb-2.5 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200 align-middle">
+                              {rowNum}
                             </td>
-                            <td className="py-1 px-1.5 text-center font-bold font-mono text-slate-800 border-r border-slate-200 align-middle">
-                              <div className="flex items-center justify-center min-h-[22px] leading-tight">
-                                {row.ticketNo}
-                              </div>
+                            <td className="pt-1.5 pb-2.5 px-1.5 text-center font-bold font-mono text-slate-800 border-r border-slate-200 align-middle">
+                              {row.ticketNo}
                             </td>
-                            <td className="py-1 px-2.5 border-r border-slate-200 align-middle">
-                              <div className="flex items-center min-h-[22px] leading-tight">
-                                <span className="font-bold text-slate-900 block leading-tight">
-                                  {row.name}
-                                  {row.nickname && (
-                                    <span className="font-semibold text-slate-600 ml-1">
-                                      ({row.nickname})
-                                    </span>
-                                  )}
-                                </span>
-                              </div>
+                            <td className="pt-1.5 pb-2.5 px-2.5 border-r border-slate-200 align-middle">
+                              <span className="font-bold text-slate-900 block leading-tight">
+                                {row.name}
+                                {row.nickname && (
+                                  <span className="font-semibold text-slate-600 ml-1">
+                                    ({row.nickname})
+                                  </span>
+                                )}
+                              </span>
                             </td>
-                            <td className="py-1 px-1.5 text-center font-mono text-slate-700 font-medium border-r border-slate-200 whitespace-nowrap align-middle">
-                              <div className="flex items-center justify-center min-h-[22px] leading-tight">
-                                {row.phone || "-"}
-                              </div>
+                            <td className="pt-1.5 pb-2.5 px-1.5 text-center font-mono text-slate-700 font-medium border-r border-slate-200 whitespace-nowrap align-middle">
+                              {row.phone || "-"}
                             </td>
-                            <td className="py-1 px-1.5 text-center border-r border-slate-200 whitespace-nowrap align-middle">
-                              <div className="flex items-center justify-center min-h-[22px]">
-                                <span
-                                  className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
-                                    isRotary
-                                      ? "bg-red-100 text-red-700 border border-red-300"
-                                      : "bg-blue-100 text-blue-700 border border-blue-300"
-                                  }`}
-                                >
-                                  {isRotary ? "โรตารี่" : "สงสพัท"}
-                                </span>
-                              </div>
+                            <td className="pt-1.5 pb-2.5 px-1.5 text-center border-r border-slate-200 whitespace-nowrap align-middle">
+                              <span
+                                className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
+                                  isRotary
+                                    ? "bg-red-100 text-red-700 border border-red-300"
+                                    : "bg-blue-100 text-blue-700 border border-blue-300"
+                                }`}
+                              >
+                                {isRotary ? "โรตารี่" : "สงสพัท"}
+                              </span>
                             </td>
-                            <td className="py-1 px-1.5 text-center whitespace-nowrap align-middle">
-                              <div className="flex items-center justify-center min-h-[22px]">
-                                <span className="text-[9.5px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 whitespace-nowrap inline-block">
-                                  ✓ ลงทะเบียนแล้ว
-                                </span>
-                              </div>
+                            <td className="pt-1.5 pb-2.5 px-1.5 text-center whitespace-nowrap align-middle">
+                              <span className="text-[9.5px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 whitespace-nowrap inline-block">
+                                ✓ ลงทะเบียนแล้ว
+                              </span>
                             </td>
                           </tr>
                         );
@@ -1843,52 +1805,40 @@ export default function EventA4PrintModal({
                                 rIdx % 2 === 0 ? "bg-white" : "bg-slate-50"
                               }`}
                             >
-                              <td className="py-1 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200 align-middle">
-                                <div className="flex items-center justify-center min-h-[22px] leading-tight">
-                                  {rowNum}
-                                </div>
+                              <td className="pt-1.5 pb-2.5 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200 align-middle">
+                                {rowNum}
                               </td>
-                              <td className="py-1 px-1.5 text-center font-bold font-mono text-purple-700 border-r border-slate-200 align-middle whitespace-nowrap">
-                                <div className="flex items-center justify-center min-h-[22px] leading-tight">
-                                  {row.ticketNo}
-                                </div>
+                              <td className="pt-1.5 pb-2.5 px-1.5 text-center font-bold font-mono text-purple-700 border-r border-slate-200 align-middle whitespace-nowrap">
+                                {row.ticketNo}
                               </td>
-                              <td className="py-1 px-2.5 border-r border-slate-200 align-middle">
-                                <div className="flex items-center min-h-[22px] leading-tight">
-                                  <span className="font-bold text-slate-900 block leading-tight">
-                                    {row.name}
-                                    {row.nickname && (
-                                      <span className="font-semibold text-slate-600 ml-1">
-                                        ({row.nickname})
-                                      </span>
-                                    )}
-                                  </span>
-                                </div>
+                              <td className="pt-1.5 pb-2.5 px-2.5 border-r border-slate-200 align-middle">
+                                <span className="font-bold text-slate-900 block leading-tight">
+                                  {row.name}
+                                  {row.nickname && (
+                                    <span className="font-semibold text-slate-600 ml-1">
+                                      ({row.nickname})
+                                    </span>
+                                  )}
+                                </span>
                               </td>
-                              <td className="py-1 px-2.5 border-r border-slate-200 align-middle">
-                                <div className="flex items-center min-h-[22px] leading-tight">
-                                  <span className="font-semibold text-slate-800 block leading-tight">
-                                    {recommenderDisplay}
-                                  </span>
-                                </div>
+                              <td className="pt-1.5 pb-2.5 px-2.5 border-r border-slate-200 align-middle">
+                                <span className="font-semibold text-slate-800 block leading-tight">
+                                  {recommenderDisplay}
+                                </span>
                               </td>
-                              <td className="py-1 px-1.5 text-center border-r border-slate-200 whitespace-nowrap align-middle">
-                                <div className="flex items-center justify-center min-h-[22px]">
-                                  <span
-                                    className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
-                                      isRotary
-                                        ? "bg-red-100 text-red-700 border border-red-300"
-                                        : "bg-blue-100 text-blue-700 border border-blue-300"
-                                    }`}
-                                  >
-                                    {row.club || "สงสพัท"}
-                                  </span>
-                                </div>
+                              <td className="pt-1.5 pb-2.5 px-1.5 text-center border-r border-slate-200 whitespace-nowrap align-middle">
+                                <span
+                                  className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
+                                    isRotary
+                                      ? "bg-red-100 text-red-700 border border-red-300"
+                                      : "bg-blue-100 text-blue-700 border border-blue-300"
+                                  }`}
+                                >
+                                  {row.club || "สงสพัท"}
+                                </span>
                               </td>
-                              <td className="py-1 px-1.5 text-center font-mono text-slate-700 font-medium whitespace-nowrap align-middle">
-                                <div className="flex items-center justify-center min-h-[22px] leading-tight">
-                                  {row.phone || "-"}
-                                </div>
+                              <td className="pt-1.5 pb-2.5 px-1.5 text-center font-mono text-slate-700 font-medium whitespace-nowrap align-middle">
+                                {row.phone || "-"}
                               </td>
                             </tr>
                           );
@@ -1933,24 +1883,8 @@ export default function EventA4PrintModal({
                               }`}
                             >
                               {/* อันดับ - กึ่งกลางแนวตั้ง */}
-                              <td className="py-2 px-1.5 text-center font-bold font-mono border-r border-slate-200 align-middle">
-                                <div className="flex items-center justify-center min-h-[28px]">
-                                  {rank === 1 ? (
-                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-100 text-amber-800 border border-amber-300 font-extrabold text-[11px]">
-                                      🥇 1
-                                    </span>
-                                  ) : rank === 2 ? (
-                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-200 text-slate-800 border border-slate-300 font-extrabold text-[11px]">
-                                      🥈 2
-                                    </span>
-                                  ) : rank === 3 ? (
-                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-orange-100 text-orange-800 border border-orange-300 font-extrabold text-[11px]">
-                                      🥉 3
-                                    </span>
-                                  ) : (
-                                    <span className="text-slate-600 font-semibold">{rank}</span>
-                                  )}
-                                </div>
+                              <td className="pt-2 pb-2.5 px-1.5 text-center font-bold font-mono text-slate-700 text-xs border-r border-slate-200 align-middle">
+                                {rank}
                               </td>
 
                               {/* ชื่อ - นามสกุล (ชื่อเล่น) ผู้เชิญ - ติดแถวบนแนวตั้ง */}
@@ -2054,72 +1988,60 @@ export default function EventA4PrintModal({
                               rIdx % 2 === 0 ? "bg-white" : "bg-slate-50"
                             }`}
                           >
-                            <td className="py-1.5 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200 align-middle">
-                              <div className="flex items-center justify-center min-h-[22px] leading-tight">
-                                {rowNum}
-                              </div>
+                            <td className="pt-1.5 pb-2.5 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200 align-middle">
+                              {rowNum}
                             </td>
-                            <td className="py-1.5 px-2.5 border-r border-slate-200 align-middle">
-                              <div className="flex flex-col justify-center min-h-[22px]">
-                                <span className="font-bold text-slate-900 block leading-tight">
-                                  {row.name}
+                            <td className="pt-1.5 pb-2.5 px-2.5 border-r border-slate-200 align-middle">
+                              <span className="font-bold text-slate-900 block leading-tight">
+                                {row.name}
+                              </span>
+                              {row.organization && (
+                                <span className="text-[9.5px] text-slate-500 block leading-tight mt-0.5">
+                                  {row.organization}
                                 </span>
-                                {row.organization && (
-                                  <span className="text-[9.5px] text-slate-500 block leading-tight">
-                                    {row.organization}
+                              )}
+                            </td>
+                            <td className="pt-1.5 pb-2.5 px-1.5 text-center border-r border-slate-200 whitespace-nowrap align-middle">
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                                {row.club || "ทั่วไป"}
+                              </span>
+                            </td>
+                            <td className="pt-1.5 pb-2.5 px-1.5 text-center border-r border-slate-200 whitespace-nowrap align-middle">
+                              <span
+                                className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[9.5px] font-bold whitespace-nowrap ${
+                                  isCash
+                                    ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                    : "bg-purple-100 text-purple-800 border border-purple-300"
+                                }`}
+                              >
+                                {isCash ? "💵 เงินสด" : "🎁 ของสนับสนุน"}
+                              </span>
+                            </td>
+                            <td className="pt-1.5 pb-2.5 px-2.5 border-r border-slate-200 align-middle">
+                              {isCash ? (
+                                <span className="font-bold text-emerald-700 font-mono text-xs">
+                                  ฿{Number(row.amount || 0).toLocaleString()} บาท
+                                </span>
+                              ) : (
+                                <div>
+                                  <span className="font-bold text-purple-900 block leading-tight">
+                                    {row.itemName}
                                   </span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="py-1.5 px-1.5 text-center border-r border-slate-200 whitespace-nowrap align-middle">
-                              <div className="flex items-center justify-center min-h-[22px]">
-                                <span className="px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
-                                  {row.club || "ทั่วไป"}
-                                </span>
-                              </div>
-                            </td>
-                            <td className="py-1.5 px-1.5 text-center border-r border-slate-200 whitespace-nowrap align-middle">
-                              <div className="flex items-center justify-center min-h-[22px]">
-                                <span
-                                  className={`px-1.5 py-0.5 rounded-full text-[9.5px] font-bold whitespace-nowrap ${
-                                    isCash
-                                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                                      : "bg-purple-100 text-purple-800 border border-purple-300"
-                                  }`}
-                                >
-                                  {isCash ? "💵 เงินสด" : "🎁 ของสนับสนุน"}
-                                </span>
-                              </div>
-                            </td>
-                            <td className="py-1.5 px-2.5 border-r border-slate-200 align-middle">
-                              <div className="flex flex-col justify-center min-h-[22px]">
-                                {isCash ? (
-                                  <span className="font-bold text-emerald-700 font-mono text-xs">
-                                    ฿{Number(row.amount || 0).toLocaleString()} บาท
-                                  </span>
-                                ) : (
-                                  <div>
-                                    <span className="font-bold text-purple-900 block leading-tight">
-                                      {row.itemName}
+                                  {row.itemQuantity && (
+                                    <span className="text-[9.5px] text-slate-600 block leading-tight mt-0.5">
+                                      จำนวน: {row.itemQuantity}
                                     </span>
-                                    {row.itemQuantity && (
-                                      <span className="text-[9.5px] text-slate-600 block leading-tight">
-                                        จำนวน: {row.itemQuantity}
-                                      </span>
-                                    )}
-                                    {row.itemNote && (
-                                      <span className="text-[9.5px] text-slate-500 italic block leading-tight">
-                                        {row.itemNote}
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
+                                  )}
+                                  {row.itemNote && (
+                                    <span className="text-[9.5px] text-slate-500 italic block leading-tight mt-0.5">
+                                      {row.itemNote}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             </td>
-                            <td className="py-1.5 px-1.5 text-center text-[9.5px] font-medium text-slate-600 whitespace-nowrap align-middle">
-                              <div className="flex items-center justify-center min-h-[22px]">
-                                {row.source || "สนับสนุนกิจกรรม"}
-                              </div>
+                            <td className="pt-1.5 pb-2.5 px-1.5 text-center text-[9.5px] font-medium text-slate-600 whitespace-nowrap align-middle">
+                              {row.source || "สนับสนุนกิจกรรม"}
                             </td>
                           </tr>
                         );
@@ -2179,59 +2101,32 @@ export default function EventA4PrintModal({
             </div>
 
             <div className="space-y-3">
-              {/* Option 1: Merged Continuous Long Image (RECOMMENDED) */}
-              <div
-                onClick={() => {
-                  setShowShareModal(false);
-                  handleShareMergedLongImage();
-                }}
-                className="group relative p-3.5 rounded-2xl bg-gradient-to-r from-emerald-950/70 via-slate-800 to-slate-800/90 border-2 border-emerald-500/60 hover:border-emerald-400 transition-all cursor-pointer hover:scale-[1.02] shadow-lg"
-              >
-                <div className="space-y-1.5">
-                  <div className="flex items-center space-x-1.5">
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500 text-slate-950 uppercase tracking-wider">
-                      🌟 แนะนำ • เรียงเป๊ะ 100%
-                    </span>
-                  </div>
-                  <h4 className="font-bold text-sm text-white group-hover:text-emerald-300 transition-colors flex items-center space-x-1.5">
-                    <span>รวมเป็น 1 รูปยาวต่อเนื่อง (เรียง 1 ➔ {a4Pages.length})</span>
-                  </h4>
-                  <p className="text-[11px] text-slate-300 leading-relaxed">
-                    รวมทุกหน้าต่อกันลงมาในภาพเดียว <strong>ภาพเรียงตามลำดับเป๊ะ 100% ไม่มีวันสลับจากเน็ต</strong> ผู้รับเปิดอ่านง่าย เลื่อนดูยาวลงมาได้ครบทุกสังกัด
-                  </p>
-                </div>
-                <div className="mt-3 flex items-center justify-between text-xs font-bold text-emerald-400 pt-2 border-t border-emerald-500/20">
-                  <span className="flex items-center space-x-1">
-                    <Check className="w-3.5 h-3.5" />
-                    <span>กดแชร์รูปยาวเข้า LINE ทันที</span>
-                  </span>
-                  <span>➔</span>
-                </div>
-              </div>
-
-              {/* Option 2: Separated 4 Images */}
+              {/* Option: แชร์แยกรูปเข้า LINE */}
               <div
                 onClick={() => {
                   setShowShareModal(false);
                   handleShareSeparatedImages();
                 }}
-                className="group p-3.5 rounded-2xl bg-slate-800/60 border border-white/15 hover:border-white/30 transition-all cursor-pointer hover:scale-[1.01]"
+                className="group relative p-3.5 rounded-2xl bg-gradient-to-r from-emerald-950/70 via-slate-800 to-slate-800/90 border-2 border-emerald-500/60 hover:border-emerald-400 transition-all cursor-pointer hover:scale-[1.02] shadow-lg"
               >
                 <div className="space-y-1.5">
                   <div className="flex items-center space-x-1.5">
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-700 text-slate-300">
-                      ส่งแยก {a4Pages.length} ไฟล์
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-[#06C755] text-white uppercase tracking-wider">
+                      💬 LINE • ส่งแยก {a4Pages.length} แผ่น
                     </span>
                   </div>
-                  <h4 className="font-bold text-sm text-white group-hover:text-amber-300 transition-colors">
-                    แชร์แยก {a4Pages.length} รูป (01 - 0{a4Pages.length})
+                  <h4 className="font-bold text-sm text-white group-hover:text-emerald-300 transition-colors flex items-center space-x-1.5">
+                    <span>แชร์แยก {a4Pages.length} รูปเข้า LINE (01 - 0{a4Pages.length})</span>
                   </h4>
-                  <p className="text-[11px] text-slate-400 leading-relaxed">
-                    ส่งแยกทีละแผ่น พร้อมใส่เลขลำดับกำกับ 01 ถึง 0{a4Pages.length} เหมาะสำหรับนำไปแยกส่งเฉพาะกลุ่ม
+                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                    ส่งรูปภาพเอกสาร A4 ครบทั้ง {a4Pages.length} แผ่น พร้อมเลขลำดับกำกับ 01 ถึง 0{a4Pages.length} เปิดอ่านง่าย คมชัด จัดวางกึ่งกลางทุกแถวเหมือนในระบบ
                   </p>
                 </div>
-                <div className="mt-3 flex items-center justify-between text-xs font-bold text-slate-300 pt-2 border-t border-white/10">
-                  <span>กดแชร์แยก {a4Pages.length} รูป</span>
+                <div className="mt-3 flex items-center justify-between text-xs font-bold text-emerald-400 pt-2 border-t border-emerald-500/20">
+                  <span className="flex items-center space-x-1">
+                    <Share2 className="w-3.5 h-3.5" />
+                    <span>กดแชร์แยก {a4Pages.length} รูปเข้า LINE ทันที</span>
+                  </span>
                   <span>➔</span>
                 </div>
               </div>

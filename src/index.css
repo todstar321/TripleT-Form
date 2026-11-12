@@ -6,6 +6,9 @@
   body {
     font-family: 'Prompt', 'Plus Jakarta Sans', sans-serif;
   }
+  img {
+    display: inline-block;
+  }
 }
 
 /* Custom Glassmorphism & Modern Utilities */
