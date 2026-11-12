@@ -120,7 +120,51 @@ export default function EventA4PrintModal({
     });
   }, [registrations]);
 
-  // 1. Group Data into 4 Categories
+  // Helper to find member information by name
+  const findMemberInfo = (searchName) => {
+    if (!searchName || typeof searchName !== "string") return null;
+    const clean = searchName.trim().toLowerCase();
+    if (!clean || clean === "-" || clean === "ไม่มี") return null;
+
+    const membersList = eventConfig?.members || [];
+
+    // 1. Exact match on member name
+    let match = membersList.find((m) => (m.name || "").trim().toLowerCase() === clean);
+    if (match) return match;
+
+    // 2. Contains match
+    match = membersList.find((m) => {
+      const mName = (m.name || "").trim().toLowerCase();
+      return mName && (clean.includes(mName) || mName.includes(clean));
+    });
+    if (match) return match;
+
+    // 3. Match in registrations
+    match = registrations.find((r) => (r.name || "").trim().toLowerCase() === clean);
+    if (match) return match;
+
+    match = registrations.find((r) => {
+      const rName = (r.name || "").trim().toLowerCase();
+      return rName && (clean.includes(rName) || rName.includes(clean));
+    });
+    return match || null;
+  };
+
+  // Helper to format recommender name and nickname
+  const formatRecommenderDisplay = (recName) => {
+    if (!recName || recName === "-" || recName === "ไม่มี") return "-";
+    if (/\(.*?\)/.test(recName)) {
+      return recName;
+    }
+    const cleanName = recName.trim();
+    const member = findMemberInfo(cleanName);
+    if (member && member.nickname) {
+      return `${member.name} (${member.nickname})`;
+    }
+    return cleanName;
+  };
+
+  // 1. Group Data into Categories
   const cat1Items = sortedRegistrations;
   const cat2Items = useMemo(() => {
     return sortedRegistrations.filter((r) => (r.club || "สงสพัท").includes("สงสพัท"));
@@ -128,6 +172,95 @@ export default function EventA4PrintModal({
   const cat3Items = useMemo(() => {
     return sortedRegistrations.filter((r) => (r.club || "").includes("โรตารี่"));
   }, [sortedRegistrations]);
+
+  // แขกรับเชิญและแขกผู้มีเกียรติ (ไม่ใช่สมาชิกแฟนที่ลงทะเบียน)
+  const guestItems = useMemo(() => {
+    return sortedRegistrations.filter((r) => {
+      if (r.regType === "guest" || r.regType === "แขก" || r.regType === "บุคคลทั่วไป/แขก") return true;
+      if (r.regType && r.regType !== "member" && r.regType !== "สมาชิก") return true;
+      if (r.recommender && r.recommender.trim() && r.recommender.trim() !== "-") {
+        const isOfficialMember = (eventConfig?.members || []).some(
+          (m) => (m.name || "").trim().toLowerCase() === (r.name || "").trim().toLowerCase()
+        );
+        if (!isOfficialMember) return true;
+      }
+      return false;
+    });
+  }, [sortedRegistrations, eventConfig]);
+
+  // สรุปสมาชิกที่เชิญแขกรับเชิญมา เรียงจากมากสุดไปน้อยสุด
+  const inviterSummaryList = useMemo(() => {
+    const map = new Map();
+
+    guestItems.forEach((guest) => {
+      const rawInviter = guest.recommender || guest.recommenderName || guest.inviter || "";
+      const cleanInviter = rawInviter.trim();
+      if (!cleanInviter || cleanInviter === "-" || cleanInviter === "ไม่มี") return;
+
+      const baseName = cleanInviter.replace(/\s*\(.*?\)\s*/g, "").trim();
+      const member = findMemberInfo(baseName || cleanInviter);
+
+      const key = member ? member.name : (baseName || cleanInviter);
+      const displayName = member ? member.name : (baseName || cleanInviter);
+      const nickname = member?.nickname || "";
+      const club = member?.club || guest.club || "สงสพัท";
+
+      if (!map.has(key)) {
+        map.set(key, {
+          inviterName: displayName,
+          inviterNickname: nickname,
+          club: club,
+          guests: []
+        });
+      }
+
+      map.get(key).guests.push({
+        ticketNo: guest.ticketNo || "",
+        name: guest.name,
+        nickname: guest.nickname || "",
+        phone: guest.phone || "",
+        club: guest.club || club
+      });
+    });
+
+    const list = Array.from(map.values()).map((item) => ({
+      ...item,
+      count: item.guests.length
+    }));
+
+    list.sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.inviterName.localeCompare(b.inviterName, "th");
+    });
+
+    return list;
+  }, [guestItems, eventConfig, registrations]);
+
+  // Dynamic Chunking for Inviter Summary pages (ensure rows fit within A4 height)
+  const chunkInviterSummary = (items) => {
+    if (!items || items.length === 0) return [[]];
+    const chunks = [];
+    let currentChunk = [];
+    let currentWeight = 0;
+    const MAX_WEIGHT_PER_PAGE = 18;
+
+    for (const item of items) {
+      const itemWeight = Math.max(1.2, 1 + (item.guests?.length || 1) * 0.7);
+      if (currentChunk.length > 0 && currentWeight + itemWeight > MAX_WEIGHT_PER_PAGE) {
+        chunks.push(currentChunk);
+        currentChunk = [item];
+        currentWeight = itemWeight;
+      } else {
+        currentChunk.push(item);
+        currentWeight += itemWeight;
+      }
+    }
+    if (currentChunk.length > 0) {
+      chunks.push(currentChunk);
+    }
+    return chunks;
+  };
+
   const cat4Items = sponsors;
 
   // 2. Build Multi-Page A4 Array with Chunking (26 items per page)
@@ -138,8 +271,8 @@ export default function EventA4PrintModal({
       categoryId,
       categoryTitle,
       categorySubtitle,
-      headerColorType, // 'pink' | 'blue' | 'red'
-      dataType, // 'registration' | 'sponsor'
+      headerColorType, // 'pink' | 'blue' | 'red' | 'purple' | 'indigo'
+      dataType, // 'registration' | 'guest' | 'inviterSummary' | 'sponsor'
       items
     }) => {
       const totalPagesForSection = Math.ceil(items.length / ROWS_PER_PAGE) || 1;
@@ -193,9 +326,42 @@ export default function EventA4PrintModal({
       items: cat3Items
     });
 
-    // หมวด 4: ตารางผู้สนับสนุนกิจกรรม (ทุกสังกัด) - สีชมพู
+    // หมวด 4: ตารางรายชื่อแขกรับเชิญและแขกผู้มีเกียรติ - สีม่วง
     addSectionPages({
       categoryId: 4,
+      categoryTitle: "ตารางรายชื่อแขกรับเชิญและแขกผู้มีเกียรติ",
+      categorySubtitle: "สรุปรายชื่อแขกรับเชิญและแขกผู้มีเกียรติ (ไม่ใช่สมาชิกแฟนที่ลงทะเบียน)",
+      headerColorType: "purple",
+      dataType: "guest",
+      items: guestItems
+    });
+
+    // หมวด 5: ตารางสรุปสมาชิกที่เชิญแขกรับเชิญ - สีคราม
+    const inviterChunks = chunkInviterSummary(inviterSummaryList);
+    const totalInviterPages = inviterChunks.length || 1;
+    let inviterRunningStart = 1;
+    for (let p = 0; p < totalInviterPages; p++) {
+      const pageItems = inviterChunks[p] || [];
+      pages.push({
+        pageNumber: pages.length + 1,
+        categoryId: 5,
+        categoryTitle: "ตารางสรุปสมาชิกที่เชิญแขกรับเชิญ",
+        categorySubtitle: "สรุปจำนวนและรายชื่อแขกรับเชิญของสมาชิก (เรียงจากยอดเชิญมากสุดไปน้อยสุด)",
+        headerColorType: "indigo",
+        dataType: "inviterSummary",
+        sectionPageIndex: p + 1,
+        sectionTotalPages: totalInviterPages,
+        pageLabel: totalInviterPages > 1 ? `หน้า ${p + 1}/${totalInviterPages}` : "หน้า 1/1",
+        items: pageItems,
+        totalItemsCount: inviterSummaryList.length,
+        startIndex: inviterRunningStart
+      });
+      inviterRunningStart += pageItems.length;
+    }
+
+    // หมวด 6: ตารางผู้สนับสนุนกิจกรรม (ทุกสังกัด) - สีชมพู
+    addSectionPages({
+      categoryId: 6,
       categoryTitle: "ตารางผู้สนับสนุนกิจกรรม (ทุกสังกัด)",
       categorySubtitle: "รายนามผู้มีจิตศรัทธาร่วมสนับสนุนกิจกรรม ทั้งเงินสดและสิ่งของ",
       headerColorType: "pink",
@@ -204,7 +370,7 @@ export default function EventA4PrintModal({
     });
 
     return pages;
-  }, [cat1Items, cat2Items, cat3Items, cat4Items]);
+  }, [cat1Items, cat2Items, cat3Items, cat4Items, guestItems, inviterSummaryList]);
 
   // LINE Share Summary Text
   const lineShareSummaryText = useMemo(() => {
@@ -212,6 +378,8 @@ export default function EventA4PrintModal({
       .filter((s) => s.sponsorType === "cash")
       .reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
     const itemSponsorsCount = sponsors.filter((s) => s.sponsorType === "item").length;
+
+    const topInviter = inviterSummaryList[0];
 
     return (
       `สรุปการลงทะเบียนเข้าร่วมกิจกรรมปีใหม่\n` +
@@ -222,6 +390,8 @@ export default function EventA4PrintModal({
       `• ผู้ลงทะเบียนรวม ${sortedRegistrations.length} ท่าน\n` +
       `  - สโมสรสงสพัท ${cat2Items.length} ท่าน\n` +
       `  - สโมสรโรตารี่ ${cat3Items.length} ท่าน\n` +
+      `  - แขกรับเชิญ/ผู้มีเกียรติ ${guestItems.length} ท่าน\n` +
+      (topInviter ? `  - ผู้เชิญแขกสูงสุด: ${topInviter.inviterName}${topInviter.inviterNickname ? ` (${topInviter.inviterNickname})` : ""} (${topInviter.count} คน)\n` : "") +
       `• ผู้สนับสนุนกิจกรรม: ${sponsors.length} ราย\n` +
       `  - ยอดเงินสดสนับสนุน ${cashSponsorsTotal.toLocaleString()} บาท\n` +
       `  - ของสนับสนุน/ของขวัญ: ${itemSponsorsCount} รายการ\n` +
@@ -229,7 +399,7 @@ export default function EventA4PrintModal({
       `🔗 ตรวจสอบข้อมูลแบบ Real-time:\n` +
       `https://triple-t-form.vercel.app`
     );
-  }, [printTimestamp, sortedRegistrations, cat2Items, cat3Items, sponsors]);
+  }, [printTimestamp, sortedRegistrations, cat2Items, cat3Items, guestItems, inviterSummaryList, sponsors]);
 
   // Handle Copy Summary Text
   const handleCopyText = () => {
@@ -716,6 +886,12 @@ export default function EventA4PrintModal({
         ? "#ec4899"
         : page.headerColorType === "blue"
         ? "#2563eb"
+        : page.headerColorType === "purple"
+        ? "#7c3aed"
+        : page.headerColorType === "indigo"
+        ? "#4f46e5"
+        : page.headerColorType === "emerald"
+        ? "#059669"
         : "#dc2626";
 
     return (
@@ -784,13 +960,13 @@ export default function EventA4PrintModal({
                         rIdx % 2 === 0 ? "bg-white" : "bg-slate-50"
                       } hover:bg-amber-50/40`}
                     >
-                      <td className="py-1 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200">
+                      <td className="py-1 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200 align-middle">
                         {rowNum}
                       </td>
-                      <td className="py-1 px-1.5 text-center font-bold font-mono text-slate-800 border-r border-slate-200">
+                      <td className="py-1 px-1.5 text-center font-bold font-mono text-slate-800 border-r border-slate-200 align-middle">
                         {row.ticketNo}
                       </td>
-                      <td className="py-1 px-2.5 border-r border-slate-200">
+                      <td className="py-1 px-2.5 border-r border-slate-200 align-middle">
                         <span className="font-bold text-slate-900 block leading-tight">
                           {row.name}
                           {row.nickname && (
@@ -799,16 +975,11 @@ export default function EventA4PrintModal({
                             </span>
                           )}
                         </span>
-                        {row.email && (
-                          <span className="text-[9.5px] text-slate-500 block truncate leading-tight">
-                            {row.email}
-                          </span>
-                        )}
                       </td>
-                      <td className="py-1 px-1.5 text-center font-mono text-slate-700 text-[10px] border-r border-slate-200">
+                      <td className="py-1 px-1.5 text-center font-mono text-slate-700 text-[10px] border-r border-slate-200 align-middle">
                         {row.phone || "-"}
                       </td>
-                      <td className="py-1 px-1.5 text-center border-r border-slate-200">
+                      <td className="py-1 px-1.5 text-center border-r border-slate-200 align-middle">
                         <span
                           className={`inline-block px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
                             isRotary
@@ -819,7 +990,7 @@ export default function EventA4PrintModal({
                           {row.club || "สงสพัท"}
                         </span>
                       </td>
-                      <td className="py-1 px-1.5 text-center whitespace-nowrap">
+                      <td className="py-1 px-1.5 text-center whitespace-nowrap align-middle">
                         <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
                           ✓ ลงทะเบียนแล้ว
                         </span>
@@ -827,6 +998,204 @@ export default function EventA4PrintModal({
                     </tr>
                   );
                 })}
+              </tbody>
+            </table>
+          )}
+
+          {/* TABLE: GUEST REPORT DATA */}
+          {page.dataType === "guest" && (
+            <table className="w-full text-[10.5px] border-collapse">
+              <thead>
+                <tr
+                  className="text-white text-left font-bold"
+                  style={{ backgroundColor: headerBgColor }}
+                >
+                  <th className="py-1.5 px-1.5 text-center w-10 border border-slate-300">ลำดับ</th>
+                  <th className="py-1.5 px-1.5 text-center w-16 border border-slate-300">เลขที่บัตร</th>
+                  <th className="py-1.5 px-2.5 border border-slate-300 min-w-[150px]">ชื่อ - นามสกุล (ชื่อเล่น)</th>
+                  <th className="py-1.5 px-2.5 border border-slate-300 min-w-[160px]">ชื่อ - นามสกุล (ชื่อเล่น) (ผู้ชักชวน)</th>
+                  <th className="py-1.5 px-1.5 text-center w-20 border border-slate-300">สังกัด</th>
+                  <th className="py-1.5 px-1.5 text-center w-24 border border-slate-300">โทร</th>
+                </tr>
+              </thead>
+              <tbody>
+                {page.items.length > 0 ? (
+                  page.items.map((row, rIdx) => {
+                    const rowNum = page.startIndex + rIdx;
+                    const isRotary = (row.club || "").includes("โรตารี่");
+                    const recommenderDisplay = formatRecommenderDisplay(row.recommender || row.recommenderName || row.inviter);
+
+                    return (
+                      <tr
+                        key={row.ticketNo || rIdx}
+                        className={`border-b border-slate-300 ${
+                          rIdx % 2 === 0 ? "bg-white" : "bg-slate-50"
+                        } hover:bg-amber-50/40`}
+                      >
+                        <td className="py-1 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200 align-middle">
+                          {rowNum}
+                        </td>
+                        <td className="py-1 px-1.5 text-center font-bold font-mono text-purple-700 border-r border-slate-200 align-middle whitespace-nowrap">
+                          {row.ticketNo}
+                        </td>
+                        <td className="py-1 px-2.5 border-r border-slate-200 align-middle">
+                          <span className="font-bold text-slate-900 block leading-tight">
+                            {row.name}
+                            {row.nickname && (
+                              <span className="font-semibold text-slate-600 ml-1">
+                                ({row.nickname})
+                              </span>
+                            )}
+                          </span>
+                        </td>
+                        <td className="py-1 px-2.5 border-r border-slate-200 align-middle">
+                          <span className="font-semibold text-slate-800 block leading-tight">
+                            {recommenderDisplay}
+                          </span>
+                        </td>
+                        <td className="py-1 px-1.5 text-center border-r border-slate-200 align-middle whitespace-nowrap">
+                          <span
+                            className={`inline-block px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
+                              isRotary
+                                ? "bg-rose-100 text-rose-700 border border-rose-300"
+                                : "bg-blue-100 text-blue-700 border border-blue-300"
+                            }`}
+                          >
+                            {row.club || "สงสพัท"}
+                          </span>
+                        </td>
+                        <td className="py-1 px-1.5 text-center font-mono text-slate-700 text-[10px] align-middle whitespace-nowrap">
+                          {row.phone || "-"}
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan="6" className="py-12 text-center text-slate-400 italic">
+                      ยังไม่มีข้อมูลการลงทะเบียนของแขกรับเชิญ
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
+
+          {/* TABLE: INVITER SUMMARY LEADERBOARD */}
+          {page.dataType === "inviterSummary" && (
+            <table className="w-full text-[10.5px] border-collapse">
+              <thead>
+                <tr
+                  className="text-white text-left font-bold"
+                  style={{ backgroundColor: headerBgColor }}
+                >
+                  <th className="py-1.5 px-1.5 text-center w-12 border border-slate-300">อันดับ</th>
+                  <th className="py-1.5 px-2.5 border border-slate-300 min-w-[140px]">ชื่อ - นามสกุล (ชื่อเล่น)</th>
+                  <th className="py-1.5 px-1.5 text-center w-20 border border-slate-300">สังกัด</th>
+                  <th className="py-1.5 px-1.5 text-center w-20 border border-slate-300">จำนวน</th>
+                  <th className="py-1.5 px-2.5 border border-slate-300 min-w-[200px]">รายชื่อแขกรับเชิญที่เชิญมา</th>
+                </tr>
+              </thead>
+              <tbody>
+                {page.items.length > 0 ? (
+                  page.items.map((row, rIdx) => {
+                    const rank = page.startIndex + rIdx;
+                    const isRotary = (row.club || "").includes("โรตารี่");
+
+                    return (
+                      <tr
+                        key={row.inviterName || rIdx}
+                        className={`border-b border-slate-300 ${
+                          rIdx % 2 === 0 ? "bg-white" : "bg-slate-50"
+                        } hover:bg-amber-50/40`}
+                      >
+                        {/* อันดับ */}
+                        <td className="py-1.5 px-1.5 text-center font-bold font-mono border-r border-slate-200 align-middle">
+                          {rank === 1 ? (
+                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-100 text-amber-800 border border-amber-300 font-extrabold text-[11px] shadow-sm">
+                              🥇 1
+                            </span>
+                          ) : rank === 2 ? (
+                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-200 text-slate-800 border border-slate-300 font-extrabold text-[11px] shadow-sm">
+                              🥈 2
+                            </span>
+                          ) : rank === 3 ? (
+                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-orange-100 text-orange-800 border border-orange-300 font-extrabold text-[11px] shadow-sm">
+                              🥉 3
+                            </span>
+                          ) : (
+                            <span className="text-slate-500 font-semibold">{rank}</span>
+                          )}
+                        </td>
+
+                        {/* ชื่อ - นามสกุล (ชื่อเล่น) ผู้เชิญ */}
+                        <td className="py-1.5 px-2.5 border-r border-slate-200 align-middle">
+                          <span className="font-bold text-slate-900 block leading-tight">
+                            {row.inviterName}
+                            {row.inviterNickname && (
+                              <span className="font-semibold text-indigo-700 ml-1">
+                                ({row.inviterNickname})
+                              </span>
+                            )}
+                          </span>
+                        </td>
+
+                        {/* สังกัด */}
+                        <td className="py-1.5 px-1.5 text-center border-r border-slate-200 align-middle whitespace-nowrap">
+                          <span
+                            className={`inline-block px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
+                              isRotary
+                                ? "bg-rose-100 text-rose-700 border border-rose-300"
+                                : "bg-blue-100 text-blue-700 border border-blue-300"
+                            }`}
+                          >
+                            {row.club || "สงสพัท"}
+                          </span>
+                        </td>
+
+                        {/* จำนวน */}
+                        <td className="py-1.5 px-1.5 text-center border-r border-slate-200 align-middle whitespace-nowrap">
+                          <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-indigo-100 text-indigo-800 border border-indigo-200">
+                            {row.count} คน
+                          </span>
+                        </td>
+
+                        {/* รายชื่อแขกรับเชิญที่เชิญมา */}
+                        <td className="py-1.5 px-2.5 align-middle">
+                          <div className="space-y-1">
+                            {row.guests.map((g, gIdx) => (
+                              <div
+                                key={g.ticketNo || gIdx}
+                                className="flex items-center text-[10px] leading-tight text-slate-800"
+                              >
+                                <span className="font-mono font-bold text-slate-400 w-4 text-right mr-1.5 shrink-0">
+                                  {gIdx + 1}.
+                                </span>
+                                <span className="font-bold text-slate-900">{g.name}</span>
+                                {g.nickname && (
+                                  <span className="font-medium text-slate-600 ml-1">
+                                    ({g.nickname})
+                                  </span>
+                                )}
+                                {g.ticketNo && (
+                                  <span className="ml-2 font-mono text-[9px] px-1 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200 shrink-0">
+                                    {g.ticketNo}
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan="5" className="py-12 text-center text-slate-400 italic">
+                      ยังไม่มีข้อมูลสมาชิกที่เชิญแขกรับเชิญ
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           )}
@@ -857,10 +1226,10 @@ export default function EventA4PrintModal({
                         rIdx % 2 === 0 ? "bg-white" : "bg-slate-50"
                       } hover:bg-amber-50/40`}
                     >
-                      <td className="py-1.5 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200">
+                      <td className="py-1.5 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200 align-middle">
                         {rowNum}
                       </td>
-                      <td className="py-1.5 px-2.5 border-r border-slate-200">
+                      <td className="py-1.5 px-2.5 border-r border-slate-200 align-middle">
                         <span className="font-bold text-slate-900 block leading-tight">
                           {row.name}
                         </span>
@@ -870,7 +1239,7 @@ export default function EventA4PrintModal({
                           </span>
                         )}
                       </td>
-                      <td className="py-1.5 px-2.5 border-r border-slate-200">
+                      <td className="py-1.5 px-2.5 border-r border-slate-200 align-middle">
                         {isCash ? (
                           <span className="font-bold text-emerald-700 font-mono text-xs">
                             ฿{Number(row.amount || 0).toLocaleString()} บาท
@@ -893,7 +1262,7 @@ export default function EventA4PrintModal({
                           </div>
                         )}
                       </td>
-                      <td className="py-1.5 px-1.5 text-center text-[9.5px] font-medium text-slate-600 whitespace-nowrap">
+                      <td className="py-1.5 px-1.5 text-center text-[9.5px] font-medium text-slate-600 whitespace-nowrap align-middle">
                         {row.source || "สนับสนุนกิจกรรม"}
                       </td>
                     </tr>
@@ -1014,7 +1383,7 @@ export default function EventA4PrintModal({
                   เอกสารตาราง A4 ({a4Pages.length} แผ่นต่อเนื่อง)
                 </h3>
                 <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-pink-500/20 text-pink-300 border border-pink-500/30 font-mono">
-                  4 หมวดหมู่
+                  {new Set(a4Pages.map((p) => p.categoryId)).size} หมวดหมู่
                 </span>
               </div>
               <p className="text-[10px] sm:text-[11px] text-slate-400 font-mono truncate">
@@ -1267,7 +1636,17 @@ export default function EventA4PrintModal({
           {a4Pages.map((pg, pageIdx) => {
             const isBlue = pg.headerColorType === "blue";
             const isRed = pg.headerColorType === "red";
-            const headerBgColor = isBlue ? "#1d4ed8" : isRed ? "#dc2626" : "#db2777";
+            const isPurple = pg.headerColorType === "purple";
+            const isIndigo = pg.headerColorType === "indigo";
+            const headerBgColor = isBlue
+              ? "#1d4ed8"
+              : isRed
+              ? "#dc2626"
+              : isPurple
+              ? "#7c3aed"
+              : isIndigo
+              ? "#4f46e5"
+              : "#db2777";
 
             return (
               <div
@@ -1342,13 +1721,13 @@ export default function EventA4PrintModal({
                               rIdx % 2 === 0 ? "bg-white" : "bg-slate-50"
                             }`}
                           >
-                            <td className="py-1 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200">
+                            <td className="py-1 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200 align-middle">
                               {rowNum}
                             </td>
-                            <td className="py-1 px-1.5 text-center font-bold font-mono text-slate-800 border-r border-slate-200">
+                            <td className="py-1 px-1.5 text-center font-bold font-mono text-slate-800 border-r border-slate-200 align-middle">
                               {row.ticketNo}
                             </td>
-                            <td className="py-1 px-2.5 border-r border-slate-200">
+                            <td className="py-1 px-2.5 border-r border-slate-200 align-middle">
                               <span className="font-bold text-slate-900 block leading-tight">
                                 {row.name}
                                 {row.nickname && (
@@ -1357,16 +1736,11 @@ export default function EventA4PrintModal({
                                   </span>
                                 )}
                               </span>
-                              {row.email && (
-                                <span className="text-[9.5px] text-slate-500 block truncate leading-tight">
-                                  {row.email}
-                                </span>
-                              )}
                             </td>
-                            <td className="py-1 px-1.5 text-center font-mono text-slate-700 font-medium border-r border-slate-200 whitespace-nowrap">
+                            <td className="py-1 px-1.5 text-center font-mono text-slate-700 font-medium border-r border-slate-200 whitespace-nowrap align-middle">
                               {row.phone || "-"}
                             </td>
-                            <td className="py-1 px-1.5 text-center border-r border-slate-200 whitespace-nowrap">
+                            <td className="py-1 px-1.5 text-center border-r border-slate-200 whitespace-nowrap align-middle">
                               <span
                                 className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
                                   isRotary
@@ -1377,7 +1751,7 @@ export default function EventA4PrintModal({
                                 {isRotary ? "โรตารี่" : "สงสพัท"}
                               </span>
                             </td>
-                            <td className="py-1 px-1.5 text-center whitespace-nowrap">
+                            <td className="py-1 px-1.5 text-center whitespace-nowrap align-middle">
                               <span className="text-[9.5px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 whitespace-nowrap inline-block">
                                 ✓ ลงทะเบียนแล้ว
                               </span>
@@ -1385,6 +1759,195 @@ export default function EventA4PrintModal({
                           </tr>
                         );
                       })}
+                    </tbody>
+                  </table>
+                )}
+
+                {/* Print Guest Table */}
+                {pg.dataType === "guest" && (
+                  <table className="w-full text-[10.5px] border-collapse">
+                    <thead>
+                      <tr
+                        className="text-white text-left font-bold"
+                        style={{ backgroundColor: headerBgColor }}
+                      >
+                        <th className="py-1.5 px-1.5 text-center w-10 border border-slate-300">ลำดับ</th>
+                        <th className="py-1.5 px-1.5 text-center w-16 border border-slate-300">เลขที่บัตร</th>
+                        <th className="py-1.5 px-2.5 border border-slate-300 min-w-[150px]">ชื่อ - นามสกุล (ชื่อเล่น)</th>
+                        <th className="py-1.5 px-2.5 border border-slate-300 min-w-[160px]">ชื่อ - นามสกุล (ชื่อเล่น) (ผู้ชักชวน)</th>
+                        <th className="py-1.5 px-1.5 text-center w-20 border border-slate-300">สังกัด</th>
+                        <th className="py-1.5 px-1.5 text-center w-24 border border-slate-300">โทร</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pg.items.length > 0 ? (
+                        pg.items.map((row, rIdx) => {
+                          const rowNum = pg.startIndex + rIdx;
+                          const isRotary = (row.club || "").includes("โรตารี่");
+                          const recommenderDisplay = formatRecommenderDisplay(row.recommender || row.recommenderName || row.inviter);
+
+                          return (
+                            <tr
+                              key={row.ticketNo || rIdx}
+                              className={`border-b border-slate-300 ${
+                                rIdx % 2 === 0 ? "bg-white" : "bg-slate-50"
+                              }`}
+                            >
+                              <td className="py-1 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200 align-middle">
+                                {rowNum}
+                              </td>
+                              <td className="py-1 px-1.5 text-center font-bold font-mono text-purple-700 border-r border-slate-200 align-middle whitespace-nowrap">
+                                {row.ticketNo}
+                              </td>
+                              <td className="py-1 px-2.5 border-r border-slate-200 align-middle">
+                                <span className="font-bold text-slate-900 block leading-tight">
+                                  {row.name}
+                                  {row.nickname && (
+                                    <span className="font-semibold text-slate-600 ml-1">
+                                      ({row.nickname})
+                                    </span>
+                                  )}
+                                </span>
+                              </td>
+                              <td className="py-1 px-2.5 border-r border-slate-200 align-middle">
+                                <span className="font-semibold text-slate-800 block leading-tight">
+                                  {recommenderDisplay}
+                                </span>
+                              </td>
+                              <td className="py-1 px-1.5 text-center border-r border-slate-200 whitespace-nowrap align-middle">
+                                <span
+                                  className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
+                                    isRotary
+                                      ? "bg-red-100 text-red-700 border border-red-300"
+                                      : "bg-blue-100 text-blue-700 border border-blue-300"
+                                  }`}
+                                >
+                                  {row.club || "สงสพัท"}
+                                </span>
+                              </td>
+                              <td className="py-1 px-1.5 text-center font-mono text-slate-700 font-medium whitespace-nowrap align-middle">
+                                {row.phone || "-"}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan="6" className="py-12 text-center text-slate-400 italic">
+                            ยังไม่มีข้อมูลการลงทะเบียนของแขกรับเชิญ
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                )}
+
+                {/* Print Inviter Summary Table */}
+                {pg.dataType === "inviterSummary" && (
+                  <table className="w-full text-[10.5px] border-collapse">
+                    <thead>
+                      <tr
+                        className="text-white text-left font-bold"
+                        style={{ backgroundColor: headerBgColor }}
+                      >
+                        <th className="py-1.5 px-1.5 text-center w-12 border border-slate-300">อันดับ</th>
+                        <th className="py-1.5 px-2.5 border border-slate-300 min-w-[140px]">ชื่อ - นามสกุล (ชื่อเล่น)</th>
+                        <th className="py-1.5 px-1.5 text-center w-20 border border-slate-300">สังกัด</th>
+                        <th className="py-1.5 px-1.5 text-center w-20 border border-slate-300">จำนวน</th>
+                        <th className="py-1.5 px-2.5 border border-slate-300 min-w-[200px]">รายชื่อแขกรับเชิญที่เชิญมา</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pg.items.length > 0 ? (
+                        pg.items.map((row, rIdx) => {
+                          const rank = pg.startIndex + rIdx;
+                          const isRotary = (row.club || "").includes("โรตารี่");
+
+                          return (
+                            <tr
+                              key={row.inviterName || rIdx}
+                              className={`border-b border-slate-300 ${
+                                rIdx % 2 === 0 ? "bg-white" : "bg-slate-50"
+                              }`}
+                            >
+                              <td className="py-1.5 px-1.5 text-center font-bold font-mono border-r border-slate-200 align-middle">
+                                {rank === 1 ? (
+                                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-100 text-amber-800 border border-amber-300 font-extrabold text-[11px]">
+                                    🥇 1
+                                  </span>
+                                ) : rank === 2 ? (
+                                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-200 text-slate-800 border border-slate-300 font-extrabold text-[11px]">
+                                    🥈 2
+                                  </span>
+                                ) : rank === 3 ? (
+                                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-orange-100 text-orange-800 border border-orange-300 font-extrabold text-[11px]">
+                                    🥉 3
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-600 font-semibold">{rank}</span>
+                                )}
+                              </td>
+                              <td className="py-1.5 px-2.5 border-r border-slate-200 align-middle">
+                                <span className="font-bold text-slate-900 block leading-tight">
+                                  {row.inviterName}
+                                  {row.inviterNickname && (
+                                    <span className="font-semibold text-indigo-700 ml-1">
+                                      ({row.inviterNickname})
+                                    </span>
+                                  )}
+                                </span>
+                              </td>
+                              <td className="py-1.5 px-1.5 text-center border-r border-slate-200 whitespace-nowrap align-middle">
+                                <span
+                                  className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
+                                    isRotary
+                                      ? "bg-red-100 text-red-700 border border-red-300"
+                                      : "bg-blue-100 text-blue-700 border border-blue-300"
+                                  }`}
+                                >
+                                  {row.club || "สงสพัท"}
+                                </span>
+                              </td>
+                              <td className="py-1.5 px-1.5 text-center border-r border-slate-200 whitespace-nowrap align-middle">
+                                <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-indigo-100 text-indigo-800 border border-indigo-200">
+                                  {row.count} คน
+                                </span>
+                              </td>
+                              <td className="py-1.5 px-2.5 align-middle">
+                                <div className="space-y-1">
+                                  {row.guests.map((g, gIdx) => (
+                                    <div
+                                      key={g.ticketNo || gIdx}
+                                      className="flex items-center text-[10px] leading-tight text-slate-800"
+                                    >
+                                      <span className="font-mono font-bold text-slate-400 w-4 text-right mr-1.5 shrink-0">
+                                        {gIdx + 1}.
+                                      </span>
+                                      <span className="font-bold text-slate-900">{g.name}</span>
+                                      {g.nickname && (
+                                        <span className="font-medium text-slate-600 ml-1">
+                                          ({g.nickname})
+                                        </span>
+                                      )}
+                                      {g.ticketNo && (
+                                        <span className="ml-2 font-mono text-[9px] px-1 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200 shrink-0">
+                                          {g.ticketNo}
+                                        </span>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan="5" className="py-12 text-center text-slate-400 italic">
+                            ยังไม่มีข้อมูลสมาชิกที่เชิญแขกรับเชิญ
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 )}
@@ -1414,17 +1977,12 @@ export default function EventA4PrintModal({
                               rIdx % 2 === 0 ? "bg-white" : "bg-slate-50"
                             }`}
                           >
-                            <td className="py-1.5 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200">
+                            <td className="py-1.5 px-1.5 text-center font-bold text-slate-500 font-mono border-r border-slate-200 align-middle">
                               {rowNum}
                             </td>
-                            <td className="py-1.5 px-2.5 border-r border-slate-200">
+                            <td className="py-1.5 px-2.5 border-r border-slate-200 align-middle">
                               <span className="font-bold text-slate-900 block leading-tight">
                                 {row.name}
-                                {row.nickname && (
-                                  <span className="font-semibold text-slate-600 ml-1">
-                                    ({row.nickname})
-                                  </span>
-                                )}
                               </span>
                               {row.organization && (
                                 <span className="text-[9.5px] text-slate-500 block leading-tight">
@@ -1432,12 +1990,12 @@ export default function EventA4PrintModal({
                                 </span>
                               )}
                             </td>
-                            <td className="py-1.5 px-1.5 text-center border-r border-slate-200 whitespace-nowrap">
+                            <td className="py-1.5 px-1.5 text-center border-r border-slate-200 whitespace-nowrap align-middle">
                               <span className="px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
                                 {row.club || "ทั่วไป"}
                               </span>
                             </td>
-                            <td className="py-1.5 px-1.5 text-center border-r border-slate-200 whitespace-nowrap">
+                            <td className="py-1.5 px-1.5 text-center border-r border-slate-200 whitespace-nowrap align-middle">
                               <span
                                 className={`px-1.5 py-0.5 rounded-full text-[9.5px] font-bold whitespace-nowrap ${
                                   isCash
@@ -1448,7 +2006,7 @@ export default function EventA4PrintModal({
                                 {isCash ? "💵 เงินสด" : "🎁 ของสนับสนุน"}
                               </span>
                             </td>
-                            <td className="py-1.5 px-2.5 border-r border-slate-200">
+                            <td className="py-1.5 px-2.5 border-r border-slate-200 align-middle">
                               {isCash ? (
                                 <span className="font-bold text-emerald-700 font-mono text-xs">
                                   ฿{Number(row.amount || 0).toLocaleString()} บาท
@@ -1471,7 +2029,7 @@ export default function EventA4PrintModal({
                                 </div>
                               )}
                             </td>
-                            <td className="py-1.5 px-1.5 text-center text-[9.5px] font-medium text-slate-600 whitespace-nowrap">
+                            <td className="py-1.5 px-1.5 text-center text-[9.5px] font-medium text-slate-600 whitespace-nowrap align-middle">
                               {row.source || "สนับสนุนกิจกรรม"}
                             </td>
                           </tr>

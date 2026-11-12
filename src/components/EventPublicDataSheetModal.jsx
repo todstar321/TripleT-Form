@@ -161,6 +161,137 @@ export default function EventPublicDataSheetModal({
     });
   }, [consolidatedSponsors, activeClubTab, searchQuery]);
 
+  // Helper to find member info
+  const findMemberInfo = (searchName) => {
+    if (!searchName || typeof searchName !== "string") return null;
+    const clean = searchName.trim().toLowerCase();
+    if (!clean || clean === "-" || clean === "ไม่มี") return null;
+
+    const membersList = eventConfig?.members || [];
+    let match = membersList.find((m) => (m.name || "").trim().toLowerCase() === clean);
+    if (match) return match;
+
+    match = membersList.find((m) => {
+      const mName = (m.name || "").trim().toLowerCase();
+      return mName && (clean.includes(mName) || mName.includes(clean));
+    });
+    if (match) return match;
+
+    match = registrations.find((r) => (r.name || "").trim().toLowerCase() === clean);
+    if (match) return match;
+
+    match = registrations.find((r) => {
+      const rName = (r.name || "").trim().toLowerCase();
+      return rName && (clean.includes(rName) || rName.includes(clean));
+    });
+    return match || null;
+  };
+
+  const formatRecommenderDisplay = (recName) => {
+    if (!recName || recName === "-" || recName === "ไม่มี") return "-";
+    if (/\(.*?\)/.test(recName)) return recName;
+    const cleanName = recName.trim();
+    const member = findMemberInfo(cleanName);
+    if (member && member.nickname) {
+      return `${member.name} (${member.nickname})`;
+    }
+    return cleanName;
+  };
+
+  // 3.1 Filter Guests by Selected Main Club Tab and Search Query
+  const filteredGuests = useMemo(() => {
+    return registrations.filter(r => {
+      const isGuest = r.regType === "guest" || r.regType === "แขก" || r.regType === "บุคคลทั่วไป/แขก" ||
+        (r.regType && r.regType !== "member" && r.regType !== "สมาชิก") ||
+        (r.recommender && r.recommender.trim() && r.recommender.trim() !== "-" && !(eventConfig?.members || []).some(m => (m.name || "").trim().toLowerCase() === (r.name || "").trim().toLowerCase()));
+      if (!isGuest) return false;
+
+      if (activeClubTab !== "all") {
+        const guestClub = r.club || "สงสพัท";
+        if (!guestClub.includes(activeClubTab)) return false;
+      }
+
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchName = r.name?.toLowerCase().includes(q);
+        const matchNick = r.nickname?.toLowerCase().includes(q);
+        const matchTicket = r.ticketNo?.toLowerCase().includes(q);
+        const matchPhone = r.phone?.includes(q);
+        const matchRec = (r.recommender || r.recommenderName || "")?.toLowerCase().includes(q);
+        if (!matchName && !matchNick && !matchTicket && !matchPhone && !matchRec) return false;
+      }
+      return true;
+    }).sort((a, b) => {
+      const numA = parseInt((a.ticketNo || "").replace(/\D/g, "")) || 0;
+      const numB = parseInt((b.ticketNo || "").replace(/\D/g, "")) || 0;
+      return numA - numB;
+    });
+  }, [registrations, activeClubTab, searchQuery, eventConfig]);
+
+  // 3.2 Inviter Summary List (Leaderboard)
+  const inviterSummaryList = useMemo(() => {
+    const map = new Map();
+    const allGuests = registrations.filter(r => {
+      return r.regType === "guest" || r.regType === "แขก" || r.regType === "บุคคลทั่วไป/แขก" ||
+        (r.regType && r.regType !== "member" && r.regType !== "สมาชิก") ||
+        (r.recommender && r.recommender.trim() && r.recommender.trim() !== "-" && !(eventConfig?.members || []).some(m => (m.name || "").trim().toLowerCase() === (r.name || "").trim().toLowerCase()));
+    });
+
+    allGuests.forEach(guest => {
+      const rawInviter = guest.recommender || guest.recommenderName || guest.inviter || "";
+      const cleanInviter = rawInviter.trim();
+      if (!cleanInviter || cleanInviter === "-" || cleanInviter === "ไม่มี") return;
+
+      const baseName = cleanInviter.replace(/\s*\(.*?\)\s*/g, "").trim();
+      const member = findMemberInfo(baseName || cleanInviter);
+
+      const key = member ? member.name : (baseName || cleanInviter);
+      const displayName = member ? member.name : (baseName || cleanInviter);
+      const nickname = member?.nickname || "";
+      const club = member?.club || guest.club || "สงสพัท";
+
+      if (activeClubTab !== "all" && !club.includes(activeClubTab)) return;
+
+      if (!map.has(key)) {
+        map.set(key, {
+          inviterName: displayName,
+          inviterNickname: nickname,
+          club: club,
+          guests: []
+        });
+      }
+
+      map.get(key).guests.push({
+        ticketNo: guest.ticketNo || "",
+        name: guest.name,
+        nickname: guest.nickname || "",
+        phone: guest.phone || "",
+        club: guest.club || club
+      });
+    });
+
+    let list = Array.from(map.values()).map(item => ({
+      ...item,
+      count: item.guests.length
+    }));
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(item => {
+        const matchInviter = item.inviterName.toLowerCase().includes(q) || item.inviterNickname.toLowerCase().includes(q);
+        const matchGuest = item.guests.some(g => g.name.toLowerCase().includes(q) || g.nickname.toLowerCase().includes(q));
+        return matchInviter || matchGuest;
+      });
+    }
+
+    list.sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.inviterName.localeCompare(b.inviterName, "th");
+    });
+
+    return list;
+  }, [registrations, activeClubTab, searchQuery, eventConfig]);
+
   // 4. Statistics Summary for currently active club tab
   const clubStats = useMemo(() => {
     const attendeesInClub = registrations.filter(r => {
@@ -319,22 +450,22 @@ export default function EventPublicDataSheetModal({
         </div>
 
         {/* ======================================================== */}
-        {/* แถบย่อย (SUB TABS): แบ่ง 2 ส่วนเท่ากัน 50% : 50%       */}
+        {/* แถบย่อย (SUB TABS): 4 หมวด                               */}
         {/* ======================================================== */}
         <div className="px-3 sm:px-6 py-2.5 bg-slate-900 border-b border-white/10 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 print:hidden">
-          <div className="grid grid-cols-2 gap-2 flex-1 max-w-lg p-1 rounded-2xl bg-slate-950/80 border border-white/10 shadow-inner">
-            {/* แถบย่อยที่ 1: รายชื่อลงทะเบียน */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 flex-1 max-w-2xl p-1 rounded-2xl bg-slate-950/80 border border-white/10 shadow-inner">
+            {/* แถบย่อยที่ 1: รายชื่อลงทะเบียนทั้งหมด */}
             <button
               type="button"
               onClick={() => setActiveSubTab("attendees")}
-              className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-2 cursor-pointer ${
+              className={`py-2 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${
                 activeSubTab === "attendees"
                   ? "bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black shadow-md shadow-amber-500/20"
                   : "text-slate-400 hover:text-white"
               }`}
             >
-              <Users className="w-3.5 h-3.5" />
-              <span>1. รายชื่อลงทะเบียน</span>
+              <Users className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">1. ลงทะเบียน</span>
               <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
                 activeSubTab === "attendees" ? "bg-slate-950/30 text-slate-950 font-extrabold" : "bg-white/5 text-slate-400"
               }`}>
@@ -342,18 +473,56 @@ export default function EventPublicDataSheetModal({
               </span>
             </button>
 
-            {/* แถบย่อยที่ 2: ผู้สนับสนุนกิจกรรม */}
+            {/* แถบย่อยที่ 2: แขกรับเชิญ */}
+            <button
+              type="button"
+              onClick={() => setActiveSubTab("guests")}
+              className={`py-2 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${
+                activeSubTab === "guests"
+                  ? "bg-gradient-to-r from-purple-500 to-violet-600 text-white font-black shadow-md shadow-purple-500/20"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">2. แขกรับเชิญ</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                activeSubTab === "guests" ? "bg-white/20 text-white font-extrabold" : "bg-white/5 text-slate-400"
+              }`}>
+                {filteredGuests.length}
+              </span>
+            </button>
+
+            {/* แถบย่อยที่ 3: สรุปผู้เชิญแขก */}
+            <button
+              type="button"
+              onClick={() => setActiveSubTab("inviterSummary")}
+              className={`py-2 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${
+                activeSubTab === "inviterSummary"
+                  ? "bg-gradient-to-r from-indigo-500 to-blue-600 text-white font-black shadow-md shadow-indigo-500/20"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">3. สรุปผู้เชิญ</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                activeSubTab === "inviterSummary" ? "bg-white/20 text-white font-extrabold" : "bg-white/5 text-slate-400"
+              }`}>
+                {inviterSummaryList.length}
+              </span>
+            </button>
+
+            {/* แถบย่อยที่ 4: ผู้สนับสนุนกิจกรรม */}
             <button
               type="button"
               onClick={() => setActiveSubTab("sponsors")}
-              className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-2 cursor-pointer ${
+              className={`py-2 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${
                 activeSubTab === "sponsors"
                   ? "bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950 font-black shadow-md shadow-emerald-500/20"
                   : "text-slate-400 hover:text-white"
               }`}
             >
-              <HeartHandshake className="w-3.5 h-3.5" />
-              <span>2. ผู้สนับสนุนกิจกรรม</span>
+              <HeartHandshake className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">4. ผู้สนับสนุน</span>
               <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
                 activeSubTab === "sponsors" ? "bg-slate-950/30 text-slate-950 font-extrabold" : "bg-white/5 text-slate-400"
               }`}>
@@ -395,14 +564,20 @@ export default function EventPublicDataSheetModal({
               <div className="font-mono flex items-center space-x-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-500" />
                 <span className="font-bold">
-                  {activeSubTab === "attendees" ? "📋 รายชื่อผู้ลงทะเบียนออนไลน์" : "🤝 รายชื่อผู้สนับสนุนกิจกรรม"}
+                  {activeSubTab === "attendees"
+                    ? "📋 รายชื่อผู้ลงทะเบียนออนไลน์"
+                    : activeSubTab === "guests"
+                    ? "✨ รายชื่อแขกรับเชิญและแขกผู้มีเกียรติ"
+                    : activeSubTab === "inviterSummary"
+                    ? "🏆 สรุปสมาชิกที่เชิญแขกรับเชิญ (จัดอันดับตามยอดเชิญ)"
+                    : "🤝 รายชื่อผู้สนับสนุนกิจกรรม"}
                 </span>
                 <span className="text-slate-400">
                   (สังกัด: {activeClubTab === "all" ? "รวมทุกสังกัด" : activeClubTab})
                 </span>
               </div>
               <div className="text-[11px] font-mono text-slate-400 print:text-gray-600">
-                แสดง {activeSubTab === "attendees" ? filteredAttendees.length : filteredSponsors.length} รายการ
+                แสดง {activeSubTab === "attendees" ? filteredAttendees.length : activeSubTab === "guests" ? filteredGuests.length : activeSubTab === "inviterSummary" ? inviterSummaryList.length : filteredSponsors.length} รายการ
               </div>
             </div>
 
@@ -427,17 +602,17 @@ export default function EventPublicDataSheetModal({
                           className="hover:bg-white/5 transition-colors print:hover:bg-transparent"
                         >
                           {/* ลำดับ */}
-                          <td className="py-2.5 px-3 text-center font-mono text-slate-400 border-r border-white/5 print:border-gray-300 print:text-gray-700">
+                          <td className="py-2.5 px-3 text-center font-mono text-slate-400 border-r border-white/5 print:border-gray-300 print:text-gray-700 align-middle">
                             {idx + 1}
                           </td>
 
                           {/* เลขที่บัตร */}
-                          <td className="py-2.5 px-3.5 font-mono font-bold text-amber-400 border-r border-white/5 print:border-gray-300 print:text-gray-900 whitespace-nowrap">
+                          <td className="py-2.5 px-3.5 font-mono font-bold text-amber-400 border-r border-white/5 print:border-gray-300 print:text-gray-900 whitespace-nowrap align-middle">
                             {r.ticketNo || `SME-${String(idx + 1).padStart(3, '0')}`}
                           </td>
 
                           {/* ชื่อ - นามสกุล */}
-                          <td className="py-2.5 px-4 font-semibold text-white border-r border-white/5 print:border-gray-300 print:text-gray-900">
+                          <td className="py-2.5 px-4 font-semibold text-white border-r border-white/5 print:border-gray-300 print:text-gray-900 align-middle">
                             <div className="flex items-center space-x-1.5">
                               <span>{r.name}</span>
                               {r.nickname && (
@@ -446,15 +621,10 @@ export default function EventPublicDataSheetModal({
                                 </span>
                               )}
                             </div>
-                            {r.email && (
-                              <div className="text-[10px] text-slate-400 font-normal truncate max-w-[200px] print:hidden">
-                                {r.email}
-                              </div>
-                            )}
                           </td>
 
                           {/* ประเภท / สังกัด */}
-                          <td className="py-2.5 px-3.5 border-r border-white/5 print:border-gray-300 whitespace-nowrap">
+                          <td className="py-2.5 px-3.5 border-r border-white/5 print:border-gray-300 whitespace-nowrap align-middle">
                             {r.regType === "member" ? (
                               (r.club || '').includes('โรตารี่') ? (
                                 <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-extrabold bg-red-500/20 text-red-300 border border-red-500/40 print:bg-red-100 print:text-red-900 print:border-red-300">
@@ -473,7 +643,7 @@ export default function EventPublicDataSheetModal({
                           </td>
 
                           {/* สถานะ */}
-                          <td className="py-2.5 px-3.5 text-center whitespace-nowrap">
+                          <td className="py-2.5 px-3.5 text-center whitespace-nowrap align-middle">
                             <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 print:bg-green-100 print:text-green-800">
                               <CheckCircle2 className="w-3 h-3" />
                               <span>ลงทะเบียนแล้ว</span>
@@ -485,6 +655,155 @@ export default function EventPublicDataSheetModal({
                       <tr>
                         <td colSpan={5} className="py-8 text-center text-slate-400 text-xs">
                           ไม่พบข้อมูลผู้ลงทะเบียนในหมวดนี้ครับ
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* TAB: GUESTS TABLE */}
+            {activeSubTab === "guests" && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-slate-900/90 text-slate-400 font-semibold border-b border-white/10 sticky top-0 print:bg-gray-100 print:text-gray-900">
+                    <tr>
+                      <th className="py-2.5 px-3 w-14 text-center border-r border-white/5 print:border-gray-300">ลำดับ</th>
+                      <th className="py-2.5 px-3.5 w-24 border-r border-white/5 print:border-gray-300">เลขที่บัตร</th>
+                      <th className="py-2.5 px-4 min-w-[200px] border-r border-white/5 print:border-gray-300">ชื่อ - นามสกุล (ชื่อเล่น)</th>
+                      <th className="py-2.5 px-4 min-w-[200px] border-r border-white/5 print:border-gray-300">ชื่อ - นามสกุล (ชื่อเล่น) (ผู้ชักชวน)</th>
+                      <th className="py-2.5 px-3.5 min-w-[120px] text-center border-r border-white/5 print:border-gray-300">สังกัด</th>
+                      <th className="py-2.5 px-3.5 text-center min-w-[120px] print:border-gray-300">โทร</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5 print:divide-gray-300">
+                    {filteredGuests.length > 0 ? (
+                      filteredGuests.map((r, idx) => (
+                        <tr 
+                          key={r.ticketNo || idx}
+                          className="hover:bg-white/5 transition-colors print:hover:bg-transparent"
+                        >
+                          <td className="py-2.5 px-3 text-center font-mono text-slate-400 border-r border-white/5 print:border-gray-300 print:text-gray-700 align-middle">
+                            {idx + 1}
+                          </td>
+                          <td className="py-2.5 px-3.5 font-mono font-bold text-purple-400 border-r border-white/5 print:border-gray-300 print:text-gray-900 whitespace-nowrap align-middle">
+                            {r.ticketNo}
+                          </td>
+                          <td className="py-2.5 px-4 font-semibold text-white border-r border-white/5 print:border-gray-300 print:text-gray-900 align-middle">
+                            <div className="flex items-center space-x-1.5">
+                              <span>{r.name}</span>
+                              {r.nickname && (
+                                <span className="text-purple-300 font-normal text-[11px] print:text-gray-700">
+                                  ({r.nickname})
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-4 font-medium text-slate-200 border-r border-white/5 print:border-gray-300 print:text-gray-900 align-middle">
+                            {formatRecommenderDisplay(r.recommender || r.recommenderName || r.inviter)}
+                          </td>
+                          <td className="py-2.5 px-3.5 text-center border-r border-white/5 print:border-gray-300 whitespace-nowrap align-middle">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 print:bg-indigo-100 print:text-indigo-900 print:border-indigo-300">
+                              {r.club || "สงสพัท"}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3.5 text-center font-mono text-slate-300 print:text-gray-700 whitespace-nowrap align-middle">
+                            {r.phone || "-"}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={6} className="py-8 text-center text-slate-400 text-xs">
+                          ไม่พบข้อมูลแขกรับเชิญในหมวดนี้ครับ
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* TAB: INVITER SUMMARY TABLE */}
+            {activeSubTab === "inviterSummary" && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-slate-900/90 text-slate-400 font-semibold border-b border-white/10 sticky top-0 print:bg-gray-100 print:text-gray-900">
+                    <tr>
+                      <th className="py-2.5 px-3 w-16 text-center border-r border-white/5 print:border-gray-300">อันดับ</th>
+                      <th className="py-2.5 px-4 min-w-[200px] border-r border-white/5 print:border-gray-300">ชื่อ - นามสกุล (ชื่อเล่น)</th>
+                      <th className="py-2.5 px-3.5 min-w-[120px] text-center border-r border-white/5 print:border-gray-300">สังกัด</th>
+                      <th className="py-2.5 px-3.5 text-center min-w-[100px] border-r border-white/5 print:border-gray-300">จำนวน</th>
+                      <th className="py-2.5 px-4 min-w-[280px] print:border-gray-300">รายชื่อแขกรับเชิญที่เชิญมา</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5 print:divide-gray-300">
+                    {inviterSummaryList.length > 0 ? (
+                      inviterSummaryList.map((row, idx) => (
+                        <tr 
+                          key={row.inviterName || idx}
+                          className="hover:bg-white/5 transition-colors print:hover:bg-transparent"
+                        >
+                          <td className="py-2.5 px-3 text-center font-mono font-bold border-r border-white/5 print:border-gray-300 align-middle">
+                            {idx === 0 ? (
+                              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold text-xs">
+                                🥇 1
+                              </span>
+                            ) : idx === 1 ? (
+                              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-400/20 text-slate-200 border border-slate-400/30 font-bold text-xs">
+                                🥈 2
+                              </span>
+                            ) : idx === 2 ? (
+                              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30 font-bold text-xs">
+                                🥉 3
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">{idx + 1}</span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-4 font-semibold text-white border-r border-white/5 print:border-gray-300 print:text-gray-900 align-middle">
+                            <div className="flex items-center space-x-1.5">
+                              <span>{row.inviterName}</span>
+                              {row.inviterNickname && (
+                                <span className="text-indigo-300 font-normal text-[11px] print:text-gray-700">
+                                  ({row.inviterNickname})
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3.5 text-center border-r border-white/5 print:border-gray-300 whitespace-nowrap align-middle">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 print:bg-indigo-100 print:text-indigo-900 print:border-indigo-300">
+                              {row.club || "สงสพัท"}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3.5 text-center border-r border-white/5 print:border-gray-300 whitespace-nowrap align-middle">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold font-mono bg-indigo-500/30 text-indigo-200 border border-indigo-500/40">
+                              {row.count} คน
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-4 align-middle">
+                            <div className="space-y-1">
+                              {row.guests.map((g, gIdx) => (
+                                <div key={g.ticketNo || gIdx} className="flex items-center space-x-1.5 text-xs text-slate-200">
+                                  <span className="font-mono text-slate-500 text-[11px] w-4 text-right shrink-0">{gIdx + 1}.</span>
+                                  <span className="font-semibold text-white">{g.name}</span>
+                                  {g.nickname && <span className="text-amber-300 text-[11px]">({g.nickname})</span>}
+                                  {g.ticketNo && (
+                                    <span className="text-[10px] font-mono px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                      {g.ticketNo}
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center text-slate-400 text-xs">
+                          ยังไม่มีข้อมูลสมาชิกที่เชิญแขกรับเชิญ
                         </td>
                       </tr>
                     )}
