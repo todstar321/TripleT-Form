@@ -447,106 +447,161 @@ export default function SatisfactionSurveyModal({
           /* ==================================================== */
           <div className="space-y-4">
             
-            {/* REAL-TIME LIVE SCORE & EVALUATOR CARD (จัดเรียงลงมาตามแบบภาพที่ 2 สบายตา ตัวหนังสือเล็กลง ไม่รกตา) */}
-            <div className="p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-yellow-400/10 to-amber-500/15 border border-amber-500/35 text-center space-y-1 shadow-md">
+            {/* ==================================================== */}
+            {/* 2-COLUMN HEADER: LEFT (ITEMS 1-5) | RIGHT (SCORE)    */}
+            {/* ==================================================== */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-stretch">
               
-              {/* บรรทัดที่ 1: ข้อมูลผู้ประเมิน */}
-              <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-slate-950/70 border border-white/10 text-xs">
-                <span className="text-amber-400">👤 ผู้ประเมิน:</span>
-                <span className="font-bold text-white">
-                  {activeAttendee.name} {activeAttendee.nickname ? `(${activeAttendee.nickname})` : ''}
-                </span>
-                {activeAttendee.ticketNo && (
-                  <span className="text-slate-400 font-mono text-[10px] pl-1 border-l border-white/10">
-                    #{activeAttendee.ticketNo}
+              {/* ฝั่งซ้าย: แยกตามข้อ 1-5 เหมือนภาพที่ 2 (ตัวหนังสือเล็ก กระชับ กดสลับหมวดได้ทันที) */}
+              <div className="p-2.5 sm:p-3 rounded-2xl bg-slate-950/80 border border-white/10 flex flex-col justify-between space-y-1.5 shadow-inner">
+                <div className="flex items-center justify-between pb-1 border-b border-white/5 px-1">
+                  <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider">
+                    📋 หัวข้อการประเมิน (คลิกเลือกหมวด)
                   </span>
-                )}
-              </div>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    {categories.filter(c => isCategoryComplete(c)).length}/{categories.length} หมวด
+                  </span>
+                </div>
 
-              {/* บรรทัดที่ 2: หัวข้อคะแนนเฉลี่ยรวม */}
-              <span className="text-[10px] sm:text-[11px] font-bold text-amber-300 uppercase tracking-wider block pt-0.5">
-                คะแนนเฉลี่ยรวมทุกหัวข้อ
-              </span>
+                <div className="space-y-1">
+                  {categories.map((cat, idx) => {
+                    const isActive = idx === currentStep;
+                    const isDone = isCategoryComplete(cat);
+                    const catScore = getCategoryAvg(cat);
+                    const catTitle = cat.title || cat.label || `หมวดที่ ${idx + 1}`;
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => {
+                          setError("");
+                          setCurrentStep(idx);
+                        }}
+                        className={`w-full px-2 py-1.5 rounded-xl text-left transition-all flex items-center justify-between text-xs border cursor-pointer ${
+                          isActive
+                            ? "bg-amber-500/20 text-white border-amber-500/60 ring-1 ring-amber-400/40 shadow-sm"
+                            : isDone
+                              ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/25 hover:bg-emerald-500/15"
+                              : "bg-white/5 text-slate-300 border-white/5 hover:bg-white/10 hover:text-white"
+                        }`}
+                        title={`คลิกเพื่อไปที่ ${catTitle}`}
+                      >
+                        <div className="flex items-center space-x-1.5 min-w-0 pr-1">
+                          <span className={`w-4 h-4 rounded-md font-bold text-[9px] flex items-center justify-center shrink-0 ${
+                            isActive
+                              ? "bg-amber-500 text-slate-950 font-black"
+                              : isDone
+                                ? "bg-emerald-500/20 text-emerald-400"
+                                : "bg-white/10 text-slate-400"
+                          }`}>
+                            {idx + 1}
+                          </span>
+                          <span className="truncate font-semibold text-[11px]">
+                            {catTitle}
+                          </span>
+                        </div>
 
-              {/* บรรทัดที่ 3: คะแนนเฉลี่ย (ปรับขนาดตัวหนังสือให้เล็กลง สบายตา ไม่รกตา) */}
-              <div className="text-2xl sm:text-3xl font-black text-amber-400 font-mono leading-tight">
-                {overallLiveStats.overallAvg} <span className="text-sm sm:text-base font-bold text-amber-300">/ 5.0 ⭐</span>
-              </div>
+                        <div className="flex items-center space-x-1 shrink-0 pl-1">
+                          <span className={`font-mono text-[10px] font-bold ${
+                            isActive ? "text-amber-300" : isDone ? "text-emerald-400" : "text-slate-400"
+                          }`}>
+                            {catScore} ⭐
+                          </span>
+                          <span className="text-[9px] text-amber-400/70 underline">
+                            {isActive ? "กำลังดู" : "เลือก"}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
 
-              {/* บรรทัดที่ 4: สถานะจำนวนข้อที่ตอบแล้ว */}
-              <div className="text-[11px] text-slate-300">
-                ตอบแล้ว {overallLiveStats.answered} จาก {overallLiveStats.totalQuestions} ข้อย่อย ({overallLiveStats.percent}%)
-              </div>
-            </div>
-
-            {/* Category Stepper Tabs Bar (แถบสลับหมวดหมู่ 1 - 5 + สรุปผล) */}
-            <div className="p-2.5 rounded-2xl bg-slate-950/90 border border-white/10 space-y-2">
-              <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 scrollbar-none">
-                {categories.map((cat, idx) => {
-                  const isActive = idx === currentStep;
-                  const isDone = isCategoryComplete(cat);
-                  const catScore = getCategoryAvg(cat);
-                  const catTitle = cat.title || cat.label || `หมวดที่ ${idx + 1}`;
-                  return (
-                    <button
-                      key={cat.id}
-                      type="button"
-                      onClick={() => {
-                        setError("");
-                        setCurrentStep(idx);
-                      }}
-                      className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center space-x-1.5 border cursor-pointer ${
-                        isActive
-                          ? "bg-amber-500 text-slate-950 border-amber-400 shadow-md shadow-amber-500/25 scale-[1.02]"
-                          : isDone
-                            ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25"
-                            : "bg-white/5 text-slate-400 border-white/10 hover:bg-white/10 hover:text-white"
-                      }`}
-                    >
-                      <span>{idx + 1}. {catTitle.replace(/^\d+\.\s*(ด้าน)?/, '').slice(0, 10)}...</span>
-                      {isDone && (
-                        <span className={`text-[10px] px-1 rounded-md font-mono font-bold ${
-                          isActive ? "bg-slate-950 text-amber-300" : "bg-emerald-500/20 text-emerald-400"
-                        }`}>
-                          {catScore}⭐
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-
-                {/* Review Tab */}
+                {/* ปุ่มไปหน้าสรุปผลการประเมิน */}
                 <button
                   type="button"
                   onClick={() => {
                     setError("");
                     setCurrentStep(categories.length);
                   }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center space-x-1 border cursor-pointer ${
+                  className={`w-full px-2 py-1.5 rounded-xl text-left transition-all flex items-center justify-between text-xs border cursor-pointer mt-0.5 ${
                     isReviewStep
-                      ? "bg-amber-500 text-slate-950 border-amber-400 shadow-md shadow-amber-500/25 scale-[1.02]"
-                      : "bg-white/5 text-slate-400 border-white/10 hover:bg-white/10 hover:text-white"
+                      ? "bg-amber-500/20 text-white border-amber-500/60 ring-1 ring-amber-400/40 shadow-sm"
+                      : "bg-white/5 text-slate-300 border-white/5 hover:bg-white/10 hover:text-white"
                   }`}
+                  title="คลิกเพื่อไปที่หน้าสรุปผลและส่งแบบประเมิน"
                 >
-                  <span>📋 สรุปผล</span>
+                  <div className="flex items-center space-x-1.5 min-w-0">
+                    <span className={`w-4 h-4 rounded-md font-bold text-[9px] flex items-center justify-center shrink-0 ${
+                      isReviewStep ? "bg-amber-500 text-slate-950" : "bg-white/10 text-slate-400"
+                    }`}>
+                      ✓
+                    </span>
+                    <span className="font-bold text-[11px] text-amber-200 truncate">
+                      หน้าสรุปผลการประเมิน
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-amber-300/80 font-semibold font-mono shrink-0 pl-1">
+                    {overallLiveStats.percent === 100 ? "ครบ 100% 🌟" : `${overallLiveStats.percent}%`}
+                  </span>
                 </button>
               </div>
 
-              {/* Current Category Info (เฉพาะหน้า 1-5) */}
-              {!isReviewStep && currentCategory && (
-                <div className="flex items-center justify-between pt-1 border-t border-white/5 text-xs">
-                  <span className="text-slate-300 font-medium truncate pr-2">
-                    หน้า {currentStep + 1} จาก {categories.length}: <strong className="text-white">{currentCategory.title || currentCategory.label}</strong>
+              {/* ฝั่งขวา: แสดงผลแบบปัจจุบันตามภาพที่ 1 (ผู้ประเมิน + คะแนนเฉลี่ยรวมสด) */}
+              <div className="p-3 sm:p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-yellow-400/10 to-amber-500/15 border border-amber-500/35 text-center flex flex-col justify-center items-center space-y-1.5 shadow-md">
+                
+                {/* ข้อมูลผู้ประเมิน */}
+                <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-slate-950/70 border border-white/10 text-xs">
+                  <span className="text-amber-400">👤 ผู้ประเมิน:</span>
+                  <span className="font-bold text-white truncate max-w-[160px] sm:max-w-none">
+                    {activeAttendee.name} {activeAttendee.nickname ? `(${activeAttendee.nickname})` : ''}
                   </span>
-                  <div className="flex items-center space-x-1.5 text-amber-400 font-mono font-bold shrink-0">
-                    <span className="text-[11px] text-slate-400 hidden sm:inline">คะแนนเฉลี่ยหมวดนี้:</span>
-                    <span className="bg-amber-500/15 px-2 py-0.5 rounded-md border border-amber-500/30 text-amber-300 text-xs">
-                      {currentCategoryStats.avg} / 5.0 ⭐
+                  {activeAttendee.ticketNo && (
+                    <span className="text-slate-400 font-mono text-[10px] pl-1 border-l border-white/10">
+                      #{activeAttendee.ticketNo}
                     </span>
-                  </div>
+                  )}
                 </div>
-              )}
+
+                {/* หัวข้อคะแนนเฉลี่ยรวม */}
+                <span className="text-[10px] sm:text-[11px] font-bold text-amber-300 uppercase tracking-wider block pt-0.5">
+                  คะแนนเฉลี่ยรวมทุกหัวข้อ
+                </span>
+
+                {/* คะแนนเฉลี่ยรวม */}
+                <div className="text-2xl sm:text-3xl font-black text-amber-400 font-mono leading-tight">
+                  {overallLiveStats.overallAvg} <span className="text-sm sm:text-base font-bold text-amber-300">/ 5.0 ⭐</span>
+                </div>
+
+                {/* สถานะจำนวนข้อที่ตอบแล้ว */}
+                <div className="text-[11px] text-slate-300">
+                  ตอบแล้ว {overallLiveStats.answered} จาก {overallLiveStats.totalQuestions} ข้อย่อย ({overallLiveStats.percent}%)
+                </div>
+
+                {/* Mini Progress Bar */}
+                <div className="w-full max-w-[180px] h-1.5 bg-slate-900/80 rounded-full overflow-hidden border border-white/10 mt-0.5">
+                  <div
+                    className="h-full bg-gradient-to-r from-amber-400 to-yellow-300 rounded-full transition-all duration-300"
+                    style={{ width: `${overallLiveStats.percent}%` }}
+                  />
+                </div>
+              </div>
+
             </div>
+
+            {/* Current Active Category Subheader (แสดงเฉพาะในหน้าข้อคำถาม 1-5) */}
+            {!isReviewStep && currentCategory && (
+              <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-950/80 border border-white/10 text-xs">
+                <span className="text-slate-300 font-medium truncate pr-2">
+                  กำลังประเมินหน้า {currentStep + 1} จาก {categories.length}: <strong className="text-white">{currentCategory.title || currentCategory.label}</strong>
+                </span>
+                <div className="flex items-center space-x-1.5 text-amber-400 font-mono font-bold shrink-0">
+                  <span className="text-[11px] text-slate-400 hidden sm:inline">คะแนนเฉลี่ยหมวดนี้:</span>
+                  <span className="bg-amber-500/15 px-2 py-0.5 rounded-md border border-amber-500/30 text-amber-300 text-xs">
+                    {currentCategoryStats.avg} / 5.0 ⭐
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* Error Banner */}
             {error && (
