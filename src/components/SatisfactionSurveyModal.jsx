@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import confetti from 'canvas-confetti';
 import { 
   X, 
   Star, 
@@ -75,6 +76,7 @@ export default function SatisfactionSurveyModal({
   const [error, setError] = useState("");
   const [existingResponse, setExistingResponse] = useState(null);
   const [shakingQuestionIds, setShakingQuestionIds] = useState([]);
+  const [zoomQuestion, setZoomQuestion] = useState(null);
 
   const getDraftKey = (att, isPreview) => {
     if (isPreview) return "triple_t_survey_draft_preview";
@@ -151,7 +153,7 @@ export default function SatisfactionSurveyModal({
 
   // Current category data
   const currentCategory = categories[currentStep] || null;
-  const isReviewStep = currentStep === categories.length;
+  const isLastCategory = currentStep === categories.length - 1;
 
   // Real-time calculation: Category Average Score
   const currentCategoryStats = useMemo(() => {
@@ -244,7 +246,7 @@ export default function SatisfactionSurveyModal({
       }
     }
     setError("");
-    setCurrentStep(prev => Math.min(categories.length, prev + 1));
+    setCurrentStep(prev => Math.min(categories.length - 1, prev + 1));
   };
 
   const handleBack = () => {
@@ -303,8 +305,18 @@ export default function SatisfactionSurveyModal({
       displayTime: fullDisplayTime
     };
 
+    // Fireworks / Confetti Celebration
+    try {
+      confetti({
+        particleCount: 120,
+        spread: 80,
+        origin: { y: 0.6 }
+      });
+    } catch (err) {}
+
     if (isPreviewMode) {
-      alert(`[โหมดทดสอบแบบสอบถาม]\n\n🎉 คุณได้ทดสอบให้คะแนนครบทั้ง ${overallLiveStats.totalQuestions} ข้อย่อยเรียบร้อยแล้ว!\nคะแนนเฉลี่ยรวมที่ทดลองประเมิน: ${overallLiveStats.overallAvg} / 5.0 ⭐\nเวลาที่บันทึก: ${fullDisplayTime}\n\n⚠️ ในโหมดทดสอบนี้ จะไม่มีการบันทึกคะแนนใดๆ ลงในระบบจริง เพื่อป้องกันไม่ให้ข้อมูลปนเปื้อนครับ`);
+      // In preview mode: No browser alert! Transition to celebration screen smoothly
+      setError("");
       setExistingResponse(newResponse);
       setIsSubmitted(true);
       return;
@@ -339,6 +351,7 @@ export default function SatisfactionSurveyModal({
       } catch (err) {}
     }
 
+    setError("");
     setIsSubmitted(true);
     setExistingResponse(newResponse);
   };
@@ -350,7 +363,7 @@ export default function SatisfactionSurveyModal({
       case 3: return "ปานกลาง 🙂";
       case 2: return "ไม่พอใจ 😐";
       case 1: return "ไม่พอใจเลย ⚠️";
-      default: return "ยังไม่ได้เลือก";
+      default: return "รอโหวต";
     }
   };
 
@@ -384,22 +397,46 @@ export default function SatisfactionSurveyModal({
         </div>
 
         {/* ==================================================== */}
-        {/* SUCCESS / VIEW SUBMITTED RECORD SCREEN (READ ONLY)   */}
+        {/* ==================================================== */}
+        {/* SUCCESS & CELEBRATION THANK YOU SCREEN               */}
         {/* ==================================================== */}
         {isSubmitted && existingResponse ? (
-          <div className="py-4 text-center space-y-4 animate-fadeIn">
-            <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/20">
-              <CheckCircle2 className="w-10 h-10 text-emerald-400" />
+          <div className="py-6 px-3 text-center space-y-5 animate-fadeIn">
+            {/* Animated Modern Sticker / Celebration Graphic */}
+            <div className="relative mx-auto w-24 h-24 sm:w-28 sm:h-28 flex items-center justify-center">
+              {/* Pulsing Glow Background */}
+              <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-amber-400/40 via-yellow-300/30 to-emerald-400/40 blur-xl animate-pulse" />
+              {/* Sticker Badge */}
+              <div className="relative w-full h-full rounded-3xl bg-gradient-to-tr from-amber-500 via-yellow-400 to-emerald-400 p-1 shadow-2xl rotate-2 hover:rotate-0 transition-transform">
+                <div className="w-full h-full rounded-[22px] bg-slate-950 flex flex-col items-center justify-center border border-white/20">
+                  <span className="text-3xl sm:text-4xl animate-bounce">🎉</span>
+                  <span className="text-[10px] font-black tracking-widest text-amber-300 uppercase pt-1">
+                    THANK YOU!
+                  </span>
+                </div>
+              </div>
             </div>
-            <div className="space-y-1">
-              <h4 className="text-xl font-extrabold text-white">
-                บันทึกแบบประเมินความพึงพอใจเรียบร้อยแล้ว 🎉
-              </h4>
-              <p className="text-xs text-slate-300 max-w-md mx-auto leading-relaxed">
-                ขอขอบพระคุณเป็นอย่างยิ่งที่ร่วมส่งความคิดเห็น ทุกคะแนนและข้อเสนอแนะมีคุณค่าต่อการพัฒนาการจัดกิจกรรม SME FAN ในครั้งต่อไปครับ
+
+            {/* Main Thank You Message */}
+            <div className="space-y-2">
+              <div className="inline-flex items-center space-x-1.5 px-3.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold shadow-sm">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                <span>บันทึกแบบประเมินเรียบร้อยแล้ว</span>
+              </div>
+              <h3 className="text-xl sm:text-2xl font-black text-white leading-snug">
+                ขอบคุณท่านที่ร่วมประเมินกิจกรรมในครั้งนี้
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-300 max-w-md mx-auto leading-relaxed">
+                ทุกคะแนนและข้อเสนอแนะของท่านมีความหมายอย่างยิ่ง ช่วยให้ทีมงานนำไปปรับปรุงและสร้างสรรค์กิจกรรม SME FAN ให้ดียิ่งขึ้นไปในอนาคตครับ
               </p>
-              <div className="pt-1">
-                <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-slate-950 border border-emerald-500/30 text-[11px] text-emerald-300 font-mono">
+              
+              {/* Time & Attendee Badge */}
+              <div className="pt-1 flex flex-wrap items-center justify-center gap-2">
+                <span className="inline-flex items-center space-x-1 px-3 py-1 rounded-full bg-slate-900 border border-white/10 text-[11px] text-slate-300">
+                  <span>👤 ผู้ประเมิน:</span>
+                  <strong className="text-white">{activeAttendee.name} {activeAttendee.nickname ? `(${activeAttendee.nickname})` : ''}</strong>
+                </span>
+                <span className="inline-flex items-center space-x-1 px-3 py-1 rounded-full bg-slate-900 border border-emerald-500/30 text-[11px] text-emerald-300 font-mono">
                   <span>⏱️ บันทึกเวลา:</span>
                   <span className="font-bold">{existingResponse.displayTime || existingResponse.submittedAt}</span>
                 </span>
@@ -407,35 +444,32 @@ export default function SatisfactionSurveyModal({
             </div>
 
             {/* Score Summary Box */}
-            <div className="bg-slate-950/80 p-4 rounded-2xl border border-white/10 space-y-3 text-xs text-left max-w-lg mx-auto">
-              <div className="flex justify-between items-center pb-2 border-b border-white/10">
-                <span className="text-slate-400 font-bold">ผู้ประเมิน:</span>
-                <span className="font-extrabold text-white">
-                  {activeAttendee.name} {activeAttendee.nickname ? `(${activeAttendee.nickname})` : ''} ({activeAttendee.ticketNo})
-                </span>
-              </div>
-
-              {/* Overall Score Banner */}
-              <div className="p-3 rounded-xl bg-gradient-to-r from-amber-500/20 via-yellow-400/10 to-amber-500/20 border border-amber-500/30 flex items-center justify-between">
+            <div className="bg-slate-950/80 p-4 rounded-2xl border border-white/10 space-y-3 text-xs text-left max-w-lg mx-auto shadow-inner">
+              {/* Overall Score Highlight Card */}
+              <div className="p-3 rounded-xl bg-gradient-to-r from-amber-500/20 via-yellow-400/10 to-amber-500/20 border border-amber-500/35 flex items-center justify-between">
                 <div>
-                  <span className="text-[10px] text-amber-300 uppercase tracking-wider font-bold block">
-                    คะแนนเฉลี่ยรวมทั้งงานของคุณ
+                  <span className="text-[10px] sm:text-[11px] text-amber-300 font-bold uppercase tracking-wider block">
+                    คะแนนเฉลี่ยรวมทุกหัวข้อ
                   </span>
                   <span className="text-xs text-slate-300">
-                    {Number(existingResponse.overallAverage || overallLiveStats.overallAvg) >= 4.5 ? "ระดับยอดเยี่ยมมาก 🌟" : "ระดับดีมาก 👍"}
+                    {Number(existingResponse.overallAverage || overallLiveStats.overallAvg) >= 4.5
+                      ? "ระดับยอดเยี่ยมมาก 🌟"
+                      : Number(existingResponse.overallAverage || overallLiveStats.overallAvg) >= 3.5
+                        ? "ระดับดีมาก 👍"
+                        : "ระดับปานกลาง 🙂"}
                   </span>
                 </div>
                 <div className="text-right">
-                  <span className="text-xl sm:text-2xl font-black text-amber-400 font-mono">
+                  <span className="text-2xl font-black text-amber-400 font-mono">
                     {existingResponse.overallAverage || overallLiveStats.overallAvg}
                   </span>
-                  <span className="text-xs text-amber-300"> / 5.0 ⭐</span>
+                  <span className="text-xs font-bold text-amber-300"> / 5.0 ⭐</span>
                 </div>
               </div>
 
               {/* Category Breakdown */}
-              <div className="space-y-2 pt-1">
-                {categories.map((cat, idx) => {
+              <div className="space-y-1.5 pt-1 max-h-48 overflow-y-auto pr-1">
+                {categories.map((cat) => {
                   const catAvg = existingResponse.categoryAverages?.[cat.id] || getCategoryAvg(cat);
                   const catComment = (existingResponse.categoryComments || {})[cat.id];
                   return (
@@ -458,26 +492,27 @@ export default function SatisfactionSurveyModal({
               </div>
             </div>
 
-            {/* Read-Only Notice - Locked once submitted */}
-            <div className="p-2.5 rounded-xl bg-slate-900 border border-white/10 text-slate-400 text-xs flex items-center justify-center space-x-2 max-w-sm mx-auto">
-              <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+            {/* Read-Only Notice */}
+            <div className="p-2 rounded-xl bg-slate-900 border border-white/10 text-slate-400 text-xs flex items-center justify-center space-x-2 max-w-sm mx-auto">
+              <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
               <span>ข้อมูลถูกบันทึกสมบูรณ์แล้ว ไม่สามารถแก้ไขได้</span>
             </div>
 
-            {/* Action Buttons */}
+            {/* Action Buttons: ปุ่มตกลงเพื่อกลับไปหน้าปกติ */}
             <div className="flex items-center justify-center gap-3 pt-1">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-8 py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-sm font-extrabold shadow-lg shadow-amber-500/25 transition-all cursor-pointer"
+                className="px-8 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-slate-950 text-sm font-black shadow-xl shadow-emerald-500/25 transition-all hover:scale-105 active:scale-95 cursor-pointer flex items-center space-x-2"
               >
-                ปิดหน้าต่าง
+                <Check className="w-4 h-4 stroke-[3]" />
+                <span>ตกลง (กลับสู่หน้าปกติ)</span>
               </button>
             </div>
           </div>
         ) : (
           /* ==================================================== */
-          /* MULTI-STEP WIZARD (STEP 1 - 5 + REVIEW STEP)         */
+          /* MULTI-STEP WIZARD (STEP 1 - 5)                       */
           /* ==================================================== */
           <div className="space-y-4">
             
@@ -498,35 +533,36 @@ export default function SatisfactionSurveyModal({
             {/* ==================================================== */}
             <div className="p-3 sm:p-4 rounded-2xl bg-slate-950/80 border border-amber-500/30 shadow-lg space-y-2.5">
               
-              {/* ส่วนที่ 1 (ด้านบน): ข้อมูลผู้ประเมิน + คะแนนเฉลี่ยรวมทุกหัวข้อ (ขนาดกะทัดรัด แถบเดียวกัน ไม่กินที่จอมือถือ) */}
-              <div className="p-2 sm:p-2.5 rounded-xl bg-gradient-to-r from-amber-500/15 via-yellow-400/10 to-amber-500/15 border border-amber-500/25 flex flex-wrap items-center justify-between gap-2">
-                {/* ข้อมูลผู้ประเมิน */}
-                <div className="flex items-center space-x-1.5 min-w-0">
-                  <span className="text-amber-400 text-xs shrink-0">👤 ผู้ประเมิน:</span>
-                  <span className="font-bold text-white text-xs sm:text-sm truncate">
+              {/* ส่วนที่ 1 (ด้านบน): ข้อมูลผู้ประเมิน + คะแนนเฉลี่ยรวมทุกหัวข้อ จัดกึ่งกลางแนวนอนทุกบรรทัด */}
+              <div className="p-3 rounded-xl bg-gradient-to-r from-amber-500/15 via-yellow-400/10 to-amber-500/15 border border-amber-500/25 flex flex-col items-center justify-center text-center space-y-1.5 shadow-sm">
+                {/* บรรทัดที่ 1: ข้อมูลผู้ประเมิน */}
+                <div className="flex flex-wrap items-center justify-center gap-1.5 text-xs sm:text-sm">
+                  <span className="text-amber-400 font-medium">👤 ผู้ประเมิน:</span>
+                  <span className="font-extrabold text-white">
                     {activeAttendee.name} {activeAttendee.nickname ? `(${activeAttendee.nickname})` : ''}
                   </span>
                   {activeAttendee.ticketNo && (
-                    <span className="text-amber-300 font-mono text-[10px] bg-slate-900/80 px-1.5 py-0.5 rounded border border-white/10 shrink-0">
+                    <span className="text-amber-300 font-mono text-[11px] bg-slate-900/80 px-2 py-0.5 rounded border border-white/10 font-bold">
                       #{activeAttendee.ticketNo}
                     </span>
                   )}
                 </div>
 
-                {/* คะแนนเฉลี่ยรวมสด & จำนวนข้อที่ตอบแล้ว */}
-                <div className="flex items-center space-x-2 shrink-0">
-                  <div className="text-right">
-                    <span className="text-[10px] text-slate-300 block leading-tight">คะแนนเฉลี่ยรวมทุกหัวข้อ</span>
-                    <div className="text-sm sm:text-base font-black text-amber-400 font-mono leading-none">
-                      {overallLiveStats.overallAvg} <span className="text-[10px] font-bold text-amber-300">/ 5.0 ⭐</span>
-                    </div>
-                  </div>
-                  <div className="pl-2 border-l border-white/10 text-right">
-                    <span className="text-[10px] text-slate-400 block leading-tight">ตอบแล้ว</span>
-                    <span className="text-xs font-mono font-bold text-emerald-400">
-                      {overallLiveStats.answered}/{overallLiveStats.totalQuestions} ({overallLiveStats.percent}%)
-                    </span>
-                  </div>
+                {/* บรรทัดที่ 2: คะแนนเฉลี่ยรวมทุกหัวข้อ */}
+                <div className="flex items-center justify-center space-x-1.5 text-xs sm:text-sm">
+                  <span className="text-slate-300 font-medium">คะแนนเฉลี่ยรวมทุกหัวข้อ</span>
+                  <span className="text-sm sm:text-base font-black text-amber-400 font-mono">
+                    {overallLiveStats.overallAvg}
+                  </span>
+                  <span className="text-xs font-bold text-amber-300">/ 5.0 ⭐</span>
+                </div>
+
+                {/* บรรทัดที่ 3: ตอบแล้ว X/Y (Z%) */}
+                <div className="flex items-center justify-center space-x-1.5 text-xs">
+                  <span className="text-slate-400">ตอบแล้ว</span>
+                  <span className="font-mono font-bold text-emerald-400">
+                    {overallLiveStats.answered}/{overallLiveStats.totalQuestions} ({overallLiveStats.percent}%)
+                  </span>
                 </div>
               </div>
 
@@ -590,14 +626,14 @@ export default function SatisfactionSurveyModal({
                           }`}>
                             {catScore} ⭐
                           </span>
-                          {/* สถานะ: ครบ (สีเขียว) หรือ ยังไม่ลง (สีแดง บอกจำนวนข้อที่เหลือ) แทนคำว่า "เลือก" */}
+                          {/* สถานะ: ✓ ครบ หรือ (ขาด X ข้อ) โดยให้ขนาดความกว้างเท่ากัน w-24 เพื่อความสวยงาม */}
                           {isDone ? (
-                            <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/20 px-1.5 py-0.5 rounded border border-emerald-500/30 flex items-center space-x-0.5">
-                              <span>✓ ครบ</span>
+                            <span className="w-24 text-center justify-center text-[10px] font-bold text-emerald-400 bg-emerald-500/20 py-0.5 rounded border border-emerald-500/30 inline-flex items-center">
+                              ✓ ครบ
                             </span>
                           ) : (
-                            <span className="text-[10px] font-bold text-rose-400 bg-rose-500/15 px-1.5 py-0.5 rounded border border-rose-500/30">
-                              ⚠️ ยังไม่ลง ({remainingCount} ข้อ)
+                            <span className="w-24 text-center justify-center text-[10px] font-bold text-rose-400 bg-rose-500/15 py-0.5 rounded border border-rose-500/30 inline-flex items-center">
+                              (ขาด {remainingCount} ข้อ)
                             </span>
                           )}
                         </div>
@@ -605,40 +641,11 @@ export default function SatisfactionSurveyModal({
                     );
                   })}
                 </div>
-
-                {/* ปุ่มไปหน้าสรุปผล */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setError("");
-                    setCurrentStep(categories.length);
-                  }}
-                  className={`w-full px-2.5 py-1.5 rounded-xl text-left transition-all flex items-center justify-between text-xs border cursor-pointer mt-1 ${
-                    isReviewStep
-                      ? "bg-amber-500/20 text-white border-amber-500/60 ring-1 ring-amber-400/40 shadow-sm"
-                      : "bg-white/5 text-slate-300 border-white/5 hover:bg-white/10 hover:text-white"
-                  }`}
-                  title="คลิกเพื่อไปที่หน้าสรุปผลและส่งแบบประเมิน"
-                >
-                  <div className="flex items-center space-x-2 min-w-0">
-                    <span className={`w-4 h-4 rounded-md font-bold text-[9px] flex items-center justify-center shrink-0 ${
-                      isReviewStep ? "bg-amber-500 text-slate-950" : "bg-white/10 text-slate-400"
-                    }`}>
-                      ✓
-                    </span>
-                    <span className="font-bold text-xs text-amber-200 truncate">
-                      หน้าสรุปผลการประเมิน
-                    </span>
-                  </div>
-                  <span className="text-[10px] text-amber-300 font-semibold font-mono shrink-0 pl-1">
-                    {overallLiveStats.percent === 100 ? "ครบ 100% 🌟" : `${overallLiveStats.percent}%`}
-                  </span>
-                </button>
               </div>
             </div>
 
-            {/* Current Active Category Subheader (แสดงเฉพาะในหน้าข้อคำถาม 1-5) */}
-            {!isReviewStep && currentCategory && (
+            {/* Current Active Category Subheader */}
+            {currentCategory && (
               <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-950/80 border border-white/10 text-xs">
                 <span className="text-slate-300 font-medium truncate pr-2">
                   กำลังประเมินหน้า {currentStep + 1} จาก {categories.length}: <strong className="text-white">{currentCategory.title || currentCategory.label}</strong>
@@ -660,13 +667,10 @@ export default function SatisfactionSurveyModal({
               </div>
             )}
 
-            {/* ==================================================== */}
-            {/* VIEW A: CATEGORY QUESTIONS PAGE (STEP 1 TO 5)        */}
-            {/* ==================================================== */}
-            {!isReviewStep && currentCategory && (
+            {/* Questions List for Current Category: พื้นหลังสีขาว ตัวหนังสือชัดเจน */}
+            {currentCategory && (
               <div className="space-y-4 animate-fadeIn">
                 
-                {/* Questions List for Current Category: พื้นหลังสีขาว ตัวหนังสือชัดเจนตามความต้องการ */}
                 <div className="space-y-3">
                   {(currentCategory.questions || []).map((q, qIdx) => {
                     const currentVal = scores[q.id];
@@ -684,25 +688,32 @@ export default function SatisfactionSurveyModal({
                               : "bg-white border-slate-200 hover:border-slate-300"
                         }`}
                       >
-                        {/* Title & Inline Rating Badge (ต่อท้ายหัวข้อทันที) */}
-                        <div className="pb-2">
-                          <h4 className="text-xs sm:text-sm font-bold text-slate-900 leading-snug flex flex-wrap items-center gap-1.5">
-                            <span>{q.title || q.label || `คำถามข้อที่ ${qIdx + 1}`}</span>
-                            {currentVal ? (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300 shadow-xs">
-                                ({getScoreBadgeText(currentVal)})
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-600 border border-rose-200">
-                                (* ยังไม่ได้ลงคะแนน)
-                              </span>
+                        {/* Title & Small Eye Icon Button at top-right corner */}
+                        <div className="flex items-start justify-between gap-2 pb-2">
+                          <div 
+                            onClick={() => setZoomQuestion({ ...q, catTitle: currentCategory.title, qIdx })}
+                            className="cursor-pointer group flex-1 text-left"
+                            title="แตะเพื่อดูตัวหนังสือขนาดใหญ่"
+                          >
+                            <h4 className="text-xs sm:text-sm font-bold text-slate-900 leading-snug group-hover:text-amber-700 transition-colors">
+                              {q.title || q.label || `คำถามข้อที่ ${qIdx + 1}`}
+                            </h4>
+                            {q.desc && (
+                              <p className="text-[11px] text-slate-600 pt-1 leading-relaxed">
+                                {q.desc}
+                              </p>
                             )}
-                          </h4>
-                          {q.desc && (
-                            <p className="text-[11px] text-slate-600 pt-1 leading-relaxed">
-                              {q.desc}
-                            </p>
-                          )}
+                          </div>
+
+                          {/* ปุ่มรูปตาเล็กๆ มุมขวาบนสำหรับเปิดป๊อปอัปขยายตัวหนังสือใหญ่ */}
+                          <button
+                            type="button"
+                            onClick={() => setZoomQuestion({ ...q, catTitle: currentCategory.title, qIdx })}
+                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-amber-100 text-slate-400 hover:text-amber-600 border border-slate-200 transition-all cursor-pointer shrink-0"
+                            title="ดูตัวหนังสือขนาดใหญ่ (Zoom)"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
                         </div>
 
                         {/* 5-Star Rating Buttons on White Card */}
@@ -733,14 +744,15 @@ export default function SatisfactionSurveyModal({
                             })}
                           </div>
 
-                          <div className="font-mono text-xs sm:text-sm font-extrabold pl-2">
+                          {/* แทนที่ 4/5 5/5 ด้วยระดับความพึงพอใจ หรือ รอโหวต */}
+                          <div className="shrink-0 pl-2">
                             {currentVal ? (
-                              <span className="text-amber-700 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
-                                {currentVal} / 5 ⭐
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-xl text-xs font-extrabold bg-amber-100 text-amber-900 border border-amber-300 shadow-xs">
+                                {getScoreBadgeText(currentVal)}
                               </span>
                             ) : (
-                              <span className="text-rose-500 font-semibold text-xs">
-                                ยังไม่เลือก
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-xl text-xs font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                                รอโหวต
                               </span>
                             )}
                           </div>
@@ -750,12 +762,17 @@ export default function SatisfactionSurveyModal({
                   })}
                 </div>
 
-                {/* Per-Category Comments / Feedback Box (การ์ดขาวสะอาดตา) */}
-                <div className="p-3.5 sm:p-4 rounded-2xl bg-white border-2 border-slate-200 shadow-sm space-y-1.5">
-                  <label className="flex items-center space-x-1.5 text-xs sm:text-sm font-bold text-slate-800">
-                    <MessageSquare className="w-4 h-4 text-amber-600" />
-                    <span>ข้อเสนอแนะเพิ่มเติมสำหรับ {currentCategory.title} (ไม่บังคับ):</span>
-                  </label>
+                {/* Per-Category Comments / Feedback Box (จัดกึ่งกลาง แยก 2 บรรทัด ไม่มีสัญลักษณ์สีแดง) */}
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-white border-2 border-slate-200 shadow-sm space-y-2 text-center">
+                  <div className="space-y-0.5">
+                    <div className="text-xs sm:text-sm font-bold text-slate-800">
+                      ข้อเสนอแนะเพิ่มเติม
+                    </div>
+                    <div className="text-[11px] sm:text-xs text-slate-600 flex items-center justify-center space-x-1">
+                      <span>{currentCategory.title}</span>
+                      <span className="text-rose-500 font-bold">(ไม่บังคับ)</span>
+                    </div>
+                  </div>
                   <textarea
                     value={categoryComments[currentCategory.id] || ""}
                     onChange={(e) => {
@@ -765,13 +782,13 @@ export default function SatisfactionSurveyModal({
                         [currentCategory.id]: val
                       }));
                     }}
-                    placeholder={`พิมพ์ข้อเสนอแนะ สิ่งที่ประทับใจ หรือสิ่งที่อยากให้พัฒนาเกี่ยวกับ ${currentCategory.title}...`}
+                    placeholder="ข้อเสนอแนะ"
                     rows={2}
-                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 placeholder-slate-400 text-xs sm:text-sm focus:outline-none focus:border-amber-500 focus:bg-white shadow-inner resize-none transition-colors"
+                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 placeholder:text-slate-400 text-xs sm:text-sm focus:outline-none focus:border-amber-500 focus:bg-white shadow-inner resize-none transition-colors text-center placeholder:text-center"
                   />
                 </div>
 
-                {/* Navigation Buttons: ⬅ ย้อนกลับ & ถัดไป ➔ */}
+                {/* Navigation Buttons: ⬅ ย้อนกลับ & (ถัดไป ➔ หรือ ยืนยันและส่งแบบประเมิน) */}
                 <div className="flex items-center justify-between pt-2">
                   <button
                     type="button"
@@ -787,101 +804,128 @@ export default function SatisfactionSurveyModal({
                     <span>ย้อนกลับ</span>
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={handleNext}
-                    className="px-6 py-3 rounded-2xl text-xs sm:text-sm font-extrabold bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 shadow-lg shadow-amber-500/25 flex items-center space-x-2 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-                  >
-                    <span>{currentStep === categories.length - 1 ? "ดูสรุปผลคะแนนทั้งหมด ➔" : "หัวข้อถัดไป ➔"}</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
+                  {isLastCategory ? (
+                    <button
+                      type="button"
+                      onClick={handleSubmit}
+                      className="px-6 py-3.5 rounded-2xl text-xs sm:text-sm font-extrabold bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-xl shadow-emerald-500/35 flex items-center space-x-2 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer animate-pulse hover:animate-none ring-2 ring-emerald-400/50"
+                    >
+                      <Send className="w-4 h-4" />
+                      <span>ยืนยันและส่งแบบประเมิน</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleNext}
+                      className="px-6 py-3 rounded-2xl text-xs sm:text-sm font-extrabold bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 shadow-lg shadow-amber-500/25 flex items-center space-x-2 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                    >
+                      <span>หัวข้อถัดไป ➔</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
 
               </div>
             )}
 
-            {/* ==================================================== */}
-            {/* VIEW B: FINAL REVIEW & SUBMIT STEP                   */}
-            {/* ==================================================== */}
-            {isReviewStep && (
-              <div className="space-y-4 animate-fadeIn">
-                <div className="text-center space-y-1">
-                  <h4 className="text-base sm:text-lg font-black text-white">
-                    📋 สรุปผลการประเมินความพึงพอใจทั้งหมด
-                  </h4>
-                  <p className="text-xs text-slate-400">
-                    กรุณาตรวจสอบคะแนนและข้อเสนอแนะของท่านก่อนกดยืนยันส่งข้อมูล
+          </div>
+        )}
+
+        {/* ==================================================== */}
+        {/* MODAL 3: ZOOM QUESTION POPUP (ตัวหนังสือขนาดใหญ่)     */}
+        {/* ==================================================== */}
+        {zoomQuestion && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+            <div className="relative w-full max-w-lg bg-white rounded-3xl p-5 sm:p-6 text-slate-900 shadow-2xl border-2 border-amber-400 space-y-4 max-h-[90vh] overflow-y-auto">
+              
+              {/* Header */}
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold">
+                  {zoomQuestion.catTitle || "แบบประเมิน"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setZoomQuestion(null)}
+                  className="p-1.5 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors cursor-pointer"
+                  title="ปิดหน้าต่างขยาย"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Large Title & Description */}
+              <div className="space-y-3 py-1 text-left">
+                <h3 className="text-base sm:text-xl font-black text-slate-950 leading-snug">
+                  {zoomQuestion.title || zoomQuestion.label}
+                </h3>
+                {zoomQuestion.desc && (
+                  <p className="text-xs sm:text-sm text-slate-700 leading-relaxed bg-slate-50 p-3 sm:p-4 rounded-2xl border border-slate-200">
+                    {zoomQuestion.desc}
                   </p>
+                )}
+              </div>
+
+              {/* Star Rating Section in Zoom Modal */}
+              <div className="pt-3 pb-2 border-t border-slate-200 text-center space-y-3">
+                <div className="text-xs sm:text-sm font-bold text-slate-600">
+                  แตะดาวด้านล่างเพื่อลงคะแนนความพึงพอใจ:
                 </div>
 
-                {/* Breakdown per Category with Comments */}
-                <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
-                  {categories.map((cat, idx) => {
-                    const catAvg = getCategoryAvg(cat);
-                    const catComment = categoryComments[cat.id];
+                {/* Big Stars for Easy Tapping */}
+                <div className="flex items-center justify-center space-x-2 sm:space-x-3">
+                  {[1, 2, 3, 4, 5].map((starNum) => {
+                    const isFilled = starNum <= (scores[zoomQuestion.id] || 0);
                     return (
-                      <div key={cat.id} className="p-3 rounded-xl bg-slate-950/80 border border-white/10 space-y-2 text-xs">
-                        <div className="flex justify-between items-center">
-                          <div className="flex items-center space-x-2">
-                            <span className="w-5 h-5 rounded-md bg-amber-500/20 text-amber-300 font-bold flex items-center justify-center text-[10px]">
-                              {idx + 1}
-                            </span>
-                            <span className="font-extrabold text-white text-xs sm:text-sm">
-                              {cat.title}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center space-x-2">
-                            <span className="font-mono font-extrabold text-amber-400">
-                              {catAvg} / 5.0 ⭐
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setError("");
-                                setCurrentStep(idx);
-                              }}
-                              className="text-[10px] text-amber-400 hover:text-amber-300 underline font-semibold cursor-pointer"
-                            >
-                              แก้ไข
-                            </button>
-                          </div>
-                        </div>
-
-                        {catComment && (
-                          <div className="p-2 rounded-lg bg-white/5 border border-white/5 text-[11px] text-slate-300 italic">
-                            💬 ข้อเสนอแนะ: "{catComment}"
-                          </div>
-                        )}
-                      </div>
+                      <button
+                        key={starNum}
+                        type="button"
+                        onClick={() => {
+                          handleScoreClick(zoomQuestion.id, starNum);
+                        }}
+                        className="p-1.5 sm:p-2 rounded-2xl hover:scale-125 transition-transform cursor-pointer group flex flex-col items-center"
+                        title={`ให้ ${starNum} ดาว`}
+                      >
+                        <Star
+                          className={`w-9 h-9 sm:w-11 sm:h-11 transition-colors ${
+                            isFilled
+                              ? "fill-amber-400 text-amber-500 drop-shadow-md"
+                              : "text-slate-300 group-hover:text-amber-300"
+                          }`}
+                        />
+                        <span className="text-xs text-slate-500 pt-1 font-mono font-bold">
+                          {starNum}
+                        </span>
+                      </button>
                     );
                   })}
                 </div>
 
-                {/* Action Buttons: เหมือนจริง 100% */}
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={handleBack}
-                    className="w-full sm:w-auto px-4 py-3 rounded-2xl text-xs sm:text-sm font-bold bg-white/10 hover:bg-white/15 text-slate-200 hover:text-white transition-all flex items-center justify-center space-x-2 cursor-pointer"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span>ย้อนกลับไปแก้ไข</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleSubmit}
-                    className="w-full sm:w-auto px-6 py-3.5 rounded-2xl text-sm font-extrabold bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-xl shadow-emerald-500/25 flex items-center justify-center space-x-2 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-                  >
-                    <Send className="w-4 h-4" />
-                    <span>ยืนยันและส่งแบบประเมิน</span>
-                  </button>
+                {/* Current Score Badge in Zoom Modal */}
+                <div>
+                  {scores[zoomQuestion.id] ? (
+                    <span className="inline-flex items-center px-4 py-1.5 rounded-full text-xs sm:text-sm font-black bg-amber-100 text-amber-900 border border-amber-300 shadow-sm">
+                      {getScoreBadgeText(scores[zoomQuestion.id])}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-4 py-1.5 rounded-full text-xs font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                      รอโหวต
+                    </span>
+                  )}
                 </div>
-
               </div>
-            )}
 
+              {/* Close & Confirm Button */}
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => setZoomQuestion(null)}
+                  className="w-full py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-amber-500/25 transition-all cursor-pointer"
+                >
+                  ✓ บันทึกและกลับสู่รายการ
+                </button>
+              </div>
+
+            </div>
           </div>
         )}
 
