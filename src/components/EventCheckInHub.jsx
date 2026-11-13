@@ -270,6 +270,63 @@ export default function EventCheckInHub({
     };
   }, [surveyResponses, currentSurveyConfig]);
 
+  // Speed Ranking States & Calculations (สำหรับจับเวลาเป็นวินาทีและจัดอันดับแจกของรางวัล)
+  const [surveyRankingSearch, setSurveyRankingSearch] = useState("");
+  const [surveyRankingFilter, setSurveyRankingFilter] = useState("all");
+
+  const speedRankingList = useMemo(() => {
+    if (!surveyResponses || surveyResponses.length === 0) return [];
+    
+    // เรียงตามเวลาที่กดส่งจริง (submittedAt) จากเร็วที่สุดไปช้าที่สุด
+    const sorted = [...surveyResponses].sort((a, b) => {
+      const timeA = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
+      const timeB = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
+      return timeA - timeB;
+    });
+
+    const pad = (n) => String(n).padStart(2, '0');
+
+    return sorted.map((item, idx) => {
+      const rank = idx + 1;
+      let displayTimeWithSec = item.displayTime || "";
+      if (!displayTimeWithSec && item.submittedAt) {
+        const d = new Date(item.submittedAt);
+        displayTimeWithSec = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())} น.`;
+      }
+      return {
+        ...item,
+        rank,
+        isTop3: rank <= 3,
+        isTop20: rank <= 20,
+        isTop30: rank <= 30,
+        displayTimeWithSec
+      };
+    });
+  }, [surveyResponses]);
+
+  const filteredRankingList = useMemo(() => {
+    let list = speedRankingList;
+    if (surveyRankingFilter === "top20") {
+      list = list.filter(item => item.rank <= 20);
+    } else if (surveyRankingFilter === "top30") {
+      list = list.filter(item => item.rank <= 30);
+    } else if (surveyRankingFilter === "top50") {
+      list = list.filter(item => item.rank <= 50);
+    }
+
+    if (surveyRankingSearch.trim()) {
+      const q = surveyRankingSearch.toLowerCase().trim();
+      list = list.filter(item => 
+        (item.name && item.name.toLowerCase().includes(q)) ||
+        (item.nickname && item.nickname.toLowerCase().includes(q)) ||
+        (item.ticketNo && item.ticketNo.toLowerCase().includes(q)) ||
+        (item.club && item.club.toLowerCase().includes(q))
+      );
+    }
+
+    return list;
+  }, [speedRankingList, surveyRankingFilter, surveyRankingSearch]);
+
   // Sync animation state
   const [isSyncing, setIsSyncing] = useState(false);
   const handleManualSync = async () => {
@@ -3616,13 +3673,14 @@ export default function EventCheckInHub({
         });
 
         const handleExportSurveyCSV = () => {
-          if (surveyResponses.length === 0) {
+          if (speedRankingList.length === 0) {
             alert("ยังไม่มีข้อมูลแบบประเมินความพึงพอใจสำหรับส่งออกครับ");
             return;
           }
           try {
             const headers = [
-              "ลำดับ",
+              "อันดับความเร็ว",
+              "สิทธิ์ของรางวัล",
               "เลขที่บัตร",
               "ชื่อผู้ประเมิน",
               "ชื่อเล่น",
@@ -3637,16 +3695,18 @@ export default function EventCheckInHub({
             categories.forEach((cat, cIdx) => {
               headers.push(`"[ข้อเสนอแนะ] ${cat.title}"`);
             });
-            headers.push("วันเวลา");
+            headers.push("วันเวลาส่ง (แม่นยำระดับวินาที)");
 
-            const rows = surveyResponses.map((r, i) => {
+            const rows = speedRankingList.map((r) => {
+              const giveawayStatus = r.rank <= 20 ? "Top 20 (มีสิทธิ์รับรางวัล)" : r.rank <= 30 ? "Top 30 (มีสิทธิ์รับรางวัล)" : "-";
               const row = [
-                i + 1,
+                r.rank,
+                `"${giveawayStatus}"`,
                 `"${r.ticketNo || ''}"`,
                 `"${r.name || ''}"`,
                 `"${r.nickname || ''}"`,
                 `"${r.club || ''}"`,
-                r.overallAvg || r.ratings?.ratingOverall || "0.00"
+                r.overallAverage || r.overallAvg || r.ratings?.ratingOverall || "0.00"
               ];
 
               categories.forEach((cat, cIdx) => {
@@ -3672,7 +3732,7 @@ export default function EventCheckInHub({
                 row.push(`"${(commentText || '').replace(/"/g, '""')}"`);
               });
 
-              row.push(`"${r.displayTime || r.submittedAt || ''}"`);
+              row.push(`"${r.displayTimeWithSec || r.displayTime || r.submittedAt || ''}"`);
               return row;
             });
 
@@ -3681,12 +3741,13 @@ export default function EventCheckInHub({
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
             link.setAttribute("href", url);
-            link.setAttribute("download", `sme_fan_2026_satisfaction_survey_full_${Date.now()}.csv`);
+            link.setAttribute("download", `ผลประเมินความพึงพอใจ_จัดอันดับความเร็ว_${new Date().toISOString().slice(0, 10)}.csv`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
           } catch (err) {
             console.error("Export survey error:", err);
+            alert("เกิดข้อผิดพลาดในการส่งออกไฟล์ CSV ครับ");
           }
         };
 
@@ -4084,6 +4145,248 @@ export default function EventCheckInHub({
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+
+            {/* ========================================================== */}
+            {/* SECTION 4: SPEED RANKING & GIVEAWAY TRACKER (จับเวลาวินาที) */}
+            {/* ========================================================== */}
+            <div className="bg-slate-900/80 p-5 rounded-2xl border border-white/10 space-y-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-white/10">
+                <div className="space-y-1">
+                  <div className="flex items-center space-x-2">
+                    <Trophy className="w-5 h-5 text-amber-400" />
+                    <h3 className="text-sm sm:text-base font-extrabold text-white">
+                      ตารางจัดอันดับความเร็วการส่งแบบประเมิน (Speed Ranking & Giveaway Tracker)
+                    </h3>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    จับเวลาแม่นยำระดับวินาที เรียงลำดับผู้ที่ประเมินเสร็จก่อน-หลัง เพื่อจัดเตรียมของรางวัลสำหรับ 20 หรือ 30 คนแรก
+                  </p>
+                </div>
+
+                <div className="flex items-center space-x-2 self-start md:self-auto">
+                  <span className="px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 font-mono text-xs font-bold">
+                    ประเมินแล้ว {speedRankingList.length} ท่าน
+                  </span>
+                </div>
+              </div>
+
+              {/* Filters & Search Bar */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                {/* Filter Tabs */}
+                <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+                  <button
+                    type="button"
+                    onClick={() => setSurveyRankingFilter("all")}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                      surveyRankingFilter === "all"
+                        ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20"
+                        : "bg-slate-800 hover:bg-slate-700 text-slate-300"
+                    }`}
+                  >
+                    ทั้งหมด ({speedRankingList.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSurveyRankingFilter("top20")}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                      surveyRankingFilter === "top20"
+                        ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20"
+                        : "bg-slate-800 hover:bg-slate-700 text-slate-300"
+                    }`}
+                  >
+                    🏆 Top 20 แรก (สิทธิ์ของรางวัล)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSurveyRankingFilter("top30")}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                      surveyRankingFilter === "top30"
+                        ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20"
+                        : "bg-slate-800 hover:bg-slate-700 text-slate-300"
+                    }`}
+                  >
+                    🎁 Top 30 แรก
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSurveyRankingFilter("top50")}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                      surveyRankingFilter === "top50"
+                        ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20"
+                        : "bg-slate-800 hover:bg-slate-700 text-slate-300"
+                    }`}
+                  >
+                    Top 50
+                  </button>
+                </div>
+
+                {/* Search Input */}
+                <div className="relative min-w-[220px]">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={surveyRankingSearch}
+                    onChange={(e) => setSurveyRankingSearch(e.target.value)}
+                    placeholder="ค้นหาชื่อ, เบอร์, เลขบัตร..."
+                    className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-950/80 border border-white/10 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors"
+                  />
+                  {surveyRankingSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setSurveyRankingSearch("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Table or Empty State */}
+              {filteredRankingList.length === 0 ? (
+                <div className="py-12 text-center text-slate-500 space-y-2">
+                  <Clock className="w-10 h-10 mx-auto opacity-30 text-amber-400" />
+                  <div className="text-sm font-semibold text-slate-400">
+                    {speedRankingList.length === 0
+                      ? "ยังไม่มีข้อมูลผู้ส่งแบบประเมินความพึงพอใจ"
+                      : "ไม่พบข้อมูลที่ตรงกับเงื่อนไขการค้นหา"}
+                  </div>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                    {speedRankingList.length === 0
+                      ? "เมื่อผู้เข้าร่วมงานกดส่งแบบประเมิน ระบบจะบันทึกเวลาเป็นวินาทีและเรียงลำดับให้ทันที"
+                      : "ลองเปลี่ยนคำค้นหา หรือเลือกตัวกรองหมวดหมู่ทั้งหมด"}
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-white/5">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-950/90 text-slate-400 border-b border-white/10 uppercase tracking-wider text-[11px] font-bold">
+                        <th className="py-3 px-3 text-center w-20">อันดับ</th>
+                        <th className="py-3 px-3">เวลาที่ส่ง (วินาที)</th>
+                        <th className="py-3 px-3">ผู้ประเมิน</th>
+                        <th className="py-3 px-3">เลขที่บัตร</th>
+                        <th className="py-3 px-3">สังกัด / คลับ</th>
+                        <th className="py-3 px-3 text-center">คะแนนรวม</th>
+                        <th className="py-3 px-3 text-center">สิทธิ์ของรางวัล</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {filteredRankingList.map((item) => {
+                        const rank = item.rank;
+                        const isTop1 = rank === 1;
+                        const isTop2 = rank === 2;
+                        const isTop3 = rank === 3;
+                        const isTop20 = rank <= 20;
+                        const isTop30 = rank <= 30;
+
+                        return (
+                          <tr
+                            key={item.id || rank}
+                            className={`transition-colors hover:bg-white/5 ${
+                              isTop1
+                                ? "bg-amber-500/10"
+                                : isTop2
+                                  ? "bg-slate-400/10"
+                                  : isTop3
+                                    ? "bg-orange-500/10"
+                                    : isTop20
+                                      ? "bg-amber-500/[0.03]"
+                                      : ""
+                            }`}
+                          >
+                            {/* อันดับ */}
+                            <td className="py-3 px-3 text-center">
+                              {isTop1 ? (
+                                <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 font-black text-xs shadow-md shadow-amber-500/30">
+                                  <span>🥇</span>
+                                  <span>#1</span>
+                                </span>
+                              ) : isTop2 ? (
+                                <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-slate-200 to-slate-400 text-slate-950 font-black text-xs shadow-md">
+                                  <span>🥈</span>
+                                  <span>#2</span>
+                                </span>
+                              ) : isTop3 ? (
+                                <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-600 to-amber-700 text-white font-black text-xs shadow-md">
+                                  <span>🥉</span>
+                                  <span>#3</span>
+                                </span>
+                              ) : isTop20 ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-mono font-bold text-xs border border-amber-500/30">
+                                  #{rank}
+                                </span>
+                              ) : isTop30 ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-teal-500/20 text-teal-300 font-mono font-bold text-xs border border-teal-500/30">
+                                  #{rank}
+                                </span>
+                              ) : (
+                                <span className="font-mono text-slate-400 font-bold">
+                                  #{rank}
+                                </span>
+                              )}
+                            </td>
+
+                            {/* เวลาส่งที่แม่นยำระดับวินาที */}
+                            <td className="py-3 px-3">
+                              <div className="flex items-center space-x-1.5 font-mono text-xs">
+                                <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                <span className="font-bold text-amber-300 whitespace-nowrap">
+                                  {item.displayTimeWithSec}
+                                </span>
+                              </div>
+                            </td>
+
+                            {/* ผู้ประเมิน */}
+                            <td className="py-3 px-3">
+                              <div className="font-bold text-white text-xs sm:text-sm">
+                                {item.name} {item.nickname ? `(${item.nickname})` : ''}
+                              </div>
+                            </td>
+
+                            {/* เลขที่บัตร */}
+                            <td className="py-3 px-3">
+                              <span className="font-mono text-amber-400 text-xs">
+                                {item.ticketNo || "-"}
+                              </span>
+                            </td>
+
+                            {/* สังกัด */}
+                            <td className="py-3 px-3 text-slate-300">
+                              {item.club || "-"}
+                            </td>
+
+                            {/* คะแนนรวม */}
+                            <td className="py-3 px-3 text-center">
+                              <span className="font-mono font-extrabold text-amber-300 text-xs bg-slate-950 px-2 py-1 rounded-md border border-white/10">
+                                {item.overallAverage || item.overallAvg || item.ratings?.ratingOverall || "0.00"} ⭐
+                              </span>
+                            </td>
+
+                            {/* สิทธิ์ของรางวัล */}
+                            <td className="py-3 px-3 text-center">
+                              {isTop20 ? (
+                                <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                                  <span>🏆</span>
+                                  <span>Top 20 (ได้รางวัล)</span>
+                                </span>
+                              ) : isTop30 ? (
+                                <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-teal-500/20 text-teal-300 border border-teal-500/40">
+                                  <span>🎁</span>
+                                  <span>Top 30 (ได้รางวัล)</span>
+                                </span>
+                              ) : (
+                                <span className="text-slate-500 text-xs font-mono">-</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>
