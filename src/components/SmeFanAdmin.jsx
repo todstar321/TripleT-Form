@@ -60,6 +60,7 @@ import ResetRegistrationsModal from './ResetRegistrationsModal';
 import ClearSecurityModal from './ClearSecurityModal';
 import AttendeeInspectionModal from './AttendeeInspectionModal';
 import EventA4PrintModal from './EventA4PrintModal';
+import AdminSurveyManagerModal from './AdminSurveyManagerModal';
 import { themePresetsList } from '../data/smeFanData';
 import { testSupabaseConnection, saveSupabaseConfig, getSupabaseConfig, isSupabaseConfigured, upsertRegistrationToCloud, saveEventConfigToCloud, fetchSponsorsFromCloud, formatThaiDisplayDateTime } from '../utils/supabaseClient';
 import { testCloudinaryConnection, saveCloudinaryConfig, getCloudinaryConfig, isCloudinaryConfigured } from '../utils/cloudinary';
@@ -110,6 +111,7 @@ export default function SmeFanAdmin({
   const [isClearSecurityOpen, setIsClearSecurityOpen] = useState(false);
   // Cloud & Purge States
   const [isPurgeModalOpen, setIsPurgeModalOpen] = useState(false);
+  const [isSurveyBuilderOpen, setIsSurveyBuilderOpen] = useState(false);
   const [sbConfig, setSbConfig] = useState(() => getSupabaseConfig());
   const [cldConfig, setCldConfig] = useState(() => getCloudinaryConfig());
   const [sbTestResult, setSbTestResult] = useState(null);
@@ -1229,38 +1231,50 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
                     </p>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const isCurrentlyOpen = Boolean(eventConfig?.isSurveyOpen);
-                      const promptMsg = isCurrentlyOpen
-                        ? "ต้องการปิดรับแบบประเมินความพึงพอใจใช่หรือไม่?"
-                        : "ต้องการเปิดระบบรับแบบประเมินความพึงพอใจใช่หรือไม่?\n(เมื่อเปิดแล้ว สมาชิกทุกคนจะสามารถกดทำแบบประเมินได้ทันที)";
-                      if (window.confirm(promptMsg)) {
-                        setEventConfig(prev => ({
-                          ...prev,
-                          isSurveyOpen: !isCurrentlyOpen
-                        }));
-                      }
-                    }}
-                    className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-2 cursor-pointer shadow-sm ${
-                      eventConfig?.isSurveyOpen
-                        ? "bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/20"
-                        : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20"
-                    }`}
-                  >
-                    {eventConfig?.isSurveyOpen ? (
-                      <>
-                        <Lock className="w-3.5 h-3.5" />
-                        <span>ปิดรับแบบประเมินความพึงพอใจ</span>
-                      </>
-                    ) : (
-                      <>
-                        <Unlock className="w-3.5 h-3.5" />
-                        <span>เปิดรับแบบประเมินความพึงพอใจ</span>
-                      </>
-                    )}
-                  </button>
+                  <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsSurveyBuilderOpen(true)}
+                      className="w-full sm:w-auto flex-1 py-2.5 px-3 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition-all flex items-center justify-center space-x-1.5 cursor-pointer shadow-sm"
+                      title="เพิ่ม แก้ไข หรือลบหัวข้อและคำถามในแบบสอบถาม"
+                    >
+                      <Sliders className="w-3.5 h-3.5" />
+                      <span>จัดการข้อคำถาม (Survey Builder)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const isCurrentlyOpen = Boolean(eventConfig?.isSurveyOpen);
+                        const promptMsg = isCurrentlyOpen
+                          ? "ต้องการปิดรับแบบประเมินความพึงพอใจใช่หรือไม่?"
+                          : "ต้องการเปิดระบบรับแบบประเมินความพึงพอใจใช่หรือไม่?\n(เมื่อเปิดแล้ว สมาชิกทุกคนจะสามารถกดทำแบบประเมินได้ทันที)";
+                        if (window.confirm(promptMsg)) {
+                          setEventConfig(prev => ({
+                            ...prev,
+                            isSurveyOpen: !isCurrentlyOpen
+                          }));
+                        }
+                      }}
+                      className={`w-full sm:w-auto flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1.5 cursor-pointer shadow-sm ${
+                        eventConfig?.isSurveyOpen
+                          ? "bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/20"
+                          : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20"
+                      }`}
+                    >
+                      {eventConfig?.isSurveyOpen ? (
+                        <>
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>ปิดรับแบบประเมิน</span>
+                        </>
+                      ) : (
+                        <>
+                          <Unlock className="w-3.5 h-3.5" />
+                          <span>เปิดรับแบบประเมิน</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -3856,6 +3870,21 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
           sponsors={adminA4Sponsors}
           eventConfig={eventConfig}
           autoSendTelegram={adminA4AutoSend}
+        />
+      )}
+
+      {/* Admin Survey Builder Modal */}
+      {isSurveyBuilderOpen && (
+        <AdminSurveyManagerModal
+          isOpen={isSurveyBuilderOpen}
+          onClose={() => setIsSurveyBuilderOpen(false)}
+          surveyConfig={eventConfig?.surveyConfig}
+          onSaveConfig={(newConfig) => {
+            setEventConfig(prev => ({
+              ...prev,
+              surveyConfig: newConfig
+            }));
+          }}
         />
       )}
 

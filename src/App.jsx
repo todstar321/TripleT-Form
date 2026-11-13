@@ -163,6 +163,9 @@ export default function App() {
         if (!parsed.registrationSchedule) {
           parsed.registrationSchedule = initialSmeFanConfig.registrationSchedule;
         }
+        if (!parsed.surveyConfig || !parsed.surveyConfig.categories || parsed.surveyConfig.categories.length < 5) {
+          parsed.surveyConfig = initialSmeFanConfig.surveyConfig;
+        }
         return parsed;
       }
     } catch (e) {

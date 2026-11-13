@@ -4179,6 +4179,7 @@ export default function SmeFanRegistration({
           isOpen={isSurveyModalOpen}
           onClose={() => setIsSurveyModalOpen(false)}
           attendee={attendeePortalUser}
+          surveyConfig={eventConfig?.surveyConfig}
         />
       )}
 

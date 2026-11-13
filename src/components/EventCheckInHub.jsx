@@ -47,7 +47,14 @@ import {
   Unlock,
   Star,
   MessageSquare,
-  Heart
+  Heart,
+  Building2,
+  UtensilsCrossed,
+  PartyPopper,
+  Sliders,
+  ChevronUp,
+  ChevronDown,
+  Layers
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import QRCode from "qrcode";
@@ -59,6 +66,8 @@ import StoragePurgeModal from "./StoragePurgeModal";
 import ResetRegistrationsModal from "./ResetRegistrationsModal";
 import ClearSecurityModal from "./ClearSecurityModal";
 import AttendeeInspectionModal from "./AttendeeInspectionModal";
+import AdminSurveyManagerModal from "./AdminSurveyManagerModal";
+import { defaultSurveyConfig } from "../data/smeFanData";
 import { formatThaiDisplayDateTime } from "../utils/supabaseClient";
 import { cleanPhoneNumber } from "../utils/phoneFormatter";
 
@@ -128,43 +137,136 @@ export default function EventCheckInHub({
     };
   }, []);
 
+  const currentSurveyConfig = useMemo(() => {
+    return eventConfig?.surveyConfig && Array.isArray(eventConfig.surveyConfig.categories) && eventConfig.surveyConfig.categories.length > 0
+      ? eventConfig.surveyConfig
+      : defaultSurveyConfig;
+  }, [eventConfig?.surveyConfig]);
+
+  const [isSurveyBuilderOpen, setIsSurveyBuilderOpen] = useState(false);
+  const [surveyFeedbackCategoryFilter, setSurveyFeedbackCategoryFilter] = useState("all");
+
   const surveyStats = useMemo(() => {
+    const categories = currentSurveyConfig.categories || [];
     if (!surveyResponses.length) {
       return {
         total: 0,
-        avgOverall: "0.00",
-        avgVenue: "0.00",
-        avgFood: "0.00",
-        avgActivities: "0.00",
-        avgStaff: "0.00",
-        totalAvg: "0.00"
+        totalAvg: "0.00",
+        totalCommentsCount: 0,
+        categoryStats: categories.map(cat => ({
+          ...cat,
+          avg: "0.00",
+          questionStats: (cat.questions || []).map(q => ({ ...q, avg: "0.00", count: 0 }))
+        }))
       };
     }
-    let sumOverall = 0, sumVenue = 0, sumFood = 0, sumActivities = 0, sumStaff = 0;
-    surveyResponses.forEach(r => {
-      sumOverall += Number(r.ratings?.ratingOverall || 5);
-      sumVenue += Number(r.ratings?.ratingVenue || 5);
-      sumFood += Number(r.ratings?.ratingFood || 5);
-      sumActivities += Number(r.ratings?.ratingActivities || 5);
-      sumStaff += Number(r.ratings?.ratingStaff || 5);
-    });
+
     const count = surveyResponses.length;
-    const avgOverall = (sumOverall / count).toFixed(2);
-    const avgVenue = (sumVenue / count).toFixed(2);
-    const avgFood = (sumFood / count).toFixed(2);
-    const avgActivities = (sumActivities / count).toFixed(2);
-    const avgStaff = (sumStaff / count).toFixed(2);
-    const totalAvg = ((Number(avgOverall) + Number(avgVenue) + Number(avgFood) + Number(avgActivities) + Number(avgStaff)) / 5).toFixed(2);
+
+    // Map each question: sum and count
+    const qMap = {};
+    categories.forEach(cat => {
+      (cat.questions || []).forEach(q => {
+        qMap[q.id] = { sum: 0, count: 0 };
+      });
+    });
+
+    let overallSum = 0;
+    let overallCount = 0;
+    let commentsCount = 0;
+
+    surveyResponses.forEach(r => {
+      // Check comments
+      if (r.categoryComments && typeof r.categoryComments === "object") {
+        Object.values(r.categoryComments).forEach(c => {
+          if (c && typeof c === "string" && c.trim()) commentsCount++;
+        });
+      } else if (r.comment && typeof r.comment === "string" && r.comment.trim()) {
+        commentsCount++;
+      }
+
+      // Check overall score
+      if (r.overallAvg && !isNaN(Number(r.overallAvg))) {
+        overallSum += Number(r.overallAvg);
+        overallCount++;
+      }
+
+      // Scores map
+      if (r.scores && typeof r.scores === "object") {
+        Object.entries(r.scores).forEach(([qId, val]) => {
+          const num = Number(val);
+          if (!isNaN(num) && num > 0) {
+            if (!qMap[qId]) qMap[qId] = { sum: 0, count: 0 };
+            qMap[qId].sum += num;
+            qMap[qId].count++;
+          }
+        });
+      }
+    });
+
+    const categoryStats = categories.map((cat, idx) => {
+      let catSum = 0;
+      let catCount = 0;
+      const questionStats = (cat.questions || []).map(q => {
+        const item = qMap[q.id];
+        const avg = item && item.count > 0 ? (item.sum / item.count).toFixed(2) : "0.00";
+        if (item && item.count > 0) {
+          catSum += Number(avg);
+          catCount++;
+        }
+        return {
+          ...q,
+          avg,
+          count: item ? item.count : 0
+        };
+      });
+
+      // If this category didn't match modern questions, check if r.ratings has fallback
+      let fallbackAvg = null;
+      if (catCount === 0) {
+        let legacySum = 0;
+        let legacyCount = 0;
+        const legacyKey = idx === 0 ? "ratingOverall" : idx === 1 ? "ratingVenue" : idx === 2 ? "ratingFood" : idx === 3 ? "ratingActivities" : "ratingStaff";
+        surveyResponses.forEach(r => {
+          if (r.ratings && r.ratings[legacyKey]) {
+            legacySum += Number(r.ratings[legacyKey]);
+            legacyCount++;
+          }
+        });
+        if (legacyCount > 0) {
+          fallbackAvg = (legacySum / legacyCount).toFixed(2);
+        }
+      }
+
+      const avg = catCount > 0 
+        ? (catSum / catCount).toFixed(2) 
+        : (fallbackAvg !== null ? fallbackAvg : "0.00");
+
+      return {
+        ...cat,
+        avg,
+        questionStats
+      };
+    });
+
+    let calculatedTotalAvg = "0.00";
+    if (overallCount > 0) {
+      calculatedTotalAvg = (overallSum / overallCount).toFixed(2);
+    } else {
+      const validCategories = categoryStats.filter(c => Number(c.avg) > 0);
+      if (validCategories.length > 0) {
+        const sum = validCategories.reduce((acc, c) => acc + Number(c.avg), 0);
+        calculatedTotalAvg = (sum / validCategories.length).toFixed(2);
+      }
+    }
+
     return {
       total: count,
-      avgOverall,
-      avgVenue,
-      avgFood,
-      avgActivities,
-      avgStaff,
-      totalAvg
+      totalAvg: calculatedTotalAvg,
+      totalCommentsCount: commentsCount,
+      categoryStats
     };
-  }, [surveyResponses]);
+  }, [surveyResponses, currentSurveyConfig]);
 
   // Sync animation state
   const [isSyncing, setIsSyncing] = useState(false);
@@ -3468,323 +3570,514 @@ export default function EventCheckInHub({
       {/* ========================================================== */}
       {/* TAB 6: แบบประเมินความพึงพอใจ (SATISFACTION SURVEY HUB)      */}
       {/* ========================================================== */}
-      {activeMainTab === "survey" && (
-        <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6 animate-fadeIn">
-          
-          {/* Header Card for Satisfaction Survey */}
-          <div className="bg-slate-900/80 rounded-2xl p-5 border border-amber-500/30 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-                <Star className="w-5 h-5 text-amber-400 fill-amber-400" />
-                <h2 className="text-lg sm:text-xl font-black text-white">
-                  แบบประเมินความพึงพอใจงาน SME FAN 2026
-                </h2>
-                <span className="font-mono text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
-                  ตอบแล้ว {surveyStats.total} ท่าน
-                </span>
+      {activeMainTab === "survey" && (() => {
+        const categories = currentSurveyConfig.categories || [];
 
-                {/* Status Badge */}
-                {eventConfig?.isSurveyOpen ? (
-                  <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center space-x-1 animate-pulse">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                    <span>🟢 กำลังเปิดรับแบบประเมิน (LIVE)</span>
+        // Build list of all attendee comments matching category filter
+        const commentsList = [];
+        surveyResponses.forEach(r => {
+          if (r.categoryComments && typeof r.categoryComments === "object") {
+            Object.entries(r.categoryComments).forEach(([catId, commentText]) => {
+              if (commentText && typeof commentText === "string" && commentText.trim()) {
+                const catObj = categories.find(c => c.id === catId);
+                if (surveyFeedbackCategoryFilter === "all" || surveyFeedbackCategoryFilter === catId) {
+                  commentsList.push({
+                    id: `${r.id || r.ticketNo}_${catId}`,
+                    name: r.name || "ผู้ประเมิน",
+                    nickname: r.nickname || "",
+                    ticketNo: r.ticketNo || "",
+                    club: r.club || "",
+                    time: r.displayTime || r.submittedAt || "-",
+                    catTitle: catObj?.title || "ข้อเสนอแนะ",
+                    catId: catId,
+                    comment: commentText.trim()
+                  });
+                }
+              }
+            });
+          }
+          if (r.comment && typeof r.comment === "string" && r.comment.trim()) {
+            if (surveyFeedbackCategoryFilter === "all" || surveyFeedbackCategoryFilter === categories[0]?.id) {
+              commentsList.push({
+                id: `${r.id || r.ticketNo}_legacy`,
+                name: r.name || "ผู้ประเมิน",
+                nickname: r.nickname || "",
+                ticketNo: r.ticketNo || "",
+                club: r.club || "",
+                time: r.displayTime || r.submittedAt || "-",
+                catTitle: categories[0]?.title || "ข้อเสนอแนะทั่วไป",
+                catId: categories[0]?.id || "cat_general",
+                comment: r.comment.trim()
+              });
+            }
+          }
+        });
+
+        const handleExportSurveyCSV = () => {
+          if (surveyResponses.length === 0) {
+            alert("ยังไม่มีข้อมูลแบบประเมินความพึงพอใจสำหรับส่งออกครับ");
+            return;
+          }
+          try {
+            const headers = [
+              "ลำดับ",
+              "เลขที่บัตร",
+              "ชื่อผู้ประเมิน",
+              "ชื่อเล่น",
+              "สังกัด",
+              "คะแนนเฉลี่ยรวม"
+            ];
+            categories.forEach((cat, cIdx) => {
+              (cat.questions || []).forEach((q, qIdx) => {
+                headers.push(`"[${cIdx + 1}.${qIdx + 1}] ${cat.title} - ${q.label}"`);
+              });
+            });
+            categories.forEach((cat, cIdx) => {
+              headers.push(`"[ข้อเสนอแนะ] ${cat.title}"`);
+            });
+            headers.push("วันเวลา");
+
+            const rows = surveyResponses.map((r, i) => {
+              const row = [
+                i + 1,
+                `"${r.ticketNo || ''}"`,
+                `"${r.name || ''}"`,
+                `"${r.nickname || ''}"`,
+                `"${r.club || ''}"`,
+                r.overallAvg || r.ratings?.ratingOverall || "0.00"
+              ];
+
+              categories.forEach((cat, cIdx) => {
+                (cat.questions || []).forEach(q => {
+                  let score = "";
+                  if (r.scores && r.scores[q.id] !== undefined) {
+                    score = r.scores[q.id];
+                  } else if (r.ratings) {
+                    const legacyKey = cIdx === 0 ? "ratingOverall" : cIdx === 1 ? "ratingVenue" : cIdx === 2 ? "ratingFood" : cIdx === 3 ? "ratingActivities" : "ratingStaff";
+                    score = r.ratings[legacyKey] || "";
+                  }
+                  row.push(score);
+                });
+              });
+
+              categories.forEach((cat, cIdx) => {
+                let commentText = "";
+                if (r.categoryComments && r.categoryComments[cat.id]) {
+                  commentText = r.categoryComments[cat.id];
+                } else if (cIdx === 0 && r.comment) {
+                  commentText = r.comment;
+                }
+                row.push(`"${(commentText || '').replace(/"/g, '""')}"`);
+              });
+
+              row.push(`"${r.displayTime || r.submittedAt || ''}"`);
+              return row;
+            });
+
+            const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", `sme_fan_2026_satisfaction_survey_full_${Date.now()}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          } catch (err) {
+            console.error("Export survey error:", err);
+          }
+        };
+
+        const ICON_MAP = {
+          Sparkles,
+          Building2,
+          UtensilsCrossed,
+          PartyPopper,
+          Heart,
+          Award,
+          Star
+        };
+
+        return (
+          <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6 animate-fadeIn">
+            
+            {/* Header Card for Satisfaction Survey */}
+            <div className="bg-slate-900/80 rounded-2xl p-5 border border-amber-500/30 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                  <Star className="w-5 h-5 text-amber-400 fill-amber-400" />
+                  <h2 className="text-lg sm:text-xl font-black text-white">
+                    แบบประเมินความพึงพอใจงาน SME FAN 2026
+                  </h2>
+                  <span className="font-mono text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+                    ตอบแล้ว {surveyStats.total} ท่าน
                   </span>
-                ) : (
-                  <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-white/10 flex items-center space-x-1">
-                    <Lock className="w-3 h-3 text-slate-400" />
-                    <span>🔒 ปิดรับแบบประเมินอยู่ (รอเปิดระบบ)</span>
-                  </span>
-                )}
+
+                  {/* Status Badge */}
+                  {eventConfig?.isSurveyOpen ? (
+                    <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center space-x-1 animate-pulse">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                      <span>🟢 กำลังเปิดรับแบบประเมิน (LIVE)</span>
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-white/10 flex items-center space-x-1">
+                      <Lock className="w-3 h-3 text-slate-400" />
+                      <span>🔒 ปิดรับแบบประเมินอยู่ (รอเปิดระบบ)</span>
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-300">
+                  มาตรวัด 5 ระดับครอบคลุม {categories.length} ด้าน ({categories.reduce((s, c) => s + (c.questions?.length || 0), 0)} ข้อย่อย) พร้อมรวบรวมข้อเสนอแนะแยกตามหัวข้อ
+                </p>
               </div>
-              <p className="text-xs text-slate-300">
-                ประเมิน 5 ด้าน (ภาพรวม, สถานที่, อาหาร, กิจกรรม, การบริการ) พร้อมรวบรวมข้อเสนอแนะจากผู้เข้าร่วมงาน
-              </p>
-            </div>
 
-            {/* Quick Actions */}
-            <div className="flex items-center space-x-2 flex-wrap gap-2">
-              {/* Toggle Survey Open/Close Button */}
-              {setEventConfig && (
+              {/* Quick Actions */}
+              <div className="flex items-center space-x-2 flex-wrap gap-2">
+                {/* Survey Builder Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsSurveyBuilderOpen(true)}
+                  className="px-3.5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center space-x-1.5 shadow-lg shadow-amber-500/20 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                  title="เปิดหน้าต่างแก้ไขและจัดการข้อคำถามแบบสอบถาม"
+                >
+                  <Sliders className="w-3.5 h-3.5" />
+                  <span>จัดการแบบสอบถาม (Survey Builder)</span>
+                </button>
+
+                {/* Toggle Survey Open/Close Button */}
+                {setEventConfig && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const isCurrentlyOpen = Boolean(eventConfig?.isSurveyOpen);
+                      const promptMsg = isCurrentlyOpen
+                        ? "ต้องการปิดรับแบบประเมินความพึงพอใจใช่หรือไม่?\n(เมื่อปิดแล้ว สมาชิกทั่วไปจะไม่สามารถส่งแบบประเมินเพิ่มได้)"
+                        : "ต้องการเปิดระบบรับแบบประเมินความพึงพอใจใช่หรือไม่?\n(เมื่อเปิดแล้ว สมาชิกทุกคนจะสามารถกดทำแบบประเมินได้ทันที)";
+                      if (window.confirm(promptMsg)) {
+                        setEventConfig(prev => ({
+                          ...prev,
+                          isSurveyOpen: !isCurrentlyOpen
+                        }));
+                        playAudioEffect(isCurrentlyOpen ? "beep" : "fanfare");
+                      }
+                    }}
+                    className={`flex items-center space-x-2 px-3.5 py-2.5 rounded-xl font-bold text-xs shadow-lg transition-all hover:scale-105 active:scale-95 cursor-pointer ${
+                      eventConfig?.isSurveyOpen
+                        ? "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30"
+                        : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30"
+                    }`}
+                    title={eventConfig?.isSurveyOpen ? "คลิกเพื่อปิดรับแบบประเมิน" : "คลิกเพื่อเปิดระบบรับแบบประเมิน"}
+                  >
+                    {eventConfig?.isSurveyOpen ? (
+                      <>
+                        <Lock className="w-3.5 h-3.5" />
+                        <span>🔴 ปิดรับประเมิน</span>
+                      </>
+                    ) : (
+                      <>
+                        <Unlock className="w-3.5 h-3.5" />
+                        <span>🟢 เปิดรับประเมิน</span>
+                      </>
+                    )}
+                  </button>
+                )}
+
+                {/* Refresh Button */}
                 <button
                   type="button"
                   onClick={() => {
-                    const isCurrentlyOpen = Boolean(eventConfig?.isSurveyOpen);
-                    const promptMsg = isCurrentlyOpen
-                      ? "ต้องการปิดรับแบบประเมินความพึงพอใจใช่หรือไม่?\n(เมื่อปิดแล้ว สมาชิกทั่วไปจะไม่สามารถส่งแบบประเมินเพิ่มได้)"
-                      : "ต้องการเปิดระบบรับแบบประเมินความพึงพอใจใช่หรือไม่?\n(เมื่อเปิดแล้ว สมาชิกทุกคนจะสามารถกดทำแบบประเมินได้ทันที)";
-                    if (window.confirm(promptMsg)) {
-                      setEventConfig(prev => ({
-                        ...prev,
-                        isSurveyOpen: !isCurrentlyOpen
-                      }));
-                      playAudioEffect(isCurrentlyOpen ? "beep" : "fanfare");
-                    }
+                    try {
+                      const saved = localStorage.getItem("sme_fan_survey_responses_v1");
+                      setSurveyResponses(saved ? JSON.parse(saved) : []);
+                      playAudioEffect("beep");
+                    } catch (e) {}
                   }}
-                  className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl font-bold text-xs shadow-lg transition-all hover:scale-105 active:scale-95 cursor-pointer ${
-                    eventConfig?.isSurveyOpen
-                      ? "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30"
-                      : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30"
-                  }`}
-                  title={eventConfig?.isSurveyOpen ? "คลิกเพื่อปิดรับแบบประเมิน" : "คลิกเพื่อเปิดระบบรับแบบประเมิน"}
+                  className="p-2.5 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs flex items-center space-x-1.5 border border-white/10 cursor-pointer"
+                  title="รีเฟรชผลคะแนนล่าสุด"
                 >
-                  {eventConfig?.isSurveyOpen ? (
-                    <>
-                      <Lock className="w-4 h-4" />
-                      <span>🔴 ปิดรับแบบประเมิน</span>
-                    </>
-                  ) : (
-                    <>
-                      <Unlock className="w-4 h-4" />
-                      <span>🟢 เปิดรับแบบประเมินความพึงพอใจ</span>
-                    </>
-                  )}
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>รีเฟรช</span>
                 </button>
-              )}
 
-              {/* Refresh Button */}
-              <button
-                type="button"
-                onClick={() => {
-                  try {
-                    const saved = localStorage.getItem("sme_fan_survey_responses_v1");
-                    setSurveyResponses(saved ? JSON.parse(saved) : []);
-                    playAudioEffect("beep");
-                  } catch (e) {}
-                }}
-                className="p-2.5 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs flex items-center space-x-1.5 border border-white/10 cursor-pointer"
-                title="รีเฟรชผลคะแนนล่าสุด"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>รีเฟรช</span>
-              </button>
-
-              {/* Export CSV Button */}
-              <button
-                type="button"
-                onClick={() => {
-                  if (surveyResponses.length === 0) {
-                    alert("ยังไม่มีข้อมูลแบบประเมินความพึงพอใจสำหรับส่งออกครับ");
-                    return;
-                  }
-                  try {
-                    const headers = ["ลำดับ", "เลขที่บัตร", "ชื่อผู้ประเมิน", "ชื่อเล่น", "สังกัด", "ภาพรวม", "สถานที่", "อาหารเครื่องดื่ม", "กิจกรรมบนเวที", "การบริการทีมงาน", "ข้อเสนอแนะเพิ่มเติม", "วันเวลา"];
-                    const rows = surveyResponses.map((r, i) => [
-                      i + 1,
-                      `"${r.ticketNo || ''}"`,
-                      `"${r.name || ''}"`,
-                      `"${r.nickname || ''}"`,
-                      `"${r.club || ''}"`,
-                      r.ratings?.ratingOverall || 0,
-                      r.ratings?.ratingVenue || 0,
-                      r.ratings?.ratingFood || 0,
-                      r.ratings?.ratingActivities || 0,
-                      r.ratings?.ratingStaff || 0,
-                      `"${(r.comment || '').replace(/"/g, '""')}"`,
-                      `"${r.displayTime || r.submittedAt || ''}"`
-                    ]);
-                    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
-                    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement("a");
-                    link.setAttribute("href", url);
-                    link.setAttribute("download", `sme_fan_2026_satisfaction_survey_${Date.now()}.csv`);
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                  } catch (err) {
-                    console.error("Export survey error:", err);
-                  }
-                }}
-                className="p-2.5 px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-bold flex items-center space-x-1.5 border border-amber-500/30 cursor-pointer"
-                title="ดาวน์โหลดผลประเมินเป็นไฟล์ CSV"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>ส่งออก CSV</span>
-              </button>
+                {/* Export CSV Button */}
+                <button
+                  type="button"
+                  onClick={handleExportSurveyCSV}
+                  className="p-2.5 px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-bold flex items-center space-x-1.5 border border-amber-500/30 cursor-pointer"
+                  title="ดาวน์โหลดผลประเมินทุกข้อย่อยและข้อเสนอแนะเป็นไฟล์ CSV"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>ส่งออก CSV ละเอียด</span>
+                </button>
+              </div>
             </div>
-          </div>
 
-          {/* 4 Stat Overview Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-            {/* Stat 1: Total Responses */}
-            <div className="bg-slate-900/80 p-4 rounded-2xl border border-white/10 space-y-1">
-              <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">
-                จำนวนผู้ประเมิน
-              </span>
-              <div className="flex items-baseline space-x-1.5">
-                <span className="text-2xl sm:text-3xl font-black text-white font-mono">
-                  {surveyStats.total}
+            {/* 4 Stat Overview Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+              {/* Stat 1: Total Responses */}
+              <div className="bg-slate-900/80 p-4 rounded-2xl border border-white/10 space-y-1">
+                <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">
+                  จำนวนผู้ประเมิน
                 </span>
-                <span className="text-xs text-slate-400">
-                  / {registrations.length} ท่าน
-                </span>
-              </div>
-              <div className="text-[10px] text-amber-400">
-                คิดเป็น {Math.round((surveyStats.total / Math.max(1, registrations.length)) * 100)}% ของผู้ลงทะเบียน
-              </div>
-            </div>
-
-            {/* Stat 2: Average Score */}
-            <div className="bg-slate-900/80 p-4 rounded-2xl border border-white/10 space-y-1">
-              <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">
-                คะแนนเฉลี่ยรวม
-              </span>
-              <div className="flex items-baseline space-x-1.5">
-                <span className="text-2xl sm:text-3xl font-black text-amber-400 font-mono">
-                  {surveyStats.totalAvg}
-                </span>
-                <span className="text-xs text-amber-300">/ 5.0 ⭐</span>
-              </div>
-              <div className="text-[10px] text-emerald-400 font-medium">
-                {Number(surveyStats.totalAvg) >= 4.5 ? "ระดับยอดเยี่ยมมาก 🌟" : Number(surveyStats.totalAvg) >= 3.5 ? "ระดับดีมาก 👍" : "ระดับปานกลาง"}
-              </div>
-            </div>
-
-            {/* Stat 3: Comments Count */}
-            <div className="bg-slate-900/80 p-4 rounded-2xl border border-white/10 space-y-1">
-              <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">
-                ข้อเสนอแนะเพิ่มเติม
-              </span>
-              <div className="flex items-baseline space-x-1.5">
-                <span className="text-2xl sm:text-3xl font-black text-teal-300 font-mono">
-                  {surveyResponses.filter(r => r.comment?.trim()).length}
-                </span>
-                <span className="text-xs text-slate-400">รายการ</span>
-              </div>
-              <div className="text-[10px] text-slate-400">
-                มีความคิดเห็นจากผู้ร่วมงาน
-              </div>
-            </div>
-
-            {/* Stat 4: System Status */}
-            <div className="bg-slate-900/80 p-4 rounded-2xl border border-white/10 space-y-1">
-              <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">
-                สถานะระบบแบบประเมิน
-              </span>
-              <div className="text-base sm:text-lg font-extrabold font-mono pt-1">
-                {eventConfig?.isSurveyOpen ? (
-                  <span className="text-emerald-400">🟢 เปิดรับข้อมูล</span>
-                ) : (
-                  <span className="text-slate-400">🔒 ปิดระบบชั่วคราว</span>
-                )}
-              </div>
-              <div className="text-[10px] text-slate-400 truncate">
-                {eventConfig?.isSurveyOpen ? "ผู้ร่วมงานประเมินได้จากแอป" : "รอแอดมินกดเปิดระบบ"}
-              </div>
-            </div>
-          </div>
-
-          {/* 5-Category Rating Breakdown Cards */}
-          <div className="bg-slate-900/80 p-5 rounded-2xl border border-white/10 space-y-4">
-            <h3 className="text-sm font-bold text-white flex items-center space-x-2">
-              <Award className="w-4 h-4 text-amber-400" />
-              <span>ผลคะแนนเฉลี่ยแยกตาม 5 ด้านการประเมิน (เต็ม 5.0 คะแนน)</span>
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-              {[
-                { label: "1. ภาพรวมความพึงพอใจในการจัดงาน", score: surveyStats.avgOverall, icon: Sparkles },
-                { label: "2. สถานที่ ความสะดวก และบรรยากาศ", score: surveyStats.avgVenue, icon: Award },
-                { label: "3. อาหาร เครื่องดื่ม และการให้บริการ", score: surveyStats.avgFood, icon: Award },
-                { label: "4. กิจกรรม การแสดง และความบันเทิงบนเวที", score: surveyStats.avgActivities, icon: Award },
-                { label: "5. การบริการและการต้อนรับของทีมงาน", score: surveyStats.avgStaff, icon: Heart }
-              ].map((item, idx) => {
-                const percent = Math.min(100, Math.round((Number(item.score) / 5) * 100));
-                return (
-                  <div key={idx} className="p-3.5 rounded-xl bg-slate-950/70 border border-white/5 space-y-2">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="font-bold text-slate-200 truncate pr-2">{item.label}</span>
-                      <span className="font-mono font-extrabold text-amber-400 shrink-0">{item.score} / 5.0</span>
-                    </div>
-                    {/* Progress Bar */}
-                    <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
-                      <div 
-                        className="bg-gradient-to-r from-amber-500 to-yellow-400 h-2.5 rounded-full transition-all duration-500" 
-                        style={{ width: `${percent}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Feedback & Comments Stream */}
-          <div className="bg-slate-900/80 p-5 rounded-2xl border border-white/10 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-white/10">
-              <h3 className="text-sm font-bold text-white flex items-center space-x-2">
-                <MessageSquare className="w-4 h-4 text-teal-400" />
-                <span>รายชื่อผู้ประเมินและความคิดเห็น ({surveyResponses.length} รายการ)</span>
-              </h3>
-            </div>
-
-            {surveyResponses.length === 0 ? (
-              <div className="py-12 text-center text-slate-500 space-y-2">
-                <Star className="w-10 h-10 mx-auto opacity-30 text-amber-400" />
-                <div className="text-sm font-semibold text-slate-400">
-                  ยังไม่มีผู้ตอบแบบประเมินความพึงพอใจ
+                <div className="flex items-baseline space-x-1.5">
+                  <span className="text-2xl sm:text-3xl font-black text-white font-mono">
+                    {surveyStats.total}
+                  </span>
+                  <span className="text-xs text-slate-400">
+                    / {registrations.length} ท่าน
+                  </span>
                 </div>
-                <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                  เมื่อแอดมินกดปุ่ม "เปิดรับแบบประเมินความพึงพอใจ" ผู้ร่วมงานจะสามารถเข้าทำแบบประเมินได้จากเมนูในหน้าแรกครับ
-                </p>
+                <div className="text-[10px] text-amber-400">
+                  คิดเป็น {Math.round((surveyStats.total / Math.max(1, registrations.length)) * 100)}% ของผู้ลงทะเบียน
+                </div>
               </div>
-            ) : (
-              <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
-                {surveyResponses.map((res, idx) => (
-                  <div key={res.id || idx} className="p-4 rounded-xl bg-slate-950/70 border border-white/5 space-y-2 text-xs">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-                      <div className="flex items-center space-x-2">
-                        <span className="w-6 h-6 rounded-lg bg-amber-500/20 text-amber-300 font-mono font-bold flex items-center justify-center text-[11px] shrink-0">
-                          #{idx + 1}
-                        </span>
-                        <div className="font-extrabold text-white text-sm">
-                          {res.name} {res.nickname ? `(${res.nickname})` : ''}
+
+              {/* Stat 2: Average Score */}
+              <div className="bg-slate-900/80 p-4 rounded-2xl border border-white/10 space-y-1">
+                <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">
+                  คะแนนเฉลี่ยรวม
+                </span>
+                <div className="flex items-baseline space-x-1.5">
+                  <span className="text-2xl sm:text-3xl font-black text-amber-400 font-mono">
+                    {surveyStats.totalAvg}
+                  </span>
+                  <span className="text-xs text-amber-300">/ 5.0 ⭐</span>
+                </div>
+                <div className="text-[10px] text-emerald-400 font-medium">
+                  {Number(surveyStats.totalAvg) >= 4.5 ? "ระดับยอดเยี่ยมมาก 🌟" : Number(surveyStats.totalAvg) >= 3.5 ? "ระดับดีมาก 👍" : Number(surveyStats.totalAvg) > 0 ? "ระดับปานกลาง" : "ยังไม่มีคะแนน"}
+                </div>
+              </div>
+
+              {/* Stat 3: Comments Count */}
+              <div className="bg-slate-900/80 p-4 rounded-2xl border border-white/10 space-y-1">
+                <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">
+                  ความคิดเห็น / ข้อเสนอแนะ
+                </span>
+                <div className="flex items-baseline space-x-1.5">
+                  <span className="text-2xl sm:text-3xl font-black text-teal-300 font-mono">
+                    {surveyStats.totalCommentsCount}
+                  </span>
+                  <span className="text-xs text-slate-400">ข้อความ</span>
+                </div>
+                <div className="text-[10px] text-slate-400">
+                  แยกตาม {categories.length} หมวดหมู่
+                </div>
+              </div>
+
+              {/* Stat 4: System Status */}
+              <div className="bg-slate-900/80 p-4 rounded-2xl border border-white/10 space-y-1">
+                <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">
+                  สถานะระบบแบบประเมิน
+                </span>
+                <div className="text-base sm:text-lg font-extrabold font-mono pt-1">
+                  {eventConfig?.isSurveyOpen ? (
+                    <span className="text-emerald-400">🟢 เปิดรับข้อมูล</span>
+                  ) : (
+                    <span className="text-slate-400">🔒 ปิดระบบชั่วคราว</span>
+                  )}
+                </div>
+                <div className="text-[10px] text-slate-400 truncate">
+                  {eventConfig?.isSurveyOpen ? "ผู้ร่วมงานประเมินได้จากแอป" : "รอแอดมินกดเปิดระบบ"}
+                </div>
+              </div>
+            </div>
+
+            {/* Categories & Sub-Questions Detailed Breakdown */}
+            <div className="bg-slate-900/80 p-5 rounded-2xl border border-white/10 space-y-5">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <h3 className="text-sm sm:text-base font-extrabold text-white flex items-center space-x-2">
+                  <Award className="w-5 h-5 text-amber-400" />
+                  <span>ผลคะแนนเฉลี่ยแยกตามหมวดหมู่และข้อคำถามย่อย (เต็ม 5.0 คะแนน)</span>
+                </h3>
+                <span className="text-xs text-slate-400 font-mono">
+                  {categories.length} ด้าน • {categories.reduce((s, c) => s + (c.questions?.length || 0), 0)} ข้อย่อย
+                </span>
+              </div>
+
+              <div className="space-y-4">
+                {(surveyStats.categoryStats || []).map((catStat, cIdx) => {
+                  const IconComp = ICON_MAP[catStat.icon] || Award;
+                  const catPercent = Math.min(100, Math.round((Number(catStat.avg) / 5) * 100));
+
+                  return (
+                    <div
+                      key={catStat.id || cIdx}
+                      className="bg-slate-950/70 border border-white/5 rounded-2xl p-4 sm:p-5 space-y-4 hover:border-amber-500/20 transition-all"
+                    >
+                      {/* Category Header */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-3">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30">
+                            <IconComp className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="flex items-center space-x-2">
+                              <h4 className="text-sm font-extrabold text-white">
+                                {catStat.title}
+                              </h4>
+                              {catStat.subtitle && (
+                                <span className="text-xs text-amber-300 font-medium">
+                                  {catStat.subtitle}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-400">
+                              มีคำถาม {catStat.questions?.length || 0} ข้อย่อย
+                            </p>
+                          </div>
                         </div>
-                        <span className="font-mono text-amber-400 text-xs">
-                          {res.ticketNo}
-                        </span>
-                        <span className="text-slate-400 text-xs">
-                          • {res.club}
-                        </span>
-                      </div>
-                      <span className="font-mono text-[11px] text-slate-400">
-                        {res.displayTime || res.submittedAt || '-'}
-                      </span>
-                    </div>
 
-                    {/* Ratings Pills */}
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      <span className="px-2 py-0.5 rounded bg-white/5 text-amber-300 font-mono text-[11px]">
-                        ภาพรวม: {res.ratings?.ratingOverall}/5 ⭐
-                      </span>
-                      <span className="px-2 py-0.5 rounded bg-white/5 text-slate-300 font-mono text-[11px]">
-                        สถานที่: {res.ratings?.ratingVenue}/5 ⭐
-                      </span>
-                      <span className="px-2 py-0.5 rounded bg-white/5 text-slate-300 font-mono text-[11px]">
-                        อาหาร: {res.ratings?.ratingFood}/5 ⭐
-                      </span>
-                      <span className="px-2 py-0.5 rounded bg-white/5 text-slate-300 font-mono text-[11px]">
-                        กิจกรรม: {res.ratings?.ratingActivities}/5 ⭐
-                      </span>
-                      <span className="px-2 py-0.5 rounded bg-white/5 text-slate-300 font-mono text-[11px]">
-                        ทีมงาน: {res.ratings?.ratingStaff}/5 ⭐
-                      </span>
-                    </div>
-
-                    {/* Comment */}
-                    {res.comment && (
-                      <div className="p-2.5 rounded-lg bg-white/5 border border-white/5 text-slate-200 italic text-xs mt-1">
-                        "{res.comment}"
+                        {/* Category Score Badge */}
+                        <div className="flex items-center space-x-2 self-start sm:self-auto bg-slate-900 px-3 py-1.5 rounded-xl border border-white/10">
+                          <span className="text-xs text-slate-400 font-medium">เฉลี่ยหมวดนี้:</span>
+                          <span className="font-mono text-base font-black text-amber-400">
+                            {catStat.avg}
+                          </span>
+                          <span className="text-xs text-amber-300">/ 5.0 ⭐</span>
+                        </div>
                       </div>
-                    )}
-                  </div>
-                ))}
+
+                      {/* Sub-Questions Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {(catStat.questionStats || []).map((qStat, qIdx) => {
+                          const qPercent = Math.min(100, Math.round((Number(qStat.avg) / 5) * 100));
+                          return (
+                            <div
+                              key={qStat.id || qIdx}
+                              className="p-3 rounded-xl bg-slate-900/60 border border-white/5 space-y-1.5"
+                            >
+                              <div className="flex justify-between items-start gap-2">
+                                <div className="space-y-0.5 min-w-0 flex-1">
+                                  <div className="text-xs font-bold text-slate-200 truncate flex items-center space-x-1.5">
+                                    <span className="font-mono text-amber-400 text-[11px] shrink-0 font-extrabold">
+                                      {cIdx + 1}.{qIdx + 1}
+                                    </span>
+                                    <span className="truncate">{qStat.label}</span>
+                                  </div>
+                                  {qStat.desc && (
+                                    <p className="text-[10px] text-slate-400 truncate">
+                                      {qStat.desc}
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="shrink-0 text-right">
+                                  <span className="font-mono font-black text-amber-300 text-xs">
+                                    {qStat.avg}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 font-mono"> / 5.0</span>
+                                </div>
+                              </div>
+
+                              {/* Progress bar */}
+                              <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                                <div
+                                  className="bg-gradient-to-r from-amber-500 to-yellow-400 h-2 rounded-full transition-all duration-500"
+                                  style={{ width: `${qPercent}%` }}
+                                ></div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            )}
-          </div>
+            </div>
 
-        </main>
-      )}
+            {/* Feedback & Comments Stream with Category Filter */}
+            <div className="bg-slate-900/80 p-5 rounded-2xl border border-white/10 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/10">
+                <div className="flex items-center space-x-2">
+                  <MessageSquare className="w-4 h-4 text-teal-400" />
+                  <h3 className="text-sm font-bold text-white">
+                    ข้อเสนอแนะและความคิดเห็นจากผู้เข้าร่วมงาน ({commentsList.length} ข้อความ)
+                  </h3>
+                </div>
+
+                {/* Category Filter Tabs */}
+                <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+                  <button
+                    type="button"
+                    onClick={() => setSurveyFeedbackCategoryFilter("all")}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                      surveyFeedbackCategoryFilter === "all"
+                        ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20"
+                        : "bg-slate-800 hover:bg-slate-700 text-slate-300"
+                    }`}
+                  >
+                    ทั้งหมด
+                  </button>
+                  {categories.map((cat, cIdx) => (
+                    <button
+                      key={cat.id || cIdx}
+                      type="button"
+                      onClick={() => setSurveyFeedbackCategoryFilter(cat.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                        surveyFeedbackCategoryFilter === cat.id
+                          ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20"
+                          : "bg-slate-800 hover:bg-slate-700 text-slate-300"
+                      }`}
+                    >
+                      ด้านที่ {cIdx + 1}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {commentsList.length === 0 ? (
+                <div className="py-12 text-center text-slate-500 space-y-2">
+                  <MessageSquare className="w-10 h-10 mx-auto opacity-30 text-teal-400" />
+                  <div className="text-sm font-semibold text-slate-400">
+                    ยังไม่มีข้อเสนอแนะในหมวดนี้
+                  </div>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                    เมื่อผู้เข้าร่วมงานกรอกข้อเสนอแนะในแต่ละหัวข้อ ความคิดเห็นจะแสดงที่นี่แบบเรียลไทม์
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                  {commentsList.map((item, idx) => (
+                    <div
+                      key={item.id || idx}
+                      className="p-4 rounded-xl bg-slate-950/70 border border-white/5 space-y-2 text-xs hover:border-amber-500/20 transition-all"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                        <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                          <span className="w-6 h-6 rounded-lg bg-teal-500/20 text-teal-300 font-mono font-bold flex items-center justify-center text-[11px] shrink-0">
+                            #{idx + 1}
+                          </span>
+                          <div className="font-extrabold text-white text-sm">
+                            {item.name} {item.nickname ? `(${item.nickname})` : ''}
+                          </div>
+                          <span className="font-mono text-amber-400 text-xs">
+                            {item.ticketNo}
+                          </span>
+                          <span className="text-slate-400 text-xs">
+                            • {item.club}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                            {item.catTitle}
+                          </span>
+                        </div>
+                        <span className="font-mono text-[11px] text-slate-400">
+                          {item.time}
+                        </span>
+                      </div>
+
+                      {/* Comment text */}
+                      <div className="p-3 rounded-lg bg-white/5 border border-white/5 text-slate-200 italic text-xs leading-relaxed">
+                        "{item.comment}"
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+          </main>
+        );
+      })()}
 
       {/* ========================================================== */}
       {/* MODAL 1: CAMERA QR SCANNER MODAL                          */}
@@ -4382,6 +4675,23 @@ export default function EventCheckInHub({
         }}
         eventConfig={eventConfig}
       />
+
+      {/* Admin Survey Builder Modal */}
+      {isSurveyBuilderOpen && (
+        <AdminSurveyManagerModal
+          isOpen={isSurveyBuilderOpen}
+          onClose={() => setIsSurveyBuilderOpen(false)}
+          surveyConfig={eventConfig?.surveyConfig}
+          onSaveConfig={(newConfig) => {
+            if (setEventConfig) {
+              setEventConfig(prev => ({
+                ...prev,
+                surveyConfig: newConfig
+              }));
+            }
+          }}
+        />
+      )}
 
       {/* Footer Accreditation */}
       <footer className="relative z-10 py-6 border-t border-white/5 text-center text-xs text-slate-500 space-y-1">
