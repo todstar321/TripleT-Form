@@ -18,9 +18,11 @@ import {
   CheckCircle2,
   HelpCircle,
   Layers,
-  Edit2
+  Edit2,
+  Eye
 } from 'lucide-react';
 import { defaultSurveyConfig } from '../data/smeFanData';
+import SatisfactionSurveyModal from './SatisfactionSurveyModal';
 
 const AVAILABLE_ICONS = [
   { key: 'Sparkles', label: 'วิบวับ / ดิจิทัล (Sparkles)', icon: Sparkles },
@@ -47,6 +49,7 @@ export default function AdminSurveyManagerModal({
 
   const [activeCatIndex, setActiveCatIndex] = useState(0);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isTestPreviewOpen, setIsTestPreviewOpen] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -247,6 +250,15 @@ export default function AdminSurveyManagerModal({
           </div>
 
           <div className="flex items-center space-x-2">
+            <button
+              type="button"
+              onClick={() => setIsTestPreviewOpen(true)}
+              className="px-3 py-2 rounded-xl bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 hover:text-teal-200 text-xs font-bold flex items-center space-x-1.5 border border-teal-500/30 transition-all cursor-pointer shadow-sm"
+              title="ทดสอบทำแบบสอบถามในมุมมองของผู้ร่วมงาน (โหมดทดสอบ ไม่บันทึกคะแนน)"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">ทดสอบแบบสอบถาม</span>
+            </button>
             <button
               type="button"
               onClick={handleResetToDefault}
@@ -585,6 +597,16 @@ export default function AdminSurveyManagerModal({
         </div>
 
       </div>
+
+      {/* Test Preview Modal */}
+      {isTestPreviewOpen && (
+        <SatisfactionSurveyModal
+          isOpen={isTestPreviewOpen}
+          onClose={() => setIsTestPreviewOpen(false)}
+          surveyConfig={config}
+          isPreviewMode={true}
+        />
+      )}
     </div>
   );
 }

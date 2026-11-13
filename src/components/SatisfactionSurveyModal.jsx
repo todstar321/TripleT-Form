@@ -17,7 +17,9 @@ import {
   Check,
   RotateCcw,
   Sliders,
-  HelpCircle
+  HelpCircle,
+  Eye,
+  Lock
 } from 'lucide-react';
 import { defaultSurveyConfig } from '../data/smeFanData';
 
@@ -38,7 +40,8 @@ export default function SatisfactionSurveyModal({
   onClose,
   attendee,
   surveyConfig,
-  onSaveSurvey
+  onSaveSurvey,
+  isPreviewMode = false
 }) {
   // Use passed surveyConfig or fallback to default
   const activeConfig = useMemo(() => {
@@ -48,6 +51,14 @@ export default function SatisfactionSurveyModal({
   }, [surveyConfig]);
 
   const categories = activeConfig.categories || [];
+
+  const activeAttendee = attendee || (isPreviewMode ? {
+    name: "ผู้ดูแลระบบ (โหมดทดสอบ)",
+    nickname: "แอดมิน",
+    club: "ทดสอบระบบ",
+    ticketNo: "PREVIEW-2026",
+    phone: "080-000-0000"
+  } : null);
 
   // Step state: 0 to categories.length (categories.length = final review/submit step)
   const [currentStep, setCurrentStep] = useState(0);
@@ -64,14 +75,25 @@ export default function SatisfactionSurveyModal({
 
   // Initialize or load existing response when opened
   useEffect(() => {
-    if (!attendee || !isOpen) return;
+    if (!activeAttendee || !isOpen) return;
+
+    if (isPreviewMode) {
+      setExistingResponse(null);
+      setIsSubmitted(false);
+      setCurrentStep(0);
+      setScores({});
+      setCategoryComments({});
+      setError("");
+      return;
+    }
+
     try {
       const saved = localStorage.getItem(SURVEY_STORAGE_KEY);
       if (saved) {
         const list = JSON.parse(saved);
         const found = list.find(r => 
-          (attendee.ticketNo && r.ticketNo === attendee.ticketNo) ||
-          (attendee.phone && r.phone === attendee.phone)
+          (activeAttendee.ticketNo && r.ticketNo === activeAttendee.ticketNo) ||
+          (activeAttendee.phone && r.phone === activeAttendee.phone)
         );
         if (found) {
           setExistingResponse(found);
@@ -90,7 +112,7 @@ export default function SatisfactionSurveyModal({
     setIsSubmitted(false);
     setCurrentStep(0);
     setError("");
-  }, [attendee, isOpen, categories]);
+  }, [activeAttendee, isOpen, categories, isPreviewMode]);
 
   // Current category data
   const currentCategory = categories[currentStep] || null;
@@ -161,7 +183,7 @@ export default function SatisfactionSurveyModal({
     return count > 0 ? (sum / count).toFixed(2) : "0.0";
   };
 
-  if (!isOpen || !attendee) return null;
+  if (!isOpen || !activeAttendee) return null;
 
   const handleScoreClick = (questionId, score) => {
     setScores(prev => ({
@@ -191,6 +213,10 @@ export default function SatisfactionSurveyModal({
 
   const handleSubmit = (e) => {
     if (e) e.preventDefault();
+    if (isPreviewMode) {
+      alert("โหมดทดสอบ: ไม่สามารถส่งคะแนนจริงได้ครับ");
+      return;
+    }
 
     // Final full validation
     for (const cat of categories) {
@@ -210,11 +236,11 @@ export default function SatisfactionSurveyModal({
 
     const newResponse = {
       id: existingResponse?.id || `survey_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-      ticketNo: attendee.ticketNo,
-      name: attendee.name,
-      nickname: attendee.nickname || "",
-      phone: attendee.phone,
-      club: attendee.club || "",
+      ticketNo: activeAttendee.ticketNo,
+      name: activeAttendee.name,
+      nickname: activeAttendee.nickname || "",
+      phone: activeAttendee.phone,
+      club: activeAttendee.club || "",
       scores: { ...scores },
       ratings: { ...scores }, // backward compatibility
       categoryAverages: catAverages,
@@ -230,8 +256,8 @@ export default function SatisfactionSurveyModal({
       const saved = localStorage.getItem(SURVEY_STORAGE_KEY);
       let list = saved ? JSON.parse(saved) : [];
       const existingIdx = list.findIndex(r => 
-        (attendee.ticketNo && r.ticketNo === attendee.ticketNo) ||
-        (attendee.phone && r.phone === attendee.phone)
+        (activeAttendee.ticketNo && r.ticketNo === activeAttendee.ticketNo) ||
+        (activeAttendee.phone && r.phone === activeAttendee.phone)
       );
       if (existingIdx >= 0) {
         list[existingIdx] = newResponse;
@@ -279,6 +305,26 @@ export default function SatisfactionSurveyModal({
           <X className="w-5 h-5" />
         </button>
 
+        {/* Test Mode Notification Banner */}
+        {isPreviewMode && (
+          <div className="p-3.5 rounded-2xl bg-amber-500/15 border border-amber-500/40 text-amber-300 flex items-center justify-between text-xs animate-fadeIn">
+            <div className="flex items-center space-x-2.5">
+              <Eye className="w-4 h-4 text-amber-400 shrink-0 animate-pulse" />
+              <div>
+                <span className="font-extrabold text-amber-200">
+                  โหมดทดสอบแบบสอบถาม (Survey Test / Preview Mode)
+                </span>
+                <p className="text-[11px] text-amber-300/80">
+                  คุณสามารถทดลองคลิกให้คะแนนและพิมพ์ข้อเสนอแนะได้ แต่ระบบจะปิดการส่งคะแนนจริง
+                </p>
+              </div>
+            </div>
+            <span className="px-2.5 py-1 rounded-full bg-amber-500/30 text-amber-200 font-mono text-[10px] font-black border border-amber-500/40 shrink-0">
+              PREVIEW ONLY
+            </span>
+          </div>
+        )}
+
         {/* Modal Header */}
         <div className="flex items-center space-x-3 border-b border-white/10 pb-3">
           <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-500/25 via-yellow-400/20 to-emerald-500/25 border border-amber-500/40 text-amber-300 flex items-center justify-center shrink-0">
@@ -316,7 +362,7 @@ export default function SatisfactionSurveyModal({
               <div className="flex justify-between items-center pb-2 border-b border-white/10">
                 <span className="text-slate-400 font-bold">ผู้ประเมิน:</span>
                 <span className="font-extrabold text-white">
-                  {attendee.name} {attendee.nickname ? `(${attendee.nickname})` : ''} ({attendee.ticketNo})
+                  {activeAttendee.name} {activeAttendee.nickname ? `(${activeAttendee.nickname})` : ''} ({activeAttendee.ticketNo})
                 </span>
               </div>
 
@@ -407,7 +453,7 @@ export default function SatisfactionSurveyModal({
                   <div className="min-w-0">
                     <span className="text-[10px] text-slate-400 block leading-none">ผู้ประเมิน</span>
                     <span className="font-extrabold text-white text-xs truncate block">
-                      {attendee.name} {attendee.nickname ? `(${attendee.nickname})` : ''}
+                      {activeAttendee.name} {activeAttendee.nickname ? `(${activeAttendee.nickname})` : ''}
                     </span>
                   </div>
                 </div>
@@ -709,24 +755,43 @@ export default function SatisfactionSurveyModal({
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex items-center justify-between pt-2">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
                   <button
                     type="button"
                     onClick={handleBack}
-                    className="px-4 py-3 rounded-2xl text-xs sm:text-sm font-bold bg-white/10 hover:bg-white/15 text-slate-200 hover:text-white transition-all flex items-center space-x-2 cursor-pointer"
+                    className="w-full sm:w-auto px-4 py-3 rounded-2xl text-xs sm:text-sm font-bold bg-white/10 hover:bg-white/15 text-slate-200 hover:text-white transition-all flex items-center justify-center space-x-2 cursor-pointer"
                   >
                     <ArrowLeft className="w-4 h-4" />
                     <span>ย้อนกลับไปแก้ไข</span>
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={handleSubmit}
-                    className="px-6 py-3.5 rounded-2xl text-sm font-extrabold bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-xl shadow-emerald-500/25 flex items-center space-x-2 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-                  >
-                    <Send className="w-4 h-4" />
-                    <span>ยืนยันและส่งแบบประเมิน</span>
-                  </button>
+                  {isPreviewMode ? (
+                    <div className="flex flex-col items-center sm:items-end space-y-1 w-full sm:w-auto">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          alert(`[โหมดทดสอบแบบสอบถาม]\n\nคุณได้ทดสอบให้คะแนนครบถ้วนแล้วครับ!\nคะแนนเฉลี่ยที่ทดลองประเมินคือ: ${overallLiveStats.overallAvg} / 5.0 ⭐\n\n⚠️ ในโหมดทดสอบนี้ จะไม่มีการบันทึกคะแนนใดๆ ลงในระบบจริง เพื่อป้องกันไม่ให้ข้อมูลปนเปื้อนครับ`);
+                        }}
+                        className="w-full sm:w-auto px-6 py-3.5 rounded-2xl text-xs sm:text-sm font-extrabold bg-slate-800 hover:bg-slate-750 text-slate-300 border border-amber-500/40 flex items-center justify-center space-x-2 cursor-pointer transition-all shadow-md"
+                        title="คลิกเพื่อตรวจสอบผลการจำลองในโหมดทดสอบ"
+                      >
+                        <Lock className="w-4 h-4 text-amber-400" />
+                        <span>🔒 โหมดทดสอบ (ปิดการส่งคะแนนจริง)</span>
+                      </button>
+                      <span className="text-[11px] text-amber-400/90 font-medium">
+                        * สามารถทดสอบกดให้คะแนนได้ แต่ไม่สามารถส่งคะแนนจริงได้
+                      </span>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleSubmit}
+                      className="w-full sm:w-auto px-6 py-3.5 rounded-2xl text-sm font-extrabold bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-xl shadow-emerald-500/25 flex items-center justify-center space-x-2 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                    >
+                      <Send className="w-4 h-4" />
+                      <span>ยืนยันและส่งแบบประเมิน</span>
+                    </button>
+                  )}
                 </div>
 
               </div>

@@ -67,6 +67,7 @@ import ResetRegistrationsModal from "./ResetRegistrationsModal";
 import ClearSecurityModal from "./ClearSecurityModal";
 import AttendeeInspectionModal from "./AttendeeInspectionModal";
 import AdminSurveyManagerModal from "./AdminSurveyManagerModal";
+import SatisfactionSurveyModal from "./SatisfactionSurveyModal";
 import { defaultSurveyConfig } from "../data/smeFanData";
 import { formatThaiDisplayDateTime } from "../utils/supabaseClient";
 import { cleanPhoneNumber } from "../utils/phoneFormatter";
@@ -144,6 +145,7 @@ export default function EventCheckInHub({
   }, [eventConfig?.surveyConfig]);
 
   const [isSurveyBuilderOpen, setIsSurveyBuilderOpen] = useState(false);
+  const [isSurveyPreviewOpen, setIsSurveyPreviewOpen] = useState(false);
   const [surveyFeedbackCategoryFilter, setSurveyFeedbackCategoryFilter] = useState("all");
 
   const surveyStats = useMemo(() => {
@@ -3733,6 +3735,17 @@ export default function EventCheckInHub({
 
               {/* Quick Actions */}
               <div className="flex items-center space-x-2 flex-wrap gap-2">
+                {/* Survey Test Preview Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsSurveyPreviewOpen(true)}
+                  className="px-3.5 py-2.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-black text-xs flex items-center space-x-1.5 shadow-lg shadow-teal-500/20 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                  title="ทดสอบทำแบบสอบถามในมุมมองผู้เข้าร่วมงาน (โหมดทดสอบ ไม่บันทึกคะแนน)"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>ทดสอบแบบสอบถาม</span>
+                </button>
+
                 {/* Survey Builder Button */}
                 <button
                   type="button"
@@ -4690,6 +4703,16 @@ export default function EventCheckInHub({
               }));
             }
           }}
+        />
+      )}
+
+      {/* Admin Survey Test Preview Modal */}
+      {isSurveyPreviewOpen && (
+        <SatisfactionSurveyModal
+          isOpen={isSurveyPreviewOpen}
+          onClose={() => setIsSurveyPreviewOpen(false)}
+          surveyConfig={eventConfig?.surveyConfig}
+          isPreviewMode={true}
         />
       )}
 
