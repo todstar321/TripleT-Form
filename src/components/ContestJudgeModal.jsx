@@ -31,7 +31,11 @@ export default function ContestJudgeModal({
   teams = [],
   existingVotes = [],
   onSaveVotes,
-  initialJudgeName = ""
+  initialJudgeName = "",
+  initialAttendee = null,
+  initialVerifiedJudge = null,
+  isVotingOpen = true,
+  currentUser = null
 }) {
   // -----------------------------------------------------------------------------------------
   // 1. ALL HOOKS MUST BE DECLARED UNCONDITIONALLY AT THE VERY TOP
@@ -53,6 +57,8 @@ export default function ContestJudgeModal({
 
   // Verified Judge Identity State
   const [verifiedJudge, setVerifiedJudge] = useState(() => {
+    const candidate = initialVerifiedJudge || initialAttendee;
+    if (candidate && candidate.name) return candidate;
     try {
       const saved = sessionStorage.getItem("sme_fan_verified_judge_v1") || localStorage.getItem("sme_fan_verified_judge_v1");
       if (!saved) return null;
@@ -62,6 +68,18 @@ export default function ContestJudgeModal({
       return null;
     }
   });
+
+  // Keep verifiedJudge in sync if attendee is passed in dynamically
+  useEffect(() => {
+    const candidate = initialVerifiedJudge || initialAttendee;
+    if (candidate && candidate.name) {
+      setVerifiedJudge(candidate);
+      try {
+        sessionStorage.setItem("sme_fan_verified_judge_v1", JSON.stringify(candidate));
+        localStorage.setItem("sme_fan_verified_judge_v1", JSON.stringify(candidate));
+      } catch (e) {}
+    }
+  }, [initialVerifiedJudge, initialAttendee]);
 
   // Verification Gate Form State
   const [judgeSearchQuery, setJudgeSearchQuery] = useState("");
@@ -842,6 +860,51 @@ export default function ContestJudgeModal({
       </div>
     );
   };
+
+  // -----------------------------------------------------------------------------------------
+  // VIEW 0: VOTING CLOSED LOCK SCREEN (เมื่อแอดมินยังไม่เปิดระบบโหวต)
+  // -----------------------------------------------------------------------------------------
+  const isAdmin = currentUser && ['owner', 'manager', 'admin'].includes(currentUser.role);
+  if (!isVotingOpen && !isAdmin) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/95 backdrop-blur-md overflow-y-auto animate-fadeIn">
+        <div className="relative w-full max-w-md bg-slate-900 border border-rose-500/40 rounded-3xl p-6 sm:p-8 text-slate-100 shadow-2xl space-y-5 text-center my-auto">
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute top-4 right-4 p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
+            title="ปิดหน้าต่าง"
+          >
+            <X className="w-5 h-5" />
+          </button>
+
+          <div className="w-16 h-16 rounded-3xl bg-rose-500/20 text-rose-400 border border-rose-500/40 flex items-center justify-center mx-auto shadow-xl shadow-rose-500/20">
+            <Lock className="w-8 h-8 text-rose-400 animate-pulse" />
+          </div>
+
+          <div className="space-y-2">
+            <span className="text-[11px] font-bold text-rose-400 uppercase tracking-wider bg-rose-500/10 px-3 py-1 rounded-full border border-rose-500/30 font-mono">
+              SYSTEM LOCKED • รอเปิดระบบ
+            </span>
+            <h3 className="text-lg sm:text-xl font-black text-white">
+              ระบบโหวตยังไม่เปิดให้ลงคะแนน
+            </h3>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              ขออภัยในความไม่สะดวกครับ ขณะนี้แอดมินยังไม่เปิดระบบลงคะแนนการประกวดแต่งกาย SME FAN 2026 กรุณารอพิธีกรหรือแอดมินประกาศเปิดระบบพร้อมกันในวันงาน เพื่อความยุติธรรมของผู้เข้าประกวดทุกท่านครับ
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full py-3 px-4 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 text-xs font-bold transition-all cursor-pointer"
+          >
+            ตกลง ปิดหน้าต่าง
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // -----------------------------------------------------------------------------------------
   // VIEW 1: IDENTITY VERIFICATION GATE (ค้นหาชื่อกรรมการ + ใส่เบอร์โทรศัพท์ยืนยันตัวตน)

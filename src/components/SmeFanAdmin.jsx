@@ -48,7 +48,9 @@ import {
   MessageSquare,
   Send,
   Ticket,
-  Bell
+  Bell,
+  Unlock,
+  Crown
 } from 'lucide-react';
 import ImageCropperModal from './ImageCropperModal';
 import MemberSpreadsheet from './MemberSpreadsheet';
@@ -1122,6 +1124,145 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
                 <span>ไปที่ศูนย์กลางแบบฟอร์ม</span>
                 <ChevronRight className="w-4 h-4" />
               </button>
+            </div>
+
+            {/* Event On-site Activities Controls Card (Voting & Survey Toggles) */}
+            <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+                <div className="space-y-0.5">
+                  <div className="flex items-center space-x-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse"></span>
+                    <h3 className="text-base font-bold text-slate-900">
+                      สวิตช์ควบคุมกิจกรรมหน้างาน (Live Event Controls)
+                    </h3>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    ควบคุมการเปิด-ปิดระบบโหวตประกวดแต่งกาย และระบบแบบประเมินความพึงพอใจสำหรับผู้ร่วมงาน
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Control 1: Contest Voting System */}
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between space-y-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <Crown className="w-4 h-4 text-rose-500" />
+                        <span className="font-bold text-sm text-slate-900">
+                          ระบบโหวตการประกวดแต่งกาย
+                        </span>
+                      </div>
+                      {eventConfig?.isVotingOpen ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center space-x-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                          <span>LIVE เปิดโหวต</span>
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-600">
+                          🔒 ปิดระบบโหวต
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                      เมื่อเปิดระบบ ผู้เข้าร่วมงานทุกคนจะสามารถกดปุ่มเริ่มโหวตคะแนนการประกวดแต่งกายได้พร้อมกัน
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const isCurrentlyOpen = Boolean(eventConfig?.isVotingOpen);
+                      const promptMsg = isCurrentlyOpen
+                        ? "ต้องการปิดระบบโหวตการประกวดแต่งกายใช่หรือไม่?\n(เมื่อปิดแล้ว สมาชิกทั่วไปจะไม่สามารถส่งคะแนนเพิ่มได้)"
+                        : "ต้องการเปิดระบบโหวตการประกวดแต่งกายใช่หรือไม่?\n(เมื่อเปิดแล้ว สมาชิกทุกคนจะสามารถกดปุ่มเริ่มโหวตพร้อมกันได้ทันที เพื่อความยุติธรรม)";
+                      if (window.confirm(promptMsg)) {
+                        setEventConfig(prev => ({
+                          ...prev,
+                          isVotingOpen: !isCurrentlyOpen
+                        }));
+                      }
+                    }}
+                    className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-2 cursor-pointer shadow-sm ${
+                      eventConfig?.isVotingOpen
+                        ? "bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/20"
+                        : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20"
+                    }`}
+                  >
+                    {eventConfig?.isVotingOpen ? (
+                      <>
+                        <Lock className="w-3.5 h-3.5" />
+                        <span>ปิดระบบโหวตคะแนน</span>
+                      </>
+                    ) : (
+                      <>
+                        <Unlock className="w-3.5 h-3.5" />
+                        <span>เปิดระบบให้เริ่มโหวตพร้อมกัน</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Control 2: Satisfaction Survey System */}
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between space-y-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+                        <span className="font-bold text-sm text-slate-900">
+                          แบบประเมินความพึงพอใจ
+                        </span>
+                      </div>
+                      {eventConfig?.isSurveyOpen ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center space-x-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                          <span>เปิดรับประเมิน</span>
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-600">
+                          🔒 ปิดระบบประเมิน
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                      เมื่อเปิดระบบ ผู้เข้าร่วมงานจะสามารถเข้าทำแบบประเมินความพึงพอใจได้จากศูนย์บริการผู้ร่วมงาน
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const isCurrentlyOpen = Boolean(eventConfig?.isSurveyOpen);
+                      const promptMsg = isCurrentlyOpen
+                        ? "ต้องการปิดรับแบบประเมินความพึงพอใจใช่หรือไม่?"
+                        : "ต้องการเปิดระบบรับแบบประเมินความพึงพอใจใช่หรือไม่?\n(เมื่อเปิดแล้ว สมาชิกทุกคนจะสามารถกดทำแบบประเมินได้ทันที)";
+                      if (window.confirm(promptMsg)) {
+                        setEventConfig(prev => ({
+                          ...prev,
+                          isSurveyOpen: !isCurrentlyOpen
+                        }));
+                      }
+                    }}
+                    className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-2 cursor-pointer shadow-sm ${
+                      eventConfig?.isSurveyOpen
+                        ? "bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/20"
+                        : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20"
+                    }`}
+                  >
+                    {eventConfig?.isSurveyOpen ? (
+                      <>
+                        <Lock className="w-3.5 h-3.5" />
+                        <span>ปิดรับแบบประเมินความพึงพอใจ</span>
+                      </>
+                    ) : (
+                      <>
+                        <Unlock className="w-3.5 h-3.5" />
+                        <span>เปิดรับแบบประเมินความพึงพอใจ</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
             </div>
 
             {/* Registration Schedule Manager Card */}

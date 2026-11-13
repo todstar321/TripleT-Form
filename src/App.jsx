@@ -1025,6 +1025,7 @@ export default function App() {
         {currentTab === 'sme_checkin' && (
           <EventCheckInHub
             eventConfig={eventConfig}
+            setEventConfig={setEventConfig}
             currentUser={currentUser}
             registrations={registrations}
             onCheckIn={handleCheckIn}
@@ -1051,6 +1052,8 @@ export default function App() {
               isOpen={true}
               onClose={() => setCurrentTab('sme_register')}
               attendees={registrations}
+              isVotingOpen={Boolean(eventConfig?.isVotingOpen)}
+              currentUser={currentUser}
               onSaveVotes={(voteData) => {
                 try {
                   const saved = localStorage.getItem("sme_fan_contest_all_votes_v2");
