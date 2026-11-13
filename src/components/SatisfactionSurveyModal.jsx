@@ -447,48 +447,46 @@ export default function SatisfactionSurveyModal({
           /* ==================================================== */
           <div className="space-y-4">
             
-            {/* REAL-TIME LIVE SCORE & STEPPER HEADER BAR (ส่วนบนสรุปคะแนนสด) */}
-            <div className="p-3 sm:p-4 rounded-2xl bg-slate-950/90 border border-amber-500/30 space-y-2.5 shadow-inner">
+            {/* REAL-TIME LIVE SCORE & EVALUATOR CARD (จัดเรียงลงมาตามแบบภาพที่ 2 สบายตา ตัวหนังสือเล็กลง ไม่รกตา) */}
+            <div className="p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-yellow-400/10 to-amber-500/15 border border-amber-500/35 text-center space-y-1 shadow-md">
               
-              {/* Row 1: Attendee Pill & Live Overall Total Score */}
-              <div className="flex items-center justify-between gap-2 pb-2 border-b border-white/10">
-                <div className="flex items-center space-x-2 min-w-0">
-                  <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-300 font-bold flex items-center justify-center text-xs shrink-0">
-                    👤
-                  </div>
-                  <div className="min-w-0">
-                    <span className="text-[10px] text-slate-400 block leading-none">ผู้ประเมิน</span>
-                    <span className="font-extrabold text-white text-xs truncate block">
-                      {activeAttendee.name} {activeAttendee.nickname ? `(${activeAttendee.nickname})` : ''}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Live Overall Rating Pill (ยอดรวมคะแนนเฉลี่ยสดทั้งงาน) */}
-                <div className="bg-gradient-to-r from-amber-500/20 via-yellow-400/20 to-amber-500/20 border border-amber-500/40 px-3 py-1.5 rounded-xl flex items-center space-x-2 shrink-0">
-                  <div className="text-right">
-                    <span className="text-[10px] text-amber-300 font-bold block uppercase tracking-wider leading-none">
-                      ยอดคะแนนเฉลี่ยรวม
-                    </span>
-                    <span className="text-[10px] text-slate-400 block leading-none pt-0.5">
-                      ตอบแล้ว {overallLiveStats.answered}/{overallLiveStats.totalQuestions} ข้อ
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-1 pl-1 border-l border-amber-500/30">
-                    <span className="font-mono text-base sm:text-lg font-black text-amber-400">
-                      {overallLiveStats.overallAvg}
-                    </span>
-                    <span className="text-amber-400 text-xs">⭐</span>
-                  </div>
-                </div>
+              {/* บรรทัดที่ 1: ข้อมูลผู้ประเมิน */}
+              <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-slate-950/70 border border-white/10 text-xs">
+                <span className="text-amber-400">👤 ผู้ประเมิน:</span>
+                <span className="font-bold text-white">
+                  {activeAttendee.name} {activeAttendee.nickname ? `(${activeAttendee.nickname})` : ''}
+                </span>
+                {activeAttendee.ticketNo && (
+                  <span className="text-slate-400 font-mono text-[10px] pl-1 border-l border-white/10">
+                    #{activeAttendee.ticketNo}
+                  </span>
+                )}
               </div>
 
-              {/* Row 2: Category Stepper Tabs (1 - 5 + สรุป) */}
+              {/* บรรทัดที่ 2: หัวข้อคะแนนเฉลี่ยรวม */}
+              <span className="text-[10px] sm:text-[11px] font-bold text-amber-300 uppercase tracking-wider block pt-0.5">
+                คะแนนเฉลี่ยรวมทุกหัวข้อ
+              </span>
+
+              {/* บรรทัดที่ 3: คะแนนเฉลี่ย (ปรับขนาดตัวหนังสือให้เล็กลง สบายตา ไม่รกตา) */}
+              <div className="text-2xl sm:text-3xl font-black text-amber-400 font-mono leading-tight">
+                {overallLiveStats.overallAvg} <span className="text-sm sm:text-base font-bold text-amber-300">/ 5.0 ⭐</span>
+              </div>
+
+              {/* บรรทัดที่ 4: สถานะจำนวนข้อที่ตอบแล้ว */}
+              <div className="text-[11px] text-slate-300">
+                ตอบแล้ว {overallLiveStats.answered} จาก {overallLiveStats.totalQuestions} ข้อย่อย ({overallLiveStats.percent}%)
+              </div>
+            </div>
+
+            {/* Category Stepper Tabs Bar (แถบสลับหมวดหมู่ 1 - 5 + สรุปผล) */}
+            <div className="p-2.5 rounded-2xl bg-slate-950/90 border border-white/10 space-y-2">
               <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 scrollbar-none">
                 {categories.map((cat, idx) => {
                   const isActive = idx === currentStep;
                   const isDone = isCategoryComplete(cat);
                   const catScore = getCategoryAvg(cat);
+                  const catTitle = cat.title || cat.label || `หมวดที่ ${idx + 1}`;
                   return (
                     <button
                       key={cat.id}
@@ -505,7 +503,7 @@ export default function SatisfactionSurveyModal({
                             : "bg-white/5 text-slate-400 border-white/10 hover:bg-white/10 hover:text-white"
                       }`}
                     >
-                      <span>{idx + 1}. {cat.title.replace(/^\d+\.\s*(ด้าน)?/, '').slice(0, 10)}...</span>
+                      <span>{idx + 1}. {catTitle.replace(/^\d+\.\s*(ด้าน)?/, '').slice(0, 10)}...</span>
                       {isDone && (
                         <span className={`text-[10px] px-1 rounded-md font-mono font-bold ${
                           isActive ? "bg-slate-950 text-amber-300" : "bg-emerald-500/20 text-emerald-400"
@@ -534,15 +532,15 @@ export default function SatisfactionSurveyModal({
                 </button>
               </div>
 
-              {/* Row 3: Current Category Live Real-time Score Badge */}
+              {/* Current Category Info (เฉพาะหน้า 1-5) */}
               {!isReviewStep && currentCategory && (
-                <div className="flex items-center justify-between pt-1 text-xs">
-                  <span className="text-slate-300 font-medium">
-                    หน้า {currentStep + 1} จาก {categories.length}: <strong className="text-white">{currentCategory.title}</strong>
+                <div className="flex items-center justify-between pt-1 border-t border-white/5 text-xs">
+                  <span className="text-slate-300 font-medium truncate pr-2">
+                    หน้า {currentStep + 1} จาก {categories.length}: <strong className="text-white">{currentCategory.title || currentCategory.label}</strong>
                   </span>
-                  <div className="flex items-center space-x-2 text-amber-400 font-mono font-bold">
-                    <span>คะแนนเฉลี่ยหน้านี้:</span>
-                    <span className="bg-amber-500/15 px-2 py-0.5 rounded-md border border-amber-500/30 text-amber-300">
+                  <div className="flex items-center space-x-1.5 text-amber-400 font-mono font-bold shrink-0">
+                    <span className="text-[11px] text-slate-400 hidden sm:inline">คะแนนเฉลี่ยหมวดนี้:</span>
+                    <span className="bg-amber-500/15 px-2 py-0.5 rounded-md border border-amber-500/30 text-amber-300 text-xs">
                       {currentCategoryStats.avg} / 5.0 ⭐
                     </span>
                   </div>
@@ -703,18 +701,6 @@ export default function SatisfactionSurveyModal({
                   </p>
                 </div>
 
-                {/* Overall Score Highlight Card */}
-                <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/20 via-yellow-400/10 to-amber-500/20 border-2 border-amber-500/40 text-center space-y-1">
-                  <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wider block">
-                    คะแนนเฉลี่ยรวมทุกหัวข้อ
-                  </span>
-                  <div className="text-3xl sm:text-4xl font-black text-amber-400 font-mono">
-                    {overallLiveStats.overallAvg} <span className="text-lg text-amber-300">/ 5.0 ⭐</span>
-                  </div>
-                  <div className="text-xs text-slate-300">
-                    ตอบครบถ้วน {overallLiveStats.answered} จาก {overallLiveStats.totalQuestions} ข้อย่อย (100%)
-                  </div>
-                </div>
 
                 {/* Breakdown per Category with Comments */}
                 <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
