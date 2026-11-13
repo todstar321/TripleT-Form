@@ -35,6 +35,14 @@ const ICON_MAP = {
   Star: Star
 };
 
+const DUMMY_PREVIEW_ATTENDEE = {
+  name: "ผู้ดูแลระบบ (โหมดทดสอบ)",
+  nickname: "แอดมิน",
+  club: "ทดสอบระบบ",
+  ticketNo: "PREVIEW-2026",
+  phone: "080-000-0000"
+};
+
 export default function SatisfactionSurveyModal({
   isOpen,
   onClose,
@@ -52,13 +60,7 @@ export default function SatisfactionSurveyModal({
 
   const categories = activeConfig.categories || [];
 
-  const activeAttendee = attendee || (isPreviewMode ? {
-    name: "ผู้ดูแลระบบ (โหมดทดสอบ)",
-    nickname: "แอดมิน",
-    club: "ทดสอบระบบ",
-    ticketNo: "PREVIEW-2026",
-    phone: "080-000-0000"
-  } : null);
+  const activeAttendee = attendee || (isPreviewMode ? DUMMY_PREVIEW_ATTENDEE : null);
 
   // Step state: 0 to categories.length (categories.length = final review/submit step)
   const [currentStep, setCurrentStep] = useState(0);
@@ -75,7 +77,7 @@ export default function SatisfactionSurveyModal({
 
   // Initialize or load existing response when opened
   useEffect(() => {
-    if (!activeAttendee || !isOpen) return;
+    if (!isOpen) return;
 
     if (isPreviewMode) {
       setExistingResponse(null);
@@ -86,6 +88,8 @@ export default function SatisfactionSurveyModal({
       setError("");
       return;
     }
+
+    if (!activeAttendee) return;
 
     try {
       const saved = localStorage.getItem(SURVEY_STORAGE_KEY);
@@ -111,8 +115,10 @@ export default function SatisfactionSurveyModal({
     setExistingResponse(null);
     setIsSubmitted(false);
     setCurrentStep(0);
+    setScores({});
+    setCategoryComments({});
     setError("");
-  }, [activeAttendee, isOpen, categories, isPreviewMode]);
+  }, [isOpen, activeAttendee?.ticketNo, activeAttendee?.phone, isPreviewMode]);
 
   // Current category data
   const currentCategory = categories[currentStep] || null;
@@ -198,7 +204,7 @@ export default function SatisfactionSurveyModal({
     if (currentCategory) {
       const unAnswered = (currentCategory.questions || []).find(q => !scores[q.id]);
       if (unAnswered) {
-        setError(`กรุณาให้คะแนนข้อ "${unAnswered.title}" ก่อนดำเนินการต่อครับ`);
+        setError(`กรุณาให้คะแนนข้อ "${unAnswered.title || unAnswered.label}" ก่อนดำเนินการต่อครับ`);
         return;
       }
     }
@@ -222,7 +228,7 @@ export default function SatisfactionSurveyModal({
     for (const cat of categories) {
       for (const q of cat.questions || []) {
         if (!scores[q.id]) {
-          setError(`ยังให้คะแนนไม่ครบ: กรุณาให้คะแนน "${q.title}" ใน ${cat.title} ครับ`);
+          setError(`ยังให้คะแนนไม่ครบ: กรุณาให้คะแนน "${q.title || q.label}" ใน ${cat.title} ครับ`);
           return;
         }
       }
@@ -574,7 +580,7 @@ export default function SatisfactionSurveyModal({
                         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-1.5 pb-2">
                           <div>
                             <h4 className="text-xs sm:text-sm font-bold text-white flex items-center space-x-2">
-                              <span>{q.title}</span>
+                              <span>{q.title || q.label || `คำถามข้อที่ ${qIdx + 1}`}</span>
                               {currentVal && (
                                 <span className="w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-[10px]">
                                   ✓

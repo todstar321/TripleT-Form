@@ -166,6 +166,7 @@ export default function AdminSurveyManagerModal({
     const newQId = `${targetCat.id}_q_${Date.now()}`;
     const newQuestion = {
       id: newQId,
+      title: `ข้อที่ ${(targetCat.questions?.length || 0) + 1}`,
       label: `ข้อที่ ${(targetCat.questions?.length || 0) + 1}`,
       desc: "รายละเอียดการประเมิน..."
     };
@@ -185,7 +186,8 @@ export default function AdminSurveyManagerModal({
       alert("ในแต่ละหัวข้อต้องมีข้อคำถามอย่างน้อย 1 ข้อครับ");
       return;
     }
-    if (window.confirm(`ต้องการลบข้อคำถาม "${targetCat.questions[qIdx].label}" หรือไม่?`)) {
+    const qName = targetCat.questions[qIdx].title || targetCat.questions[qIdx].label || "คำถามนี้";
+    if (window.confirm(`ต้องการลบข้อคำถาม "${qName}" หรือไม่?`)) {
       setConfig(prev => {
         const updated = [...prev.categories];
         updated[catIdx] = {
@@ -216,7 +218,10 @@ export default function AdminSurveyManagerModal({
     setConfig(prev => {
       const updated = [...prev.categories];
       const questions = [...updated[catIdx].questions];
-      questions[qIdx] = { ...questions[qIdx], [field]: value };
+      const qItem = { ...questions[qIdx], [field]: value };
+      if (field === "label") qItem.title = value;
+      if (field === "title") qItem.label = value;
+      questions[qIdx] = qItem;
       updated[catIdx] = { ...updated[catIdx], questions };
       return { ...prev, categories: updated };
     });
@@ -483,7 +488,7 @@ export default function AdminSurveyManagerModal({
                               {activeCatIndex + 1}.{qIdx + 1}
                             </span>
                             <span className="text-xs font-bold text-slate-200 truncate">
-                              {q.label || `คำถามข้อที่ ${qIdx + 1}`}
+                              {q.title || q.label || `คำถามข้อที่ ${qIdx + 1}`}
                             </span>
                           </div>
 
@@ -520,11 +525,11 @@ export default function AdminSurveyManagerModal({
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                           <div className="space-y-1">
                             <label className="text-[11px] font-semibold text-slate-400">
-                              หัวข้อคำถาม (Label)
+                              หัวข้อคำถาม (Label / Title)
                             </label>
                             <input
                               type="text"
-                              value={q.label || ""}
+                              value={q.title || q.label || ""}
                               onChange={e => handleUpdateQuestionField(activeCatIndex, qIdx, "label", e.target.value)}
                               placeholder="เช่น ความทันสมัยของระบบ"
                               className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-white text-xs font-medium focus:outline-none focus:border-amber-400"
