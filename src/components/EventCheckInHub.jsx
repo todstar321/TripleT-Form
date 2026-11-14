@@ -1018,235 +1018,236 @@ export default function EventCheckInHub({
         <div className="absolute bottom-1/4 left-10 w-[500px] h-[500px] bg-amber-500/10 rounded-full blur-[140px]" />
       </div>
 
-      {/* Top Header Bar */}
-      <header className="relative z-10 border-b border-white/10 bg-slate-950/80 backdrop-blur-xl sticky top-0 px-4 sm:px-6 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+      {/* ========================================================== */}
+      {/* STICKY TOP APP BAR (HEADER + TABS PINNED AT TOP)            */}
+      {/* ========================================================== */}
+      <div className="sticky top-0 z-40 bg-slate-950 shadow-xl border-b border-slate-800 text-white">
         
-        {/* Left: Branding & Back to Portal */}
-        <div className="flex items-center space-x-3">
-          <button
-            type="button"
-            onClick={onBackToPortal}
-            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition-all shadow-sm"
-            title="กลับสู่ศูนย์ควบคุม Owner"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-
-          <div>
-            <div className="flex items-center space-x-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-              <h1 className="font-extrabold text-white text-base sm:text-lg tracking-tight">
-                ระบบลงทะเบียนเข้างาน & กิจกรรมหน้างาน
-              </h1>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
-                Live On-Site
-              </span>
-            </div>
-            <p className="text-xs text-slate-400">
-              {eventConfig?.eventTitle || "งานสังสรรค์ปีใหม่ SME FAN 2026"} • {currentUser?.name || "ทีป์ชลิต"}
-            </p>
-          </div>
-        </div>
-
-        {/* Center: Live Stats Chips */}
-        <div className="flex items-center space-x-2 sm:space-x-3 text-xs overflow-x-auto pb-1 md:pb-0">
-          <div className="px-3 py-1.5 rounded-xl bg-slate-900/90 border border-white/10 flex items-center space-x-1.5 shrink-0">
-            <Users className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-slate-400">ผู้สมัครทั้งหมด:</span>
-            <strong className="text-white font-mono">{totalCount}</strong>
-          </div>
-
-          <div className="px-3 py-1.5 rounded-xl bg-emerald-950/60 border border-emerald-500/30 flex items-center space-x-1.5 shrink-0">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="text-emerald-300">เข้างานแล้ว:</span>
-            <strong className="text-emerald-400 font-mono">{checkedInCount}</strong>
-            <span className="text-[10px] text-emerald-400/80">({totalCount > 0 ? Math.round((checkedInCount / totalCount) * 100) : 0}%)</span>
-          </div>
-
-          <div className="px-3 py-1.5 rounded-xl bg-amber-950/60 border border-amber-500/30 flex items-center space-x-1.5 shrink-0">
-            <Gift className="w-3.5 h-3.5 text-amber-400" />
-            <span className="text-amber-300">ของขวัญ:</span>
-            <strong className="text-amber-400 font-mono">{giftCount}</strong>
-          </div>
-
-          <div className="px-3 py-1.5 rounded-xl bg-teal-950/60 border border-teal-500/30 flex items-center space-x-1.5 shrink-0">
-            <Shirt className="w-3.5 h-3.5 text-teal-400" />
-            <span className="text-teal-300">เสื้อที่ระลึก:</span>
-            <strong className="text-teal-400 font-mono">{shirtReceivedCount}/{shirtTotalCount}</strong>
-          </div>
-        </div>
-
-        {/* Right: Sound & Navigation Switches */}
-        <div className="flex items-center space-x-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => setSoundEnabled(!soundEnabled)}
-            className={`p-2 rounded-xl border text-xs transition-all ${
-              soundEnabled 
-                ? "bg-amber-500/20 border-amber-500/40 text-amber-300" 
-                : "bg-white/5 border-white/10 text-slate-400 hover:text-white"
-            }`}
-            title={soundEnabled ? "ปิดเสียงเอฟเฟกต์" : "เปิดเสียงเอฟเฟกต์"}
-          >
-            {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-          </button>
-
-          {/* High-Security Clear Button (แทนที่ปุ่มลบรูปและล้างข้อมูลเดิม ป้องกันการกดพลาด) */}
-          <button
-            type="button"
-            onClick={() => setIsClearSecurityOpen(true)}
-            className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-gradient-to-r from-rose-950/90 to-red-950/80 hover:from-rose-900 hover:to-red-900 border border-rose-500/50 hover:border-rose-400 text-xs font-black text-rose-200 hover:text-white transition-all shadow-md shadow-rose-950/50 hover:scale-105 active:scale-95 cursor-pointer"
-            title="ระบบความปลอดภัย: เคลียร์ข้อมูล (ลบรูปหลังจบงาน / ล้างข้อมูลลงทะเบียน)"
-          >
-            <span className="text-xs">⛔</span>
-            <span>Clear</span>
-          </button>
-
-          {onForceSyncCloud && (
+        {/* Top Header Bar */}
+        <header className="px-3 sm:px-6 py-2.5 sm:py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2.5 border-b border-white/5 bg-slate-950">
+          
+          {/* Left: Branding & Back to Portal */}
+          <div className="flex items-center space-x-2.5 sm:space-x-3">
             <button
               type="button"
-              onClick={handleManualSync}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-sm cursor-pointer ${
-                isSyncing 
-                  ? "bg-emerald-500/30 border-emerald-400 text-emerald-200 animate-pulse" 
-                  : "bg-emerald-950/60 hover:bg-emerald-900/80 border-emerald-500/40 text-emerald-300 hover:text-white"
-              }`}
-              title={`ซิงค์ข้อมูล Cloud ล่าสุด (อัปเดตล่าสุด: ${lastCloudSync ? lastCloudSync.toLocaleTimeString('th-TH') : 'เรียลไทม์'})`}
+              onClick={onBackToPortal}
+              className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition-all shadow-sm cursor-pointer"
+              title="กลับสู่ศูนย์ควบคุม Owner"
             >
-              <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${isSyncing ? "animate-spin" : ""}`} />
-              <span className="inline">ซิงค์ Cloud</span>
-              <span className="hidden lg:inline text-[10px] text-emerald-400/80 font-normal">
-                ({lastCloudSync ? lastCloudSync.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'สด'})
-              </span>
+              <ArrowLeft className="w-4 h-4" />
             </button>
-          )}
 
-          <button
-            type="button"
-            onClick={onGoToSettings}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs font-semibold text-slate-300 hover:text-white transition-all shadow-sm"
-            title="ไปยังหน้าตั้งค่าระบบ (แอดมิน)"
-          >
-            <Settings className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden sm:inline">ตั้งค่าระบบ</span>
-          </button>
+            <div>
+              <div className="flex items-center space-x-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                <h1 className="font-black text-white text-sm sm:text-base tracking-tight">
+                  ระบบลงทะเบียนหน้างาน
+                </h1>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-extrabold border border-emerald-500/30">
+                  Live On-Site
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 truncate max-w-[260px] sm:max-w-none">
+                {eventConfig?.eventTitle || "งานสังสรรค์ปีใหม่ SME FAN 2026"} • {currentUser?.name || "ทีป์ชลิต"}
+              </p>
+            </div>
+          </div>
 
-          <button
-            type="button"
-            onClick={onSwitchToPublicForm}
-            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-white transition-all"
-            title="ไปยังหน้าฟอร์มลงทะเบียน"
-          >
-            <Globe className="w-4 h-4" />
-          </button>
-        </div>
-      </header>
+          {/* Right: Live Stats Chips & Essential Actions (Clean & Organized, No Dangerous Clear Button) */}
+          <div className="flex items-center justify-between md:justify-end gap-2 sm:gap-3 flex-wrap">
+            {/* Live Stats Chips */}
+            <div className="flex items-center space-x-1.5 sm:space-x-2 text-xs overflow-x-auto">
+              <div className="px-2.5 py-1 rounded-xl bg-slate-900 border border-white/10 flex items-center space-x-1.5 shrink-0 text-[11px]">
+                <Users className="w-3.5 h-3.5 text-slate-400" />
+                <span className="text-slate-400">ทั้งหมด:</span>
+                <strong className="text-white font-mono">{totalCount}</strong>
+              </div>
 
-      {/* 5 Main Tabs Header */}
-      <div className="relative z-10 bg-slate-900/60 border-b border-white/10 px-4 sm:px-6">
-        <div className="max-w-7xl mx-auto flex items-center space-x-2 sm:space-x-3 overflow-x-auto py-2.5">
-          
-          {/* Tab 1: ลงทะเบียนเข้า */}
-          <button
-            type="button"
-            onClick={() => setActiveMainTab("checkin")}
-            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 ${
-              activeMainTab === "checkin"
-                ? "bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/25"
-                : "text-slate-400 hover:text-white hover:bg-white/5"
-            }`}
-          >
-            <Camera className="w-4 h-4" />
-            <span>ลงทะเบียนเข้า ({checkedInCount}/{totalCount})</span>
-          </button>
+              <div className="px-2.5 py-1 rounded-xl bg-emerald-950/70 border border-emerald-500/30 flex items-center space-x-1.5 shrink-0 text-[11px]">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-emerald-300">เข้างาน:</span>
+                <strong className="text-emerald-300 font-mono">{checkedInCount}</strong>
+                <span className="text-[10px] text-emerald-400/80">({totalCount > 0 ? Math.round((checkedInCount / totalCount) * 100) : 0}%)</span>
+              </div>
 
-          {/* Tab 2: ลงทะเบียนจับของขวัญ */}
-          <button
-            type="button"
-            onClick={() => setActiveMainTab("gifts")}
-            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 ${
-              activeMainTab === "gifts"
-                ? "bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/25"
-                : "text-slate-400 hover:text-white hover:bg-white/5"
-            }`}
-          >
-            <Gift className="w-4 h-4" />
-            <span>ลงทะเบียนจับของขวัญ ({giftCount})</span>
-          </button>
+              <div className="px-2.5 py-1 rounded-xl bg-amber-950/70 border border-amber-500/30 flex items-center space-x-1.5 shrink-0 text-[11px]">
+                <Gift className="w-3.5 h-3.5 text-amber-400" />
+                <span className="text-amber-300">ของขวัญ:</span>
+                <strong className="text-amber-300 font-mono">{giftCount}</strong>
+              </div>
 
-          {/* Tab 3: ลงทะเบียนรับเสื้อ */}
-          <button
-            type="button"
-            onClick={() => setActiveMainTab("shirts")}
-            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 ${
-              activeMainTab === "shirts"
-                ? "bg-teal-500 text-slate-950 shadow-lg shadow-teal-500/25"
-                : "text-slate-400 hover:text-white hover:bg-white/5"
-            }`}
-          >
-            <Shirt className="w-4 h-4" />
-            <span>ลงทะเบียนรับเสื้อ ({shirtReceivedCount}/{shirtTotalCount})</span>
-          </button>
+              <div className="hidden sm:flex px-2.5 py-1 rounded-xl bg-teal-950/70 border border-teal-500/30 items-center space-x-1.5 shrink-0 text-[11px]">
+                <Shirt className="w-3.5 h-3.5 text-teal-400" />
+                <span className="text-teal-300">เสื้อ:</span>
+                <strong className="text-teal-300 font-mono">{shirtReceivedCount}/{shirtTotalCount}</strong>
+              </div>
+            </div>
 
-          {/* Tab 4: การประกวดการแข่งขัน */}
-          <button
-            type="button"
-            onClick={() => setActiveMainTab("contest")}
-            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 ${
-              activeMainTab === "contest"
-                ? "bg-rose-500 text-white shadow-lg shadow-rose-500/25"
-                : "text-slate-400 hover:text-white hover:bg-white/5"
-            }`}
-          >
-            <Crown className="w-4 h-4" />
-            <span>การประกวดการแข่งขัน</span>
-            {eventConfig?.isVotingOpen && (
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="ระบบโหวตกำลังเปิดอยู่"></span>
-            )}
-          </button>
+            {/* Quick Action Toolbar */}
+            <div className="flex items-center space-x-1 sm:space-x-1.5 shrink-0">
+              {onForceSyncCloud && (
+                <button
+                  type="button"
+                  onClick={handleManualSync}
+                  className={`flex items-center space-x-1 px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-sm cursor-pointer ${
+                    isSyncing 
+                      ? "bg-emerald-500/30 border-emerald-400 text-emerald-200 animate-pulse" 
+                      : "bg-emerald-950/80 hover:bg-emerald-900 border-emerald-500/40 text-emerald-300 hover:text-white"
+                  }`}
+                  title={`ซิงค์ข้อมูล Cloud ล่าสุด (${lastCloudSync ? lastCloudSync.toLocaleTimeString('th-TH') : 'เรียลไทม์'})`}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${isSyncing ? "animate-spin" : ""}`} />
+                  <span className="text-[11px]">ซิงค์</span>
+                </button>
+              )}
 
-          {/* Tab 5: Random จับของรางวัล */}
-          <button
-            type="button"
-            onClick={() => setActiveMainTab("lucky_draw")}
-            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 ${
-              activeMainTab === "lucky_draw"
-                ? "bg-indigo-500 text-white shadow-lg shadow-indigo-500/25"
-                : "text-slate-400 hover:text-white hover:bg-white/5"
-            }`}
-          >
-            <Dices className="w-4 h-4" />
-            <span>Random จับของรางวัล</span>
-          </button>
+              <button
+                type="button"
+                onClick={onGoToSettings}
+                className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs font-semibold text-slate-300 hover:text-white transition-all shadow-sm flex items-center space-x-1 cursor-pointer"
+                title="ไปยังหน้าตั้งค่าระบบ (แอดมิน)"
+              >
+                <Settings className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden sm:inline text-[11px]">ตั้งค่า</span>
+              </button>
 
-          {/* Tab 6: แบบประเมินความพึงพอใจ */}
-          <button
-            type="button"
-            onClick={() => setActiveMainTab("survey")}
-            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 ${
-              activeMainTab === "survey"
-                ? "bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/25"
-                : "text-slate-400 hover:text-white hover:bg-white/5"
-            }`}
-          >
-            <Star className="w-4 h-4" />
-            <span>แบบประเมินความพึงพอใจ ({surveyStats.total})</span>
-            {eventConfig?.isSurveyOpen && (
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="ระบบประเมินกำลังเปิดอยู่"></span>
-            )}
-          </button>
+              <button
+                type="button"
+                onClick={onSwitchToPublicForm}
+                className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition-all flex items-center space-x-1 cursor-pointer"
+                title="ไปยังหน้าฟอร์มลงทะเบียน (หน้าบ้าน)"
+              >
+                <Globe className="w-3.5 h-3.5 text-slate-400" />
+                <span className="hidden sm:inline text-[11px]">หน้าบ้าน</span>
+              </button>
 
+              <button
+                type="button"
+                onClick={() => setSoundEnabled(!soundEnabled)}
+                className={`p-1.5 sm:p-2 rounded-xl border text-xs transition-all cursor-pointer ${
+                  soundEnabled 
+                    ? "bg-amber-500/20 border-amber-500/40 text-amber-300" 
+                    : "bg-white/5 border-white/10 text-slate-400 hover:text-white"
+                }`}
+                title={soundEnabled ? "ปิดเสียงเอฟเฟกต์" : "เปิดเสียงเอฟเฟกต์"}
+              >
+                {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+        </header>
+
+        {/* 6 Main Tabs Header (Pinned directly under header) */}
+        <div className="bg-slate-900/95 px-3 sm:px-6">
+          <div className="max-w-7xl mx-auto flex items-center space-x-1.5 sm:space-x-2.5 overflow-x-auto py-2 scrollbar-none">
+            
+            {/* Tab 1: ลงทะเบียนเข้า */}
+            <button
+              type="button"
+              onClick={() => setActiveMainTab("checkin")}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
+                activeMainTab === "checkin"
+                  ? "bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/30"
+                  : "text-slate-400 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              <Camera className="w-4 h-4" />
+              <span>ลงทะเบียนเข้า ({checkedInCount}/{totalCount})</span>
+            </button>
+
+            {/* Tab 2: ลงทะเบียนจับของขวัญ */}
+            <button
+              type="button"
+              onClick={() => setActiveMainTab("gifts")}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
+                activeMainTab === "gifts"
+                  ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/30"
+                  : "text-slate-400 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              <Gift className="w-4 h-4" />
+              <span>ลงทะเบียนจับของขวัญ ({giftCount})</span>
+            </button>
+
+            {/* Tab 3: ลงทะเบียนรับเสื้อ */}
+            <button
+              type="button"
+              onClick={() => setActiveMainTab("shirts")}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
+                activeMainTab === "shirts"
+                  ? "bg-teal-500 text-slate-950 shadow-md shadow-teal-500/30"
+                  : "text-slate-400 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              <Shirt className="w-4 h-4" />
+              <span>ลงทะเบียนรับเสื้อ ({shirtReceivedCount}/{shirtTotalCount})</span>
+            </button>
+
+            {/* Tab 4: การประกวดการแข่งขัน */}
+            <button
+              type="button"
+              onClick={() => setActiveMainTab("contest")}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
+                activeMainTab === "contest"
+                  ? "bg-rose-500 text-white shadow-md shadow-rose-500/30"
+                  : "text-slate-400 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              <Crown className="w-4 h-4" />
+              <span>การประกวดการแข่งขัน</span>
+              {eventConfig?.isVotingOpen && (
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="ระบบโหวตกำลังเปิดอยู่"></span>
+              )}
+            </button>
+
+            {/* Tab 5: Random จับของรางวัล */}
+            <button
+              type="button"
+              onClick={() => setActiveMainTab("lucky_draw")}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
+                activeMainTab === "lucky_draw"
+                  ? "bg-indigo-500 text-white shadow-md shadow-indigo-500/30"
+                  : "text-slate-400 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              <Dices className="w-4 h-4" />
+              <span>Random จับของรางวัล</span>
+            </button>
+
+            {/* Tab 6: แบบประเมินความพึงพอใจ */}
+            <button
+              type="button"
+              onClick={() => setActiveMainTab("survey")}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
+                activeMainTab === "survey"
+                  ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/30"
+                  : "text-slate-400 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              <Star className="w-4 h-4" />
+              <span>แบบประเมินความพึงพอใจ ({surveyStats.total})</span>
+              {eventConfig?.isSurveyOpen && (
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="ระบบประเมินกำลังเปิดอยู่"></span>
+              )}
+            </button>
+
+          </div>
         </div>
       </div>
+
+      {/* ========================================================== */}
+      {/* WORKSPACE AREA UNDER THE TABS (CLEAN & OFFICIAL WHITE THEME) */}
+      {/* ========================================================== */}
+      <div className="flex-1 bg-slate-100 text-slate-800 min-h-screen">
 
       {/* ========================================================== */}
       {/* TAB 1: แถบลงทะเบียนเข้า (CHECK-IN)                         */}
       {/* ========================================================== */}
       {activeMainTab === "checkin" && (
-        <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-4">
+        <main className="max-w-7xl w-full mx-auto p-3 sm:p-6 space-y-4">
           
-          {/* Top Action & Filter Toolbar */}
-          <div className="bg-slate-900/80 rounded-2xl p-4 border border-white/10 shadow-xl space-y-3.5">
+          {/* Top Action & Filter Toolbar (Clean White Card) */}
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-sm space-y-3.5">
             
             {/* Row 1: Camera Scanner CTA + Search Bar */}
             <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
@@ -1254,7 +1255,7 @@ export default function EventCheckInHub({
               <button
                 type="button"
                 onClick={() => setIsScannerOpen(true)}
-                className="flex items-center justify-center space-x-2 px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-extrabold text-sm shadow-xl shadow-emerald-500/25 hover:scale-[1.02] active:scale-95 transition-all cursor-pointer shrink-0"
+                className="flex items-center justify-center space-x-2 px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-sm shadow-md shadow-emerald-600/20 hover:scale-[1.02] active:scale-95 transition-all cursor-pointer shrink-0"
               >
                 <Camera className="w-5 h-5" />
                 <span>📷 เปิดกล้องสแกน QR Code บัตรเข้างาน</span>
@@ -1268,13 +1269,13 @@ export default function EventCheckInHub({
                   placeholder="ค้นหาชื่อ, ชื่อเล่น, เลขที่บัตร, เบอร์โทร..."
                   value={searchCheckIn}
                   onChange={(e) => setSearchCheckIn(e.target.value)}
-                  className="w-full bg-slate-950/90 border border-white/10 rounded-xl pl-9 pr-9 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors shadow-inner"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-9 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-emerald-500 transition-colors shadow-inner"
                 />
                 {searchCheckIn && (
                   <button
                     type="button"
                     onClick={() => setSearchCheckIn("")}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors cursor-pointer"
                     title="ล้างข้อความค้นหา"
                   >
                     <X className="w-3.5 h-3.5" />
@@ -1284,28 +1285,28 @@ export default function EventCheckInHub({
             </div>
 
             {/* Row 2: Interactive Filter Button Bars (แถบปุ่มเลือกสถานะและสังกัด) */}
-            <div className="pt-3 border-t border-white/10 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+            <div className="pt-3 border-t border-slate-100 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
               
               {/* 1. แถบปุ่มสถานะเข้างาน */}
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[11px] font-bold text-slate-400 flex items-center space-x-1 shrink-0">
-                  <Filter className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-[11px] font-bold text-slate-500 flex items-center space-x-1 shrink-0">
+                  <Filter className="w-3.5 h-3.5 text-emerald-600" />
                   <span>สถานะเข้างาน:</span>
                 </span>
-                <div className="inline-flex p-1 rounded-xl bg-slate-950/80 border border-white/10 shadow-inner gap-1 flex-wrap">
+                <div className="inline-flex p-1 rounded-xl bg-slate-100 border border-slate-200/80 shadow-inner gap-1 flex-wrap">
                   {/* สถานะทั้งหมด */}
                   <button
                     type="button"
                     onClick={() => setFilterCheckInStatus("all")}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer ${
                       filterCheckInStatus === "all"
-                        ? "bg-slate-800 text-white shadow-md border border-white/20 font-bold"
-                        : "text-slate-400 hover:text-white hover:bg-white/5"
+                        ? "bg-white text-slate-900 shadow-sm border border-slate-200 font-bold"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
                     }`}
                   >
                     <span>สถานะทั้งหมด</span>
                     <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                      filterCheckInStatus === "all" ? "bg-white/20 text-white font-bold" : "bg-white/5 text-slate-400"
+                      filterCheckInStatus === "all" ? "bg-slate-100 text-slate-800 font-bold" : "bg-slate-200 text-slate-600"
                     }`}>
                       {totalCount}
                     </span>
@@ -1317,13 +1318,13 @@ export default function EventCheckInHub({
                     onClick={() => setFilterCheckInStatus("checked_in")}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer ${
                       filterCheckInStatus === "checked_in"
-                        ? "bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950 font-extrabold shadow-md shadow-emerald-500/25"
-                        : "text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-500/10"
+                        ? "bg-emerald-600 text-white font-extrabold shadow-sm"
+                        : "text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50"
                     }`}
                   >
                     <span>🟢 เข้างานแล้ว</span>
                     <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                      filterCheckInStatus === "checked_in" ? "bg-slate-950/40 text-slate-950 font-extrabold" : "bg-emerald-500/10 text-emerald-400 font-bold"
+                      filterCheckInStatus === "checked_in" ? "bg-emerald-700 text-white font-extrabold" : "bg-emerald-100 text-emerald-800 font-bold"
                     }`}>
                       {checkedInList.length}
                     </span>
@@ -1335,13 +1336,13 @@ export default function EventCheckInHub({
                     onClick={() => setFilterCheckInStatus("not_checked_in")}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer ${
                       filterCheckInStatus === "not_checked_in"
-                        ? "bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-extrabold shadow-md shadow-amber-500/20"
-                        : "text-slate-400 hover:text-white hover:bg-white/5"
+                        ? "bg-amber-500 text-slate-950 font-extrabold shadow-sm"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
                     }`}
                   >
                     <span>⚪ ยังไม่เข้างาน</span>
                     <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                      filterCheckInStatus === "not_checked_in" ? "bg-slate-950/40 text-slate-950 font-extrabold" : "bg-white/5 text-slate-400"
+                      filterCheckInStatus === "not_checked_in" ? "bg-amber-600/30 text-slate-950 font-extrabold" : "bg-slate-200 text-slate-600"
                     }`}>
                       {Math.max(0, totalCount - checkedInList.length)}
                     </span>
@@ -1351,24 +1352,24 @@ export default function EventCheckInHub({
 
               {/* 2. แถบปุ่มสังกัด */}
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[11px] font-bold text-slate-400 flex items-center space-x-1 shrink-0">
-                  <Users className="w-3.5 h-3.5 text-indigo-400" />
+                <span className="text-[11px] font-bold text-slate-500 flex items-center space-x-1 shrink-0">
+                  <Users className="w-3.5 h-3.5 text-indigo-600" />
                   <span>สังกัด:</span>
                 </span>
-                <div className="inline-flex p-1 rounded-xl bg-slate-950/80 border border-white/10 shadow-inner gap-1 flex-wrap">
+                <div className="inline-flex p-1 rounded-xl bg-slate-100 border border-slate-200/80 shadow-inner gap-1 flex-wrap">
                   {/* ทุกสังกัด */}
                   <button
                     type="button"
                     onClick={() => setFilterCheckInClub("all")}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer ${
                       filterCheckInClub === "all"
-                        ? "bg-slate-800 text-white shadow-md border border-white/20 font-bold"
-                        : "text-slate-400 hover:text-white hover:bg-white/5"
+                        ? "bg-white text-slate-900 shadow-sm border border-slate-200 font-bold"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
                     }`}
                   >
                     <span>ทุกสังกัด</span>
                     <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                      filterCheckInClub === "all" ? "bg-white/20 text-white font-bold" : "bg-white/5 text-slate-400"
+                      filterCheckInClub === "all" ? "bg-slate-100 text-slate-800 font-bold" : "bg-slate-200 text-slate-600"
                     }`}>
                       {totalCount}
                     </span>
@@ -1380,13 +1381,13 @@ export default function EventCheckInHub({
                     onClick={() => setFilterCheckInClub("สงสพัท")}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer ${
                       filterCheckInClub === "สงสพัท"
-                        ? "bg-gradient-to-r from-indigo-600 to-indigo-700 text-white font-extrabold shadow-md shadow-indigo-500/25 border border-indigo-400/40"
-                        : "text-indigo-300 hover:text-indigo-200 hover:bg-indigo-500/10"
+                        ? "bg-indigo-600 text-white font-extrabold shadow-sm"
+                        : "text-indigo-700 hover:text-indigo-800 hover:bg-indigo-50"
                     }`}
                   >
                     <span>สงสพัท</span>
                     <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                      filterCheckInClub === "สงสพัท" ? "bg-white/20 text-white font-bold" : "bg-indigo-500/10 text-indigo-400 font-bold"
+                      filterCheckInClub === "สงสพัท" ? "bg-indigo-700 text-white font-extrabold" : "bg-indigo-100 text-indigo-800 font-bold"
                     }`}>
                       {countSongSapat}
                     </span>
@@ -1398,13 +1399,13 @@ export default function EventCheckInHub({
                     onClick={() => setFilterCheckInClub("โรตารี่")}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer ${
                       filterCheckInClub === "โรตารี่"
-                        ? "bg-gradient-to-r from-red-600 to-rose-600 text-white font-extrabold shadow-md shadow-red-500/30 border border-red-400/50 ring-1 ring-red-400/30"
-                        : "text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                        ? "bg-red-600 text-white font-extrabold shadow-sm"
+                        : "text-red-700 hover:text-red-800 hover:bg-red-50"
                     }`}
                   >
                     <span>โรตารี่</span>
                     <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                      filterCheckInClub === "โรตารี่" ? "bg-white/20 text-white font-bold" : "bg-red-500/10 text-red-400 font-bold"
+                      filterCheckInClub === "โรตารี่" ? "bg-red-700 text-white font-extrabold" : "bg-red-100 text-red-800 font-bold"
                     }`}>
                       {countRotary}
                     </span>
@@ -1451,17 +1452,17 @@ export default function EventCheckInHub({
             </div>
           )}
 
-          {/* Google Sheets Style Table */}
-          <div className="bg-slate-900/70 rounded-2xl border border-white/10 shadow-2xl overflow-hidden">
+          {/* Google Sheets Style Table (Clean White Card) */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
             
             {/* Sheet Sub-header Bar */}
-            <div className="bg-slate-950/80 px-3 sm:px-4 py-2 sm:py-2.5 border-b border-white/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-[11px] sm:text-xs text-slate-400">
+            <div className="bg-slate-50/90 px-3 sm:px-4 py-2 sm:py-2.5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-[11px] sm:text-xs text-slate-500">
               <div className="flex items-center space-x-2 font-mono">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
-                <span className="font-bold text-slate-200">Google Sheets View:</span>
-                <span className="truncate">ตารางรายชื่อผู้ลงทะเบียนออนไลน์ (เรียงลำดับ 1 ถึง {totalCount})</span>
+                <span className="font-bold text-slate-700">Google Sheets View:</span>
+                <span className="truncate text-slate-600">ตารางรายชื่อผู้ลงทะเบียนออนไลน์ (เรียงลำดับ 1 ถึง {totalCount})</span>
               </div>
-              <div className="text-[10px] sm:text-xs text-slate-400">
+              <div className="text-[10px] sm:text-xs text-slate-500">
                 แสดง {filteredCheckInList.length} จากทั้งหมด {totalCount} รายการ
               </div>
             </div>
@@ -1469,54 +1470,54 @@ export default function EventCheckInHub({
             {/* Table */}
             <div className="overflow-x-auto max-h-[620px] overflow-y-auto">
               <table className="w-full text-left text-xs border-collapse">
-                <thead className="bg-slate-950/90 text-slate-400 font-semibold sticky top-0 z-10 border-b border-white/10">
+                <thead className="bg-slate-100 text-slate-700 font-bold sticky top-0 z-10 border-b border-slate-200">
                   <tr>
-                    <th className="py-2.5 px-2 sm:py-3 sm:px-3 w-12 sm:w-14 text-center border-r border-white/5 text-[11px] sm:text-xs">ลำดับ</th>
-                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 w-20 sm:w-24 border-r border-white/5 text-[11px] sm:text-xs">เลขที่บัตร</th>
-                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-white/5 min-w-[125px] sm:min-w-[145px] text-[11px] sm:text-xs">วัน-เวลาลงทะเบียน</th>
-                    <th className="py-2.5 px-1.5 sm:py-3 sm:px-2 w-14 sm:w-16 text-center border-r border-white/5 text-[11px] sm:text-xs">รูปถ่าย</th>
-                    <th className="py-2.5 px-3 sm:py-3 sm:px-4 border-r border-white/5 min-w-[140px] sm:min-w-[180px] text-[11px] sm:text-xs">ชื่อ - นามสกุล (ชื่อเล่น)</th>
-                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-white/5 min-w-[100px] sm:min-w-[120px] text-[11px] sm:text-xs">ประเภท / สังกัด</th>
-                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-white/5 text-[11px] sm:text-xs">เบอร์โทรศัพท์</th>
-                    <th className="py-2.5 px-1.5 sm:py-3 sm:px-2 w-12 sm:w-14 text-center border-r border-white/5 text-[11px] sm:text-xs">สลิป</th>
-                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-white/5 text-[11px] sm:text-xs">เสื้อที่ระลึก</th>
-                    <th className="py-2.5 px-3 sm:py-3 sm:px-4 border-r border-white/5 min-w-[130px] sm:min-w-[150px] text-[11px] sm:text-xs">สถานะเข้างาน</th>
-                    <th className="py-2.5 px-2 sm:py-3 sm:px-3.5 border-r border-white/5 text-center text-[11px] sm:text-xs">ของขวัญ</th>
+                    <th className="py-2.5 px-2 sm:py-3 sm:px-3 w-12 sm:w-14 text-center border-r border-slate-200 text-[11px] sm:text-xs">ลำดับ</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 w-20 sm:w-24 border-r border-slate-200 text-[11px] sm:text-xs">เลขที่บัตร</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-slate-200 min-w-[125px] sm:min-w-[145px] text-[11px] sm:text-xs">วัน-เวลาลงทะเบียน</th>
+                    <th className="py-2.5 px-1.5 sm:py-3 sm:px-2 w-14 sm:w-16 text-center border-r border-slate-200 text-[11px] sm:text-xs">รูปถ่าย</th>
+                    <th className="py-2.5 px-3 sm:py-3 sm:px-4 border-r border-slate-200 min-w-[140px] sm:min-w-[180px] text-[11px] sm:text-xs">ชื่อ - นามสกุล (ชื่อเล่น)</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-slate-200 min-w-[100px] sm:min-w-[120px] text-[11px] sm:text-xs">ประเภท / สังกัด</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-slate-200 text-[11px] sm:text-xs">เบอร์โทรศัพท์</th>
+                    <th className="py-2.5 px-1.5 sm:py-3 sm:px-2 w-12 sm:w-14 text-center border-r border-slate-200 text-[11px] sm:text-xs">สลิป</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-slate-200 text-[11px] sm:text-xs">เสื้อที่ระลึก</th>
+                    <th className="py-2.5 px-3 sm:py-3 sm:px-4 border-r border-slate-200 min-w-[130px] sm:min-w-[150px] text-[11px] sm:text-xs">สถานะเข้างาน</th>
+                    <th className="py-2.5 px-2 sm:py-3 sm:px-3.5 border-r border-slate-200 text-center text-[11px] sm:text-xs">ของขวัญ</th>
                     <th className="py-2.5 px-2 sm:py-3 sm:px-3 text-center text-[11px] sm:text-xs">จัดการ</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5">
+                <tbody className="divide-y divide-slate-100">
                   {filteredCheckInList.map((r, idx) => {
                     const isCheckedIn = !!r.checkedIn;
                     return (
                       <tr 
                         key={r.ticketNo || idx}
                         onClick={() => setInspectingAttendee(r)}
-                        className={`cursor-pointer hover:bg-amber-500/10 active:bg-amber-500/15 transition-colors group ${
-                          isCheckedIn ? "bg-emerald-950/15" : ""
+                        className={`cursor-pointer hover:bg-amber-50/70 active:bg-amber-100/60 transition-colors group text-slate-800 ${
+                          isCheckedIn ? "bg-emerald-50/40" : "bg-white"
                         }`}
                         title="แตะเพื่อดูข้อมูลการลงทะเบียนและสลิปธนาคาร"
                       >
                         {/* 1. ลำดับ */}
-                        <td className="py-2 px-2 sm:py-2.5 sm:px-3 text-center font-mono text-slate-400 border-r border-white/5 text-[11px] sm:text-xs">
+                        <td className="py-2 px-2 sm:py-2.5 sm:px-3 text-center font-mono text-slate-400 border-r border-slate-100 text-[11px] sm:text-xs">
                           {idx + 1}
                         </td>
 
                         {/* 2. เลขที่บัตร */}
-                        <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 font-mono font-bold text-amber-400 border-r border-white/5 text-[11px] sm:text-xs whitespace-nowrap">
+                        <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 font-mono font-bold text-amber-700 border-r border-slate-100 text-[11px] sm:text-xs whitespace-nowrap">
                           {r.ticketNo || "SME-001"}
                         </td>
 
                         {/* 2.2 วัน-เวลาลงทะเบียน */}
-                        <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 border-r border-white/5 text-[10px] sm:text-[11px] text-slate-300 font-mono whitespace-nowrap">
-                          <div className="flex items-center space-x-1 text-slate-300">
-                            <Clock className="w-3 h-3 text-amber-400/80 shrink-0" />
+                        <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 border-r border-slate-100 text-[10px] sm:text-[11px] text-slate-500 font-mono whitespace-nowrap">
+                          <div className="flex items-center space-x-1 text-slate-500">
+                            <Clock className="w-3 h-3 text-amber-600 shrink-0" />
                             <span>{formatThaiDisplayDateTime(r.createdAt || r.timestamp || r.slipUploadedAt)}</span>
                           </div>
                         </td>
 
                         {/* 2.5 รูปถ่าย (1:1) */}
-                        <td className="py-2 px-1.5 sm:py-2 sm:px-2 text-center border-r border-white/5">
+                        <td className="py-2 px-1.5 sm:py-2 sm:px-2 text-center border-r border-slate-100">
                           {r.photoUrl ? (
                             <button
                               type="button"
@@ -1531,9 +1532,9 @@ export default function EventCheckInHub({
                               <img
                                 src={r.photoUrl}
                                 alt={r.name}
-                                className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover border-2 border-amber-400/70 shadow-md mx-auto group-hover:border-amber-300"
+                                className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover border-2 border-amber-400/80 shadow-xs mx-auto group-hover:border-amber-500"
                               />
-                              <span className="absolute -bottom-1 -right-1 px-1 py-0.5 rounded-full bg-slate-900 border border-amber-400/60 text-[9px] text-amber-300 shadow leading-none font-bold">
+                              <span className="absolute -bottom-1 -right-1 px-1 py-0.5 rounded-full bg-slate-900 border border-amber-400 text-[9px] text-amber-300 shadow leading-none font-bold">
                                 🔍
                               </span>
                             </button>
@@ -1544,21 +1545,21 @@ export default function EventCheckInHub({
                                 e.stopPropagation();
                                 openPhotoModal(r, 'checkin');
                               }}
-                              className="p-1.5 px-2 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-300 border border-white/10 hover:border-emerald-500/30 transition-all inline-flex items-center space-x-1 cursor-pointer"
+                              className="p-1.5 px-2 rounded-xl bg-slate-100 hover:bg-emerald-100 text-slate-600 hover:text-emerald-700 border border-slate-200 transition-all inline-flex items-center space-x-1 cursor-pointer"
                               title="ถ่ายรูปผู้เข้าร่วมงาน (สัดส่วน 1:1)"
                             >
                               <Camera className="w-3.5 h-3.5" />
-                              <span className="text-[10px]">ถ่าย</span>
+                              <span className="text-[10px] font-bold">ถ่าย</span>
                             </button>
                           )}
                         </td>
 
                         {/* 3. ชื่อ - นามสกุล */}
-                        <td className="py-2 px-3 sm:py-2.5 sm:px-4 font-semibold text-white border-r border-white/5 text-[11px] sm:text-xs">
-                          <div className="flex items-center space-x-1.5 group-hover:text-amber-300 transition-colors">
+                        <td className="py-2 px-3 sm:py-2.5 sm:px-4 font-semibold text-slate-900 border-r border-slate-100 text-[11px] sm:text-xs">
+                          <div className="flex items-center space-x-1.5 group-hover:text-amber-800 transition-colors">
                             <span className="underline-offset-2 group-hover:underline">{r.name}</span>
                             {r.nickname && (
-                              <span className="text-amber-300 font-normal text-[10px] sm:text-[11px]">
+                              <span className="text-amber-700 font-normal text-[10px] sm:text-[11px]">
                                 ({r.nickname})
                               </span>
                             )}
@@ -1571,31 +1572,31 @@ export default function EventCheckInHub({
                         </td>
 
                         {/* 4. สังกัด */}
-                        <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 border-r border-white/5 text-[11px] sm:text-xs">
+                        <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 border-r border-slate-100 text-[11px] sm:text-xs">
                           {r.regType === "member" ? (
                             (r.club || '').includes('โรตารี่') ? (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-extrabold bg-red-500/20 text-red-300 border border-red-500/40 shadow-sm shadow-red-500/20 whitespace-nowrap">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-extrabold bg-rose-50 text-rose-700 border border-rose-200 shadow-xs whitespace-nowrap">
                                 สมาชิก{r.club}
                               </span>
                             ) : (
-                              <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 whitespace-nowrap">
+                              <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 whitespace-nowrap">
                                 สมาชิก{r.club || "สงสพัท"}
                               </span>
                             )
                           ) : (
-                            <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 whitespace-nowrap">
+                            <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
                               แขกผู้มีเกียรติ {r.club && `(${r.club})`}
                             </span>
                           )}
                         </td>
 
                         {/* 5. เบอร์โทร */}
-                        <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 font-mono text-slate-300 border-r border-white/5 text-[11px] sm:text-xs whitespace-nowrap">
+                        <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 font-mono text-slate-600 border-r border-slate-100 text-[11px] sm:text-xs whitespace-nowrap">
                           {r.phone || "-"}
                         </td>
 
                         {/* 5.5 สลิปโอนเงิน */}
-                        <td className="py-2 px-1.5 sm:py-2 sm:px-2 text-center border-r border-white/5">
+                        <td className="py-2 px-1.5 sm:py-2 sm:px-2 text-center border-r border-slate-100">
                           {r.slipUrl || r.paymentSlip ? (
                             <button
                               type="button"
@@ -1609,51 +1610,51 @@ export default function EventCheckInHub({
                               <img
                                 src={r.slipUrl || r.paymentSlip}
                                 alt="Slip"
-                                className="w-8 h-8 rounded-lg object-cover border border-amber-400/60 shadow-sm mx-auto group-hover/slip:border-amber-300"
+                                className="w-8 h-8 rounded-lg object-cover border border-slate-200 shadow-xs mx-auto group-hover/slip:border-amber-400"
                               />
-                              <span className="absolute -bottom-1 -right-1 px-1 py-0.2 rounded-full bg-slate-900 border border-amber-400/60 text-[8px] text-amber-300 leading-none font-bold">
+                              <span className="absolute -bottom-1 -right-1 px-1 py-0.2 rounded-full bg-slate-900 border border-amber-400 text-[8px] text-amber-300 leading-none font-bold">
                                 🧾
                               </span>
                             </button>
                           ) : (
-                            <span className="text-[10px] text-slate-600">-</span>
+                            <span className="text-[10px] text-slate-400">-</span>
                           )}
                         </td>
 
                         {/* 6. เสื้อที่ระลึก */}
-                        <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 border-r border-white/5 text-[11px] sm:text-xs whitespace-nowrap">
+                        <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 border-r border-slate-100 text-[11px] sm:text-xs whitespace-nowrap">
                           {r.hasShirt ? (
-                            <span className="text-amber-300 font-medium text-[10px] sm:text-[11px] flex items-center space-x-1">
-                              <Shirt className="w-3 h-3 text-amber-400" />
+                            <span className="text-amber-800 font-semibold text-[10px] sm:text-[11px] flex items-center space-x-1">
+                              <Shirt className="w-3 h-3 text-amber-600" />
                               <span>{r.shirtSize} ({r.shirtGender || "ทั่วไป"})</span>
                             </span>
                           ) : (
-                            <span className="text-slate-500">-</span>
+                            <span className="text-slate-400">-</span>
                           )}
                         </td>
 
                         {/* 7. สถานะเข้างาน */}
-                        <td className="py-2 px-3 sm:py-2.5 sm:px-4 border-r border-white/5 whitespace-nowrap">
+                        <td className="py-2 px-3 sm:py-2.5 sm:px-4 border-r border-slate-100 whitespace-nowrap">
                           {isCheckedIn ? (
-                            <div className="inline-flex items-center space-x-1 sm:space-x-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] sm:text-[11px] font-bold shadow-xs">
-                              <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-400" />
+                            <div className="inline-flex items-center space-x-1 sm:space-x-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] sm:text-[11px] font-bold shadow-xs">
+                              <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-600" />
                               <span>เข้างานแล้ว {r.checkedInAt ? `(${r.checkedInAt})` : ""}</span>
                             </div>
                           ) : (
-                            <span className="inline-flex items-center space-x-1 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-slate-800 text-slate-400 text-[10px] sm:text-[11px] font-medium border border-white/5">
+                            <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 text-[10px] sm:text-[11px] font-medium border border-slate-200">
                               <span>⏳ ยังไม่เข้างาน</span>
                             </span>
                           )}
                         </td>
 
                         {/* 8. สถานะของขวัญ */}
-                        <td className="py-2 px-2 sm:py-2.5 sm:px-3.5 text-center border-r border-white/5 whitespace-nowrap">
+                        <td className="py-2 px-2 sm:py-2.5 sm:px-3.5 text-center border-r border-slate-100 whitespace-nowrap">
                           {r.giftNumber ? (
-                            <span className="font-mono font-extrabold px-2 py-0.5 rounded-md bg-amber-500/25 text-amber-300 border border-amber-500/40 text-[10px] sm:text-xs">
+                            <span className="font-mono font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-300 text-[10px] sm:text-xs">
                               🎁 #{r.giftNumber}
                             </span>
                           ) : (
-                            <span className="text-slate-600">-</span>
+                            <span className="text-slate-400">-</span>
                           )}
                         </td>
 
@@ -1666,10 +1667,10 @@ export default function EventCheckInHub({
                                 e.stopPropagation();
                                 setInspectingAttendee(r);
                               }}
-                              className="text-[9px] sm:text-[10px] px-2 py-1 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/35 text-indigo-200 border border-indigo-500/40 transition-all font-semibold inline-flex items-center space-x-1 cursor-pointer"
+                              className="text-[9px] sm:text-[10px] px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition-all font-semibold inline-flex items-center space-x-1 cursor-pointer"
                               title="เปิดดูข้อมูลที่กรอกและสลิปธนาคาร"
                             >
-                              <Eye className="w-3 h-3 text-indigo-300" />
+                              <Eye className="w-3 h-3 text-indigo-600" />
                               <span>ตรวจข้อมูล</span>
                             </button>
 
@@ -1682,7 +1683,7 @@ export default function EventCheckInHub({
                                     onCheckIn(r.ticketNo, false);
                                   }
                                 }}
-                                className="text-[9px] sm:text-[10px] px-2 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 transition-all cursor-pointer"
+                                className="text-[9px] sm:text-[10px] px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-all cursor-pointer font-medium"
                                 title="ยกเลิกการเช็คอิน"
                               >
                                 ยกเลิก
@@ -1694,7 +1695,7 @@ export default function EventCheckInHub({
                                   e.stopPropagation();
                                   setEmergencyTarget(r);
                                 }}
-                                className="text-[9px] sm:text-[10px] px-2 sm:px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-medium transition-all cursor-pointer"
+                                className="text-[9px] sm:text-[10px] px-2 sm:px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-all shadow-xs cursor-pointer"
                                 title="กดเช็คอินกรณีฉุกเฉิน (ผู้ร่วมงานไม่ได้บันทึกภาพบัตรมา)"
                               >
                                 ⚡ เช็คอิน
@@ -1709,7 +1710,7 @@ export default function EventCheckInHub({
               </table>
 
               {filteredCheckInList.length === 0 && (
-                <div className="py-12 text-center text-slate-500 space-y-2">
+                <div className="py-12 text-center text-slate-400 space-y-2">
                   <Search className="w-8 h-8 mx-auto opacity-30" />
                   <p>ไม่พบรายชื่อผู้ลงทะเบียนที่ตรงกับเงื่อนไขการค้นหา</p>
                 </div>
@@ -1723,21 +1724,21 @@ export default function EventCheckInHub({
       {/* TAB 2: แถบลงทะเบียนจับของขวัญ (GIFT EXCHANGE)              */}
       {/* ========================================================== */}
       {activeMainTab === "gifts" && (
-        <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-4">
+        <main className="max-w-7xl w-full mx-auto p-3 sm:p-6 space-y-4">
           
-          {/* Header Card for Gifts */}
-          <div className="bg-slate-900/80 rounded-2xl p-5 border border-amber-500/30 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          {/* Header Card for Gifts (Clean White Card) */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-slate-800">
             <div className="space-y-1">
               <div className="flex items-center space-x-2">
-                <Gift className="w-5 h-5 text-amber-400" />
-                <h2 className="text-lg sm:text-xl font-black text-white">
+                <Gift className="w-5 h-5 text-amber-600" />
+                <h2 className="text-lg sm:text-xl font-black text-slate-900">
                   ตารางลงทะเบียนจับของขวัญปีใหม่
                 </h2>
-                <span className="font-mono text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+                <span className="font-mono text-xs px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold border border-amber-300">
                   ลงทะเบียนแล้ว {giftCount} ชิ้น
                 </span>
               </div>
-              <p className="text-xs text-slate-300">
+              <p className="text-xs text-slate-600">
                 เมื่อผู้ร่วมงานนำของขวัญมาส่งที่จุดลงทะเบียน ให้กดปุ่มเครื่องหมายบวก (+) เพื่อเลือกชื่อและรับหมายเลขของขวัญทันที
               </p>
             </div>
@@ -1746,22 +1747,22 @@ export default function EventCheckInHub({
             <button
               type="button"
               onClick={() => setIsGiftModalOpen(true)}
-              className="flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 hover:scale-105 active:scale-95 transition-all"
+              className="flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs shadow-md shadow-amber-500/20 hover:scale-105 active:scale-95 transition-all cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>เพิ่มผู้ลงทะเบียนของขวัญ</span>
             </button>
           </div>
 
-          {/* Google Sheets Style Table for Gifts */}
-          <div className="bg-slate-900/70 rounded-2xl border border-white/10 shadow-2xl overflow-hidden">
-            <div className="bg-slate-950/80 px-3 sm:px-4 py-2 sm:py-2.5 border-b border-white/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-[11px] sm:text-xs text-slate-400 font-mono">
+          {/* Google Sheets Style Table for Gifts (Clean White Card) */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
+            <div className="bg-slate-50/90 px-3 sm:px-4 py-2 sm:py-2.5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-[11px] sm:text-xs text-slate-500 font-mono">
               <div className="flex items-center space-x-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />
-                <span className="font-bold text-slate-200">Google Sheets View:</span>
-                <span className="truncate">ตารางหมายเลขของขวัญ (เรียงลำดับ 1 ถึง {giftCount > 0 ? giftCount : "..."})</span>
+                <span className="font-bold text-slate-700">Google Sheets View:</span>
+                <span className="truncate text-slate-600">ตารางหมายเลขของขวัญ (เรียงลำดับ 1 ถึง {giftCount > 0 ? giftCount : "..."})</span>
               </div>
-              <div className="text-[10px] sm:text-xs text-amber-400">
+              <div className="text-[10px] sm:text-xs text-amber-700 font-bold">
                 ทั้งหมด {giftCount} ชิ้น
               </div>
             </div>
@@ -1769,39 +1770,39 @@ export default function EventCheckInHub({
             {giftList.length > 0 ? (
               <div className="overflow-x-auto max-h-[620px] overflow-y-auto">
                 <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-slate-950/90 text-slate-400 font-semibold sticky top-0 z-10 border-b border-white/10">
+                  <thead className="bg-slate-100 text-slate-700 font-bold sticky top-0 z-10 border-b border-slate-200">
                     <tr>
-                      <th className="py-2.5 px-2.5 sm:py-3 sm:px-4 w-24 sm:w-28 text-center border-r border-white/5 text-[11px] sm:text-xs">หมายเลขของขวัญ</th>
-                      <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 w-20 sm:w-24 border-r border-white/5 text-[11px] sm:text-xs">เลขที่บัตร</th>
-                      <th className="py-2.5 px-3 sm:py-3 sm:px-4 border-r border-white/5 min-w-[140px] sm:min-w-[180px] text-[11px] sm:text-xs">ชื่อผู้มอบของขวัญ (ชื่อเล่น)</th>
-                      <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-white/5 text-[11px] sm:text-xs">สังกัด</th>
-                      <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-white/5 text-[11px] sm:text-xs">เบอร์โทรศัพท์</th>
-                      <th className="py-2.5 px-3 sm:py-3 sm:px-4 border-r border-white/5 text-[11px] sm:text-xs">เวลาลงทะเบียน</th>
+                      <th className="py-2.5 px-2.5 sm:py-3 sm:px-4 w-24 sm:w-28 text-center border-r border-slate-200 text-[11px] sm:text-xs">หมายเลขของขวัญ</th>
+                      <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 w-20 sm:w-24 border-r border-slate-200 text-[11px] sm:text-xs">เลขที่บัตร</th>
+                      <th className="py-2.5 px-3 sm:py-3 sm:px-4 border-r border-slate-200 min-w-[140px] sm:min-w-[180px] text-[11px] sm:text-xs">ชื่อผู้มอบของขวัญ (ชื่อเล่น)</th>
+                      <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-slate-200 text-[11px] sm:text-xs">สังกัด</th>
+                      <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-slate-200 text-[11px] sm:text-xs">เบอร์โทรศัพท์</th>
+                      <th className="py-2.5 px-3 sm:py-3 sm:px-4 border-r border-slate-200 text-[11px] sm:text-xs">เวลาลงทะเบียน</th>
                       <th className="py-2.5 px-2 sm:py-3 sm:px-3 text-center text-[11px] sm:text-xs">จัดการ</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/5">
+                  <tbody className="divide-y divide-slate-100">
                     {giftList.map((g) => (
-                      <tr key={g.ticketNo} className="hover:bg-white/[0.03] transition-colors">
+                      <tr key={g.ticketNo} className="hover:bg-amber-50/60 transition-colors text-slate-800">
                         
                         {/* 1. หมายเลขของขวัญ */}
-                        <td className="py-2 px-2.5 sm:py-3 sm:px-4 text-center border-r border-white/5 whitespace-nowrap">
-                          <span className="font-mono font-black text-xs sm:text-sm px-2 sm:px-3 py-0.5 sm:py-1 rounded-xl bg-amber-500/25 text-amber-300 border border-amber-500/40 shadow-inner">
+                        <td className="py-2 px-2.5 sm:py-3 sm:px-4 text-center border-r border-slate-100 whitespace-nowrap">
+                          <span className="font-mono font-black text-xs sm:text-sm px-2 sm:px-3 py-0.5 sm:py-1 rounded-xl bg-amber-100 text-amber-800 border border-amber-300 shadow-xs">
                             🎁 #{g.giftNumber}
                           </span>
                         </td>
 
                         {/* 2. เลขที่บัตร */}
-                        <td className="py-2 px-2.5 sm:py-3 sm:px-3.5 font-mono font-bold text-slate-300 border-r border-white/5 text-[11px] sm:text-xs whitespace-nowrap">
+                        <td className="py-2 px-2.5 sm:py-3 sm:px-3.5 font-mono font-bold text-amber-700 border-r border-slate-100 text-[11px] sm:text-xs whitespace-nowrap">
                           {g.ticketNo}
                         </td>
 
                         {/* 3. ชื่อผู้มอบ */}
-                        <td className="py-2 px-3 sm:py-3 sm:px-4 font-semibold text-white border-r border-white/5 text-[11px] sm:text-xs">
+                        <td className="py-2 px-3 sm:py-3 sm:px-4 font-semibold text-slate-900 border-r border-slate-100 text-[11px] sm:text-xs">
                           <div className="flex items-center space-x-1.5">
                             <span>{g.name}</span>
                             {g.nickname && (
-                              <span className="text-amber-300 font-normal text-[10px] sm:text-[11px]">
+                              <span className="text-amber-700 font-normal text-[10px] sm:text-[11px]">
                                 ({g.nickname})
                               </span>
                             )}
@@ -1809,17 +1810,17 @@ export default function EventCheckInHub({
                         </td>
 
                         {/* 4. สังกัด */}
-                        <td className="py-2 px-2.5 sm:py-3 sm:px-3.5 border-r border-white/5 text-slate-300 text-[11px] sm:text-xs whitespace-nowrap">
+                        <td className="py-2 px-2.5 sm:py-3 sm:px-3.5 border-r border-slate-100 text-slate-600 text-[11px] sm:text-xs whitespace-nowrap">
                           {g.regType === "member" ? `สมาชิก${g.club || "สงสพัท"}` : `แขกผู้มีเกียรติ (${g.club || "ทั่วไป"})`}
                         </td>
 
                         {/* 5. เบอร์โทร */}
-                        <td className="py-2 px-2.5 sm:py-3 sm:px-3.5 font-mono text-slate-400 border-r border-white/5 text-[11px] sm:text-xs whitespace-nowrap">
+                        <td className="py-2 px-2.5 sm:py-3 sm:px-3.5 font-mono text-slate-600 border-r border-slate-100 text-[11px] sm:text-xs whitespace-nowrap">
                           {g.phone || "-"}
                         </td>
 
                         {/* 6. เวลาลงทะเบียนของขวัญ */}
-                        <td className="py-2 px-3 sm:py-3 sm:px-4 font-mono text-emerald-400 border-r border-white/5 text-[10px] sm:text-xs whitespace-nowrap">
+                        <td className="py-2 px-3 sm:py-3 sm:px-4 font-mono text-emerald-700 font-bold border-r border-slate-100 text-[10px] sm:text-xs whitespace-nowrap">
                           {g.giftRegisteredAt || "18:00 น."}
                         </td>
 
@@ -1832,7 +1833,7 @@ export default function EventCheckInHub({
                                 onRemoveGift(g.ticketNo);
                               }
                             }}
-                            className="p-1.5 rounded-lg hover:bg-rose-500/20 text-rose-400 hover:text-rose-200 transition-all"
+                            className="p-1.5 rounded-lg hover:bg-rose-50 text-rose-600 hover:text-rose-800 transition-all cursor-pointer"
                             title="ยกเลิกการลงทะเบียนของขวัญ"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -1844,23 +1845,23 @@ export default function EventCheckInHub({
                 </table>
               </div>
             ) : (
-              /* Empty State (Google Sheet Style) */
-              <div className="py-20 text-center space-y-4 px-4">
-                <div className="w-16 h-16 rounded-3xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mx-auto shadow-inner">
+              /* Empty State (Clean White) */
+              <div className="py-20 text-center space-y-4 px-4 bg-white">
+                <div className="w-16 h-16 rounded-3xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 mx-auto shadow-xs">
                   <Gift className="w-8 h-8" />
                 </div>
                 <div className="space-y-1">
-                  <h3 className="text-lg font-bold text-white">
+                  <h3 className="text-lg font-bold text-slate-900">
                     ยังไม่มีผู้ลงทะเบียนจับของขวัญ
                   </h3>
-                  <p className="text-xs text-slate-400 max-w-md mx-auto">
-                    เมื่อผู้ร่วมงานนำของขวัญมาส่งที่โต๊ะลงทะเบียน ให้กดปุ่มเครื่องหมายบวก <strong className="text-amber-400 font-bold">(+)</strong> เพื่อเลือกชื่อผู้ร่วมงานและรับหมายเลขของขวัญเรียงลำดับจาก 1 ไปเรื่อยๆ
+                  <p className="text-xs text-slate-500 max-w-md mx-auto">
+                    เมื่อผู้ร่วมงานนำของขวัญมาส่งที่โต๊ะลงทะเบียน ให้กดปุ่มเครื่องหมายบวก <strong className="text-amber-700 font-bold">(+)</strong> เพื่อเลือกชื่อผู้ร่วมงานและรับหมายเลขของขวัญเรียงลำดับจาก 1 ไปเรื่อยๆ
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setIsGiftModalOpen(true)}
-                  className="inline-flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/25 hover:scale-105 transition-all"
+                  className="inline-flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-bold text-xs shadow-md shadow-amber-500/25 hover:scale-105 transition-all cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
                   <span>กดตรงนี้เพื่อเริ่มลงทะเบียนของขวัญชิ้นแรก</span>
@@ -1891,18 +1892,18 @@ export default function EventCheckInHub({
         <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-4">
           
           {/* Header Card for Shirts */}
-          <div className="bg-slate-900/80 rounded-2xl p-5 border border-teal-500/30 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div className="space-y-1">
               <div className="flex items-center space-x-2">
-                <Shirt className="w-5 h-5 text-teal-400" />
-                <h2 className="text-lg sm:text-xl font-black text-white">
+                <Shirt className="w-5 h-5 text-teal-600" />
+                <h2 className="text-lg sm:text-xl font-black text-slate-900">
                   ตารางลงทะเบียนรับเสื้อที่ระลึก
                 </h2>
-                <span className="font-mono text-xs px-2.5 py-0.5 rounded-full bg-teal-500/20 text-teal-300 font-bold border border-teal-500/30">
+                <span className="font-mono text-xs px-2.5 py-0.5 rounded-full bg-teal-50 text-teal-700 font-bold border border-teal-200">
                   มอบแล้ว {shirtReceivedCount} / {shirtTotalCount} ตัว
                 </span>
               </div>
-              <p className="text-xs text-slate-300">
+              <p className="text-xs text-slate-600">
                 สำหรับผู้เข้าร่วมงานที่ได้รับสิทธิ์เสื้อที่ระลึก ตรวจสอบไซซ์และกดส่งมอบเสื้อ หรือคลิกถ่ายรูป 1:1 เพื่อเตรียมขึ้นสไลด์นำเสนอ
               </p>
             </div>
@@ -1912,7 +1913,7 @@ export default function EventCheckInHub({
               <button
                 type="button"
                 onClick={() => setIsShirtSlideOpen(true)}
-                className="flex items-center space-x-2 px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs sm:text-sm shadow-xl shadow-amber-500/30 hover:scale-105 active:scale-95 transition-all"
+                className="flex items-center space-x-2 px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs sm:text-sm shadow-md shadow-amber-500/20 hover:scale-105 active:scale-95 transition-all cursor-pointer"
               >
                 <Printer className="w-4 h-4 stroke-[2.5]" />
                 <span>🖨️ นำเสนอสไลด์ผู้ได้รับเสื้อ (16:9)</span>
@@ -1921,7 +1922,7 @@ export default function EventCheckInHub({
           </div>
 
           {/* Search & Status Filters */}
-          <div className="bg-slate-900/80 rounded-2xl p-4 border border-white/10 shadow-lg flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
             <div className="relative flex-1 max-w-md">
               <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
@@ -1929,23 +1930,23 @@ export default function EventCheckInHub({
                 placeholder="ค้นหาชื่อ, ชื่อเล่น, เลขที่บัตร, เบอร์, ไซซ์เสื้อ..."
                 value={searchShirt}
                 onChange={(e) => setSearchShirt(e.target.value)}
-                className="w-full bg-slate-950/80 border border-white/10 rounded-xl pl-9 pr-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-teal-500"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
               />
             </div>
 
-            <div className="inline-flex p-1 rounded-xl bg-slate-950/80 border border-white/10 shadow-inner gap-1 flex-wrap">
+            <div className="inline-flex p-1 rounded-xl bg-slate-100 border border-slate-200 shadow-inner gap-1 flex-wrap">
               <button
                 type="button"
                 onClick={() => setFilterShirtStatus("all")}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer ${
                   filterShirtStatus === "all"
-                    ? "bg-slate-800 text-white shadow-md border border-white/20 font-bold"
-                    : "text-slate-400 hover:text-white hover:bg-white/5"
+                    ? "bg-white text-slate-900 shadow-sm border border-slate-200 font-bold"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
                 }`}
               >
                 <span>ทั้งหมด</span>
                 <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                  filterShirtStatus === "all" ? "bg-white/20 text-white font-bold" : "bg-white/5 text-slate-400"
+                  filterShirtStatus === "all" ? "bg-slate-200 text-slate-800 font-bold" : "bg-slate-200/60 text-slate-600"
                 }`}>
                   {shirtTotalCount}
                 </span>
@@ -1956,13 +1957,13 @@ export default function EventCheckInHub({
                 onClick={() => setFilterShirtStatus("received")}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer ${
                   filterShirtStatus === "received"
-                    ? "bg-gradient-to-r from-teal-500 to-emerald-600 text-slate-950 font-extrabold shadow-md shadow-teal-500/20"
-                    : "text-teal-400/80 hover:text-teal-300 hover:bg-teal-500/10"
+                    ? "bg-emerald-600 text-white font-extrabold shadow-sm"
+                    : "text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50"
                 }`}
               >
                 <span>🟢 รับเสื้อแล้ว</span>
                 <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                  filterShirtStatus === "received" ? "bg-slate-950/40 text-slate-950 font-extrabold" : "bg-teal-500/10 text-teal-400 font-bold"
+                  filterShirtStatus === "received" ? "bg-emerald-800 text-white font-extrabold" : "bg-emerald-100 text-emerald-800 font-bold"
                 }`}>
                   {shirtReceivedCount}
                 </span>
@@ -1973,13 +1974,13 @@ export default function EventCheckInHub({
                 onClick={() => setFilterShirtStatus("not_received")}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer ${
                   filterShirtStatus === "not_received"
-                    ? "bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-extrabold shadow-md shadow-amber-500/20"
-                    : "text-amber-400/80 hover:text-amber-300 hover:bg-amber-500/10"
+                    ? "bg-amber-500 text-slate-950 font-extrabold shadow-sm"
+                    : "text-amber-700 hover:text-amber-900 hover:bg-amber-50"
                 }`}
               >
                 <span>⏳ ยังไม่ได้รับเสื้อ</span>
                 <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                  filterShirtStatus === "not_received" ? "bg-slate-950/40 text-slate-950 font-extrabold" : "bg-amber-500/10 text-amber-400 font-bold"
+                  filterShirtStatus === "not_received" ? "bg-amber-600 text-slate-950 font-extrabold" : "bg-amber-100 text-amber-800 font-bold"
                 }`}>
                   {Math.max(0, shirtTotalCount - shirtReceivedCount)}
                 </span>
@@ -1988,14 +1989,14 @@ export default function EventCheckInHub({
           </div>
 
           {/* Google Sheets Style Table for Shirt Recipients */}
-          <div className="bg-slate-900/70 rounded-2xl border border-white/10 shadow-2xl overflow-hidden">
-            <div className="bg-slate-950/80 px-3 sm:px-4 py-2 sm:py-2.5 border-b border-white/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-[11px] sm:text-xs text-slate-400 font-mono">
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
+            <div className="bg-slate-50 px-3 sm:px-4 py-2 sm:py-2.5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-[11px] sm:text-xs text-slate-600 font-mono">
               <div className="flex items-center space-x-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-teal-500 shrink-0" />
-                <span className="font-bold text-slate-200">Google Sheets View:</span>
+                <span className="font-bold text-slate-800">Google Sheets View:</span>
                 <span className="truncate">ตารางผู้ได้รับสิทธิ์เสื้อที่ระลึก (แสดง {filteredShirtList.length} จาก {shirtTotalCount} รายการ)</span>
               </div>
-              <div className="text-[10px] sm:text-xs text-amber-400">
+              <div className="text-[10px] sm:text-xs text-amber-700 font-bold">
                 คงเหลือยังไม่ได้รับ: {shirtTotalCount - shirtReceivedCount} ตัว
               </div>
             </div>
@@ -2003,42 +2004,42 @@ export default function EventCheckInHub({
             {filteredShirtList.length > 0 ? (
               <div className="overflow-x-auto max-h-[620px] overflow-y-auto">
                 <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-slate-950/90 text-slate-400 font-semibold sticky top-0 z-10 border-b border-white/10">
+                  <thead className="bg-slate-100 text-slate-700 font-bold sticky top-0 z-10 border-b border-slate-200">
                     <tr>
-                      <th className="py-2.5 px-2 sm:py-3 sm:px-3 w-12 sm:w-14 text-center border-r border-white/5 text-[11px] sm:text-xs">ลำดับ</th>
-                      <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 w-20 sm:w-24 border-r border-white/5 text-[11px] sm:text-xs">เลขที่บัตร</th>
-                      <th className="py-2.5 px-1.5 sm:py-3 sm:px-2 w-14 sm:w-16 text-center border-r border-white/5 text-[11px] sm:text-xs">รูปถ่าย</th>
-                      <th className="py-2.5 px-3 sm:py-3 sm:px-4 border-r border-white/5 min-w-[140px] sm:min-w-[180px] text-[11px] sm:text-xs">ชื่อ - นามสกุล (ชื่อเล่น)</th>
-                      <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-white/5 min-w-[100px] sm:min-w-[120px] text-[11px] sm:text-xs">ประเภท / สังกัด / ผู้เชิญ</th>
-                      <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-white/5 text-[11px] sm:text-xs">เบอร์โทรศัพท์</th>
-                      <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-white/5 text-[11px] sm:text-xs">ไซซ์เสื้อที่ระลึก</th>
-                      <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-white/5 text-center text-[11px] sm:text-xs">เข้างาน</th>
+                      <th className="py-2.5 px-2 sm:py-3 sm:px-3 w-12 sm:w-14 text-center border-r border-slate-200 text-[11px] sm:text-xs">ลำดับ</th>
+                      <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 w-20 sm:w-24 border-r border-slate-200 text-[11px] sm:text-xs">เลขที่บัตร</th>
+                      <th className="py-2.5 px-1.5 sm:py-3 sm:px-2 w-14 sm:w-16 text-center border-r border-slate-200 text-[11px] sm:text-xs">รูปถ่าย</th>
+                      <th className="py-2.5 px-3 sm:py-3 sm:px-4 border-r border-slate-200 min-w-[140px] sm:min-w-[180px] text-[11px] sm:text-xs">ชื่อ - นามสกุล (ชื่อเล่น)</th>
+                      <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-slate-200 min-w-[100px] sm:min-w-[120px] text-[11px] sm:text-xs">ประเภท / สังกัด / ผู้เชิญ</th>
+                      <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-slate-200 text-[11px] sm:text-xs">เบอร์โทรศัพท์</th>
+                      <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-slate-200 text-[11px] sm:text-xs">ไซซ์เสื้อที่ระลึก</th>
+                      <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-slate-200 text-center text-[11px] sm:text-xs">เข้างาน</th>
                       <th className="py-2.5 px-3 sm:py-3 sm:px-4 text-center text-[11px] sm:text-xs">สถานะรับเสื้อ</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/5">
+                  <tbody className="divide-y divide-slate-100 bg-white">
                     {filteredShirtList.map((r, idx) => {
                       const isReceived = !!r.shirtReceived;
                       return (
                         <tr 
                           key={r.ticketNo} 
                           onClick={() => setInspectingAttendee(r)}
-                          className={`cursor-pointer hover:bg-teal-500/10 active:bg-teal-500/15 transition-colors group ${isReceived ? "bg-teal-950/15" : ""}`}
+                          className={`cursor-pointer hover:bg-teal-50/60 active:bg-teal-100/60 transition-colors group ${isReceived ? "bg-teal-50/20" : ""}`}
                           title="แตะเพื่อดูข้อมูลการลงทะเบียนและสลิปธนาคาร"
                         >
                           
                           {/* 1. ลำดับ */}
-                          <td className="py-2 px-2 sm:py-2.5 sm:px-3 text-center font-mono text-slate-400 border-r border-white/5 text-[11px] sm:text-xs">
+                          <td className="py-2 px-2 sm:py-2.5 sm:px-3 text-center font-mono text-slate-500 border-r border-slate-100 text-[11px] sm:text-xs">
                             {idx + 1}
                           </td>
 
                           {/* 2. เลขที่บัตร */}
-                          <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 font-mono font-bold text-amber-400 border-r border-white/5 text-[11px] sm:text-xs whitespace-nowrap">
+                          <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 font-mono font-bold text-amber-600 border-r border-slate-100 text-[11px] sm:text-xs whitespace-nowrap">
                             {r.ticketNo}
                           </td>
 
                           {/* 3. รูปถ่ายรับเสื้อ 1:1 */}
-                          <td className="py-2 px-1.5 sm:py-2 sm:px-2 text-center border-r border-white/5">
+                          <td className="py-2 px-1.5 sm:py-2 sm:px-2 text-center border-r border-slate-100">
                             {r.shirtPhoto ? (
                               <button
                                 type="button"
@@ -2053,7 +2054,7 @@ export default function EventCheckInHub({
                                 <img
                                   src={r.shirtPhoto}
                                   alt={r.name}
-                                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover border-2 border-teal-400 shadow-md mx-auto group-hover:border-teal-300"
+                                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover border-2 border-teal-500 shadow-sm mx-auto group-hover:border-teal-600"
                                 />
                                 <span className="absolute -bottom-1 -right-1 px-1 py-0.5 rounded-full bg-slate-900 border border-teal-400/60 text-[9px] text-teal-300 shadow leading-none font-bold">
                                   👕
@@ -2066,7 +2067,7 @@ export default function EventCheckInHub({
                                   e.stopPropagation();
                                   openPhotoModal(r, 'shirt');
                                 }}
-                                className="p-1.5 px-2 rounded-xl bg-teal-500/10 hover:bg-teal-500/25 text-teal-300 border border-teal-500/30 transition-all inline-flex items-center space-x-1 cursor-pointer"
+                                className="p-1.5 px-2 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 transition-all inline-flex items-center space-x-1 cursor-pointer"
                                 title="ถ่ายรูปผู้รับมอบเสื้อ (สัดส่วน 1:1)"
                               >
                                 <Camera className="w-3.5 h-3.5" />
@@ -2076,60 +2077,60 @@ export default function EventCheckInHub({
                           </td>
 
                           {/* 4. ชื่อ - สกุล */}
-                          <td className="py-2 px-3 sm:py-2.5 sm:px-4 font-semibold text-white border-r border-white/5 text-[11px] sm:text-xs">
-                            <div className="flex items-center space-x-1.5 group-hover:text-amber-300 transition-colors">
+                          <td className="py-2 px-3 sm:py-2.5 sm:px-4 font-semibold text-slate-800 border-r border-slate-100 text-[11px] sm:text-xs">
+                            <div className="flex items-center space-x-1.5 group-hover:text-amber-600 transition-colors">
                               <span className="underline-offset-2 group-hover:underline">{r.name}</span>
                               {r.nickname && (
-                                <span className="text-amber-300 font-normal text-[10px] sm:text-[11px]">
+                                <span className="text-amber-600 font-normal text-[10px] sm:text-[11px]">
                                   ({r.nickname})
                                 </span>
                               )}
                             </div>
                             {r.email && (
-                              <div className="text-[9px] sm:text-[10px] text-slate-400 font-normal truncate max-w-[160px]">
+                              <div className="text-[9px] sm:text-[10px] text-slate-500 font-normal truncate max-w-[160px]">
                                 {r.email}
                               </div>
                             )}
                           </td>
 
                           {/* 5. สังกัด */}
-                          <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 border-r border-white/5 text-[11px] sm:text-xs">
+                          <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 border-r border-slate-100 text-[11px] sm:text-xs">
                             {r.regType === "member" ? (
                               (r.club || '').includes('โรตารี่') ? (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-extrabold bg-red-500/20 text-red-300 border border-red-500/40 shadow-sm shadow-red-500/20 whitespace-nowrap">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-extrabold bg-red-50 text-red-700 border border-red-200 whitespace-nowrap">
                                   สมาชิก{r.club}
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 whitespace-nowrap">
+                                <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 whitespace-nowrap">
                                   สมาชิก{r.club || "สงสพัท"}
                                 </span>
                               )
                             ) : (
-                              <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 whitespace-nowrap">
+                              <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
                                 แขก {r.club && `(${r.club})`}
                               </span>
                             )}
                           </td>
 
                           {/* 6. เบอร์โทร */}
-                          <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 font-mono text-slate-300 border-r border-white/5 text-[11px] sm:text-xs whitespace-nowrap">
+                          <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 font-mono text-slate-600 border-r border-slate-100 text-[11px] sm:text-xs whitespace-nowrap">
                             {r.phone || "-"}
                           </td>
 
                           {/* 7. ไซซ์เสื้อ */}
-                          <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 border-r border-white/5 whitespace-nowrap">
-                            <span className="inline-flex items-center space-x-1 font-mono font-bold px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] sm:text-xs">
-                              <Shirt className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-amber-400" />
+                          <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 border-r border-slate-100 whitespace-nowrap">
+                            <span className="inline-flex items-center space-x-1 font-mono font-bold px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 text-[10px] sm:text-xs">
+                              <Shirt className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-amber-600" />
                               <span>ไซซ์ {r.shirtSize} ({r.shirtGender || "ทั่วไป"})</span>
                             </span>
                           </td>
 
                           {/* 8. สถานะเข้างาน */}
-                          <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 text-center border-r border-white/5 whitespace-nowrap">
+                          <td className="py-2 px-2.5 sm:py-2.5 sm:px-3.5 text-center border-r border-slate-100 whitespace-nowrap">
                             {r.checkedIn ? (
-                              <span className="text-emerald-400 font-bold text-[10px] sm:text-[11px]">✓ เข้างาน</span>
+                              <span className="text-emerald-700 font-bold text-[10px] sm:text-[11px]">✓ เข้างาน</span>
                             ) : (
-                              <span className="text-slate-500 text-[10px] sm:text-[11px]">ยังไม่เข้า</span>
+                              <span className="text-slate-400 text-[10px] sm:text-[11px]">ยังไม่เข้า</span>
                             )}
                           </td>
 
@@ -2137,8 +2138,8 @@ export default function EventCheckInHub({
                           <td className="py-2 px-3 sm:py-2.5 sm:px-4 text-center whitespace-nowrap">
                             {isReceived ? (
                               <div className="inline-flex items-center space-x-1.5 sm:space-x-2">
-                                <span className="inline-flex items-center space-x-1 px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40 text-[10px] sm:text-xs shadow-xs">
-                                  <CheckCircle2 className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-emerald-400" />
+                                <span className="inline-flex items-center space-x-1 px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 text-[10px] sm:text-xs shadow-xs">
+                                  <CheckCircle2 className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-emerald-600" />
                                   <span>รับเสื้อแล้ว ✓</span>
                                 </span>
                                 <button
@@ -2147,7 +2148,7 @@ export default function EventCheckInHub({
                                     e.stopPropagation();
                                     onToggleShirtReceived(r.ticketNo, false);
                                   }}
-                                  className="text-[9px] sm:text-[10px] text-slate-500 hover:text-rose-400 underline transition-colors cursor-pointer"
+                                  className="text-[9px] sm:text-[10px] text-slate-400 hover:text-rose-600 underline transition-colors cursor-pointer"
                                   title="คลิกเพื่อยกเลิกสถานะรับเสื้อหากกดผิด"
                                 >
                                   แก้ไข
@@ -2162,7 +2163,7 @@ export default function EventCheckInHub({
                                   playAudioEffect("fanfare");
                                   openPhotoModal(r, 'shirt');
                                 }}
-                                className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 font-bold text-[10px] sm:text-xs shadow-md shadow-teal-500/20 hover:scale-105 active:scale-95 transition-all inline-flex items-center space-x-1 cursor-pointer"
+                                className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-400 hover:to-emerald-500 text-white font-bold text-[10px] sm:text-xs shadow-sm shadow-teal-500/20 hover:scale-105 active:scale-95 transition-all inline-flex items-center space-x-1 cursor-pointer"
                                 title="ส่งมอบเสื้อและเปิดกล้องถ่ายรูปบุคคลทันที"
                               >
                                 <Shirt className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
@@ -2177,9 +2178,9 @@ export default function EventCheckInHub({
                 </table>
               </div>
             ) : (
-              <div className="py-16 text-center text-slate-500 space-y-3 px-4">
-                <Shirt className="w-12 h-12 mx-auto opacity-30 text-teal-400" />
-                <div className="text-base font-bold text-slate-300">
+              <div className="py-16 text-center text-slate-400 space-y-3 px-4 bg-white">
+                <Shirt className="w-12 h-12 mx-auto opacity-30 text-teal-600" />
+                <div className="text-base font-bold text-slate-700">
                   {shirtTotalCount === 0 ? "ไม่มีผู้ลงทะเบียนที่เลือกรับเสื้อที่ระลึก" : "ไม่พบรายชื่อที่ค้นหา"}
                 </div>
                 <p className="text-xs text-slate-500 max-w-sm mx-auto">
@@ -2199,31 +2200,31 @@ export default function EventCheckInHub({
         <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-5">
           
           {/* Header Card for Contest */}
-          <div className="bg-slate-900/80 rounded-2xl p-5 border border-rose-500/30 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div className="space-y-1">
               <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-                <Crown className="w-5 h-5 text-rose-400" />
-                <h2 className="text-lg sm:text-xl font-black text-white">
+                <Crown className="w-5 h-5 text-rose-500" />
+                <h2 className="text-lg sm:text-xl font-black text-slate-900">
                   การประกวดแต่งกาย SME FAN 2026
                 </h2>
-                <span className="font-mono text-xs px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 font-bold border border-rose-500/30">
+                <span className="font-mono text-xs px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 font-bold border border-rose-200">
                   กรรมการลงคะแนนแล้ว {allJudgeVotes.length} ท่าน
                 </span>
 
                 {/* Live Voting Status Badge */}
                 {eventConfig?.isVotingOpen ? (
-                  <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center space-x-1 animate-pulse">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                  <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center space-x-1 animate-pulse">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                     <span>🟢 กำลังเปิดให้โหวตสด (LIVE)</span>
                   </span>
                 ) : (
-                  <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-white/10 flex items-center space-x-1">
-                    <Lock className="w-3 h-3 text-slate-400" />
+                  <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 flex items-center space-x-1">
+                    <Lock className="w-3 h-3 text-slate-500" />
                     <span>🔒 ปิดระบบโหวตอยู่ (รอเปิดระบบ)</span>
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-300">
+              <p className="text-xs text-slate-600">
                 รองรับประกวดเดี่ยว & กลุ่ม • 2 ประเภทรางวัล (ความสวยงาม & ความคิดสร้างสรรค์) • คะแนนเฉพาะ 5, 4, 3, 2, 1 ห้ามซ้ำ พร้อมบันทึกเหตุผลหากมีการแก้ไข
               </p>
             </div>
@@ -2247,10 +2248,10 @@ export default function EventCheckInHub({
                       playAudioEffect(isCurrentlyOpen ? "beep" : "fanfare");
                     }
                   }}
-                  className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl font-bold text-xs shadow-lg transition-all hover:scale-105 active:scale-95 cursor-pointer ${
+                  className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl font-bold text-xs shadow-md transition-all hover:scale-105 active:scale-95 cursor-pointer ${
                     eventConfig?.isVotingOpen
-                      ? "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30"
-                      : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30"
+                      ? "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/20"
+                      : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20"
                   }`}
                   title={eventConfig?.isVotingOpen ? "คลิกเพื่อปิดระบบโหวต" : "คลิกเพื่อเปิดระบบให้ทุกคนโหวตพร้อมกัน"}
                 >
@@ -2271,7 +2272,7 @@ export default function EventCheckInHub({
               <button
                 type="button"
                 onClick={() => setIsJudgeModalOpen(true)}
-                className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-400 hover:to-pink-400 text-white font-bold text-xs shadow-lg shadow-rose-500/25 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-400 hover:to-pink-400 text-white font-bold text-xs shadow-md shadow-rose-500/20 hover:scale-105 active:scale-95 transition-all cursor-pointer"
               >
                 <Award className="w-4 h-4" />
                 <span>⚖️ หน้าต่างให้คะแนน (กรรมการ)</span>
@@ -2280,16 +2281,16 @@ export default function EventCheckInHub({
           </div>
 
           {/* Subtabs Selector */}
-          <div className="bg-slate-900/80 p-2 rounded-2xl border border-white/10 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          <div className="bg-white p-2 rounded-2xl border border-slate-200/90 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
             <div className="flex items-center space-x-2 overflow-x-auto">
               
               <button
                 type="button"
                 onClick={() => setContestSubTab("leaderboard")}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 ${
+                className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
                   contestSubTab === "leaderboard"
-                    ? "bg-rose-500 text-white shadow-md shadow-rose-500/25"
-                    : "text-slate-400 hover:text-white hover:bg-white/5"
+                    ? "bg-rose-500 text-white shadow-md shadow-rose-500/20"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                 }`}
               >
                 <Trophy className="w-4 h-4" />
@@ -2299,10 +2300,10 @@ export default function EventCheckInHub({
               <button
                 type="button"
                 onClick={() => setContestSubTab("teams")}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 ${
+                className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
                   contestSubTab === "teams"
-                    ? "bg-indigo-500 text-white shadow-md shadow-indigo-500/25"
-                    : "text-slate-400 hover:text-white hover:bg-white/5"
+                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                 }`}
               >
                 <Users className="w-4 h-4" />
@@ -2312,10 +2313,10 @@ export default function EventCheckInHub({
               <button
                 type="button"
                 onClick={() => setContestSubTab("judge_qr")}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 ${
+                className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
                   contestSubTab === "judge_qr"
-                    ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/25"
-                    : "text-slate-400 hover:text-white hover:bg-white/5"
+                    ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 font-extrabold"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                 }`}
               >
                 <ExternalLink className="w-4 h-4" />
@@ -2334,7 +2335,7 @@ export default function EventCheckInHub({
                   playAudioEffect("beep");
                 } catch (e) {}
               }}
-              className="p-2 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs flex items-center space-x-1.5 self-start sm:self-auto border border-white/10"
+              className="p-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 text-xs flex items-center space-x-1.5 self-start sm:self-auto border border-slate-200 cursor-pointer"
               title="ดึงคะแนนล่าสุดจากกรรมการ"
             >
               <RefreshCw className="w-3.5 h-3.5" />
@@ -2347,21 +2348,21 @@ export default function EventCheckInHub({
             <div className="space-y-6">
               
               {/* Category & Award Filter Controls */}
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-900/60 p-3 rounded-2xl border border-white/5">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200/90 shadow-sm">
                 
                 {/* Category Switcher: Individual vs Team */}
-                <div className="flex items-center space-x-2 bg-slate-950 p-1.5 rounded-xl border border-white/10">
+                <div className="flex items-center space-x-2 bg-slate-100 p-1.5 rounded-xl border border-slate-200">
                   <button
                     type="button"
                     onClick={() => setContestCategoryView("individual")}
-                    className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                       contestCategoryView === "individual"
                         ? "bg-rose-500 text-white shadow-sm"
-                        : "text-slate-400 hover:text-white"
+                        : "text-slate-600 hover:text-slate-900"
                     }`}
                   >
                     <span>👤 ประกวดเดี่ยว</span>
-                    <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/30 font-mono">
+                    <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200/80 text-slate-800 font-mono">
                       {registrations.length}
                     </span>
                   </button>
@@ -2369,14 +2370,14 @@ export default function EventCheckInHub({
                   <button
                     type="button"
                     onClick={() => setContestCategoryView("team")}
-                    className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                       contestCategoryView === "team"
                         ? "bg-rose-500 text-white shadow-sm"
-                        : "text-slate-400 hover:text-white"
+                        : "text-slate-600 hover:text-slate-900"
                     }`}
                   >
                     <span>👥 ประกวดกลุ่ม</span>
-                    <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/30 font-mono">
+                    <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200/80 text-slate-800 font-mono">
                       {contestTeams.length}
                     </span>
                   </button>
@@ -2384,14 +2385,14 @@ export default function EventCheckInHub({
 
                 {/* Award Type Switcher */}
                 <div className="flex items-center space-x-1.5 overflow-x-auto text-xs">
-                  <span className="text-slate-400 text-[11px] pr-1">เรียงตาม:</span>
+                  <span className="text-slate-500 text-[11px] pr-1">เรียงตาม:</span>
                   <button
                     type="button"
                     onClick={() => setContestAwardView("total")}
-                    className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
+                    className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
                       contestAwardView === "total"
-                        ? "bg-amber-500 text-slate-950 shadow-md"
-                        : "bg-white/5 text-slate-300 hover:text-white"
+                        ? "bg-amber-500 text-slate-950 shadow-sm"
+                        : "bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200"
                     }`}
                   >
                     🏆 คะแนนรวมสูงสุด
@@ -2399,10 +2400,10 @@ export default function EventCheckInHub({
                   <button
                     type="button"
                     onClick={() => setContestAwardView("beauty")}
-                    className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
+                    className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
                       contestAwardView === "beauty"
-                        ? "bg-amber-500 text-slate-950 shadow-md"
-                        : "bg-white/5 text-slate-300 hover:text-white"
+                        ? "bg-amber-500 text-slate-950 shadow-sm"
+                        : "bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200"
                     }`}
                   >
                     ✨ ความสวยงาม
@@ -2410,10 +2411,10 @@ export default function EventCheckInHub({
                   <button
                     type="button"
                     onClick={() => setContestAwardView("creativity")}
-                    className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
+                    className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
                       contestAwardView === "creativity"
-                        ? "bg-amber-500 text-slate-950 shadow-md"
-                        : "bg-white/5 text-slate-300 hover:text-white"
+                        ? "bg-amber-500 text-slate-950 shadow-sm"
+                        : "bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200"
                     }`}
                   >
                     🎨 ความคิดสร้างสรรค์
@@ -2968,16 +2969,16 @@ export default function EventCheckInHub({
         <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
           
           {/* Sub-Tabs Selector */}
-          <div className="bg-slate-900/80 p-2 rounded-2xl border border-white/10 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          <div className="bg-white p-2 rounded-2xl border border-slate-200/90 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
             <div className="flex items-center space-x-2 overflow-x-auto">
               
               <button
                 type="button"
                 onClick={() => { setDrawSubTab("general"); setCurrentWinner(null); setSearchDrawPool(""); }}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 ${
+                className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
                   drawSubTab === "general"
-                    ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/25"
-                    : "text-slate-400 hover:text-white hover:bg-white/5"
+                    ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                 }`}
               >
                 <Dices className="w-4 h-4" />
@@ -2987,10 +2988,10 @@ export default function EventCheckInHub({
               <button
                 type="button"
                 onClick={() => { setDrawSubTab("grand"); setCurrentWinner(null); setSearchDrawPool(""); }}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 ${
+                className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
                   drawSubTab === "grand"
-                    ? "bg-rose-500 text-white shadow-md shadow-rose-500/25"
-                    : "text-slate-400 hover:text-white hover:bg-white/5"
+                    ? "bg-rose-500 text-white shadow-md shadow-rose-500/20"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                 }`}
               >
                 <Trophy className="w-4 h-4" />
@@ -3000,10 +3001,10 @@ export default function EventCheckInHub({
               <button
                 type="button"
                 onClick={() => { setDrawSubTab("gift_exclusive"); setCurrentWinner(null); setSearchDrawPool(""); }}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 ${
+                className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
                   drawSubTab === "gift_exclusive"
-                    ? "bg-indigo-500 text-white shadow-md shadow-indigo-500/25"
-                    : "text-slate-400 hover:text-white hover:bg-white/5"
+                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                 }`}
               >
                 <Gift className="w-4 h-4" />
@@ -3013,9 +3014,9 @@ export default function EventCheckInHub({
             </div>
 
             {/* Candidate Pool Indicator */}
-            <div className="text-xs text-slate-400 px-3 py-1 rounded-xl bg-slate-950 border border-white/5 flex items-center space-x-2 self-start sm:self-auto">
+            <div className="text-xs text-slate-600 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 flex items-center space-x-2 self-start sm:self-auto font-medium">
               <span>โถสุ่มปัจจุบัน:</span>
-              <strong className="text-amber-400 font-mono text-sm">{getCandidatePool().length}</strong>
+              <strong className="text-amber-700 font-mono text-sm font-bold">{getCandidatePool().length}</strong>
               <span>ท่าน</span>
             </div>
           </div>
@@ -3765,31 +3766,31 @@ export default function EventCheckInHub({
           <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6 animate-fadeIn">
             
             {/* Header Card for Satisfaction Survey */}
-            <div className="bg-slate-900/80 rounded-2xl p-5 border border-amber-500/30 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div className="space-y-1">
                 <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-                  <Star className="w-5 h-5 text-amber-400 fill-amber-400" />
-                  <h2 className="text-lg sm:text-xl font-black text-white">
+                  <Star className="w-5 h-5 text-amber-500 fill-amber-400" />
+                  <h2 className="text-lg sm:text-xl font-black text-slate-900">
                     แบบประเมินความพึงพอใจงาน SME FAN 2026
                   </h2>
-                  <span className="font-mono text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+                  <span className="font-mono text-xs px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 font-bold border border-amber-200">
                     ตอบแล้ว {surveyStats.total} ท่าน
                   </span>
 
                   {/* Status Badge */}
                   {eventConfig?.isSurveyOpen ? (
-                    <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center space-x-1 animate-pulse">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                    <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center space-x-1 animate-pulse">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                       <span>🟢 กำลังเปิดรับแบบประเมิน (LIVE)</span>
                     </span>
                   ) : (
-                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-white/10 flex items-center space-x-1">
-                      <Lock className="w-3 h-3 text-slate-400" />
+                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 flex items-center space-x-1">
+                      <Lock className="w-3 h-3 text-slate-500" />
                       <span>🔒 ปิดรับแบบประเมินอยู่ (รอเปิดระบบ)</span>
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-slate-300">
+                <p className="text-xs text-slate-600">
                   มาตรวัด 5 ระดับครอบคลุม {categories.length} ด้าน ({categories.reduce((s, c) => s + (c.questions?.length || 0), 0)} ข้อย่อย) พร้อมรวบรวมข้อเสนอแนะแยกตามหัวข้อ
                 </p>
               </div>
@@ -3800,7 +3801,7 @@ export default function EventCheckInHub({
                 <button
                   type="button"
                   onClick={() => setIsSurveyPreviewOpen(true)}
-                  className="px-3.5 py-2.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-black text-xs flex items-center space-x-1.5 shadow-lg shadow-teal-500/20 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                  className="px-3.5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-black text-xs flex items-center space-x-1.5 shadow-sm shadow-teal-600/20 hover:scale-105 active:scale-95 transition-all cursor-pointer"
                   title="ทดสอบทำแบบสอบถามในมุมมองผู้เข้าร่วมงาน (โหมดทดสอบ ไม่บันทึกคะแนน)"
                 >
                   <Eye className="w-3.5 h-3.5" />
@@ -3811,7 +3812,7 @@ export default function EventCheckInHub({
                 <button
                   type="button"
                   onClick={() => setIsSurveyBuilderOpen(true)}
-                  className="px-3.5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center space-x-1.5 shadow-lg shadow-amber-500/20 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                  className="px-3.5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center space-x-1.5 shadow-sm shadow-amber-500/20 hover:scale-105 active:scale-95 transition-all cursor-pointer"
                   title="เปิดหน้าต่างแก้ไขและจัดการข้อคำถามแบบสอบถาม"
                 >
                   <Sliders className="w-3.5 h-3.5" />
@@ -3835,10 +3836,10 @@ export default function EventCheckInHub({
                         playAudioEffect(isCurrentlyOpen ? "beep" : "fanfare");
                       }
                     }}
-                    className={`flex items-center space-x-2 px-3.5 py-2.5 rounded-xl font-bold text-xs shadow-lg transition-all hover:scale-105 active:scale-95 cursor-pointer ${
+                    className={`flex items-center space-x-2 px-3.5 py-2.5 rounded-xl font-bold text-xs shadow-md transition-all hover:scale-105 active:scale-95 cursor-pointer ${
                       eventConfig?.isSurveyOpen
-                        ? "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30"
-                        : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30"
+                        ? "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/20"
+                        : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20"
                     }`}
                     title={eventConfig?.isSurveyOpen ? "คลิกเพื่อปิดรับแบบประเมิน" : "คลิกเพื่อเปิดระบบรับแบบประเมิน"}
                   >
@@ -3866,7 +3867,7 @@ export default function EventCheckInHub({
                       playAudioEffect("beep");
                     } catch (e) {}
                   }}
-                  className="p-2.5 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs flex items-center space-x-1.5 border border-white/10 cursor-pointer"
+                  className="p-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 text-xs flex items-center space-x-1.5 border border-slate-200 cursor-pointer"
                   title="รีเฟรชผลคะแนนล่าสุด"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
@@ -3877,7 +3878,7 @@ export default function EventCheckInHub({
                 <button
                   type="button"
                   onClick={handleExportSurveyCSV}
-                  className="p-2.5 px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-bold flex items-center space-x-1.5 border border-amber-500/30 cursor-pointer"
+                  className="p-2.5 px-3 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold flex items-center space-x-1.5 border border-amber-300 cursor-pointer"
                   title="ดาวน์โหลดผลประเมินทุกข้อย่อยและข้อเสนอแนะเป็นไฟล์ CSV"
                 >
                   <Download className="w-3.5 h-3.5" />
@@ -3889,81 +3890,81 @@ export default function EventCheckInHub({
             {/* 4 Stat Overview Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
               {/* Stat 1: Total Responses */}
-              <div className="bg-slate-900/80 p-4 rounded-2xl border border-white/10 space-y-1">
-                <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">
+              <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-sm space-y-1">
+                <span className="text-[11px] text-slate-500 font-bold uppercase tracking-wider block">
                   จำนวนผู้ประเมิน
                 </span>
                 <div className="flex items-baseline space-x-1.5">
-                  <span className="text-2xl sm:text-3xl font-black text-white font-mono">
+                  <span className="text-2xl sm:text-3xl font-black text-slate-900 font-mono">
                     {surveyStats.total}
                   </span>
-                  <span className="text-xs text-slate-400">
+                  <span className="text-xs text-slate-500">
                     / {registrations.length} ท่าน
                   </span>
                 </div>
-                <div className="text-[10px] text-amber-400">
+                <div className="text-[10px] text-amber-700 font-medium">
                   คิดเป็น {Math.round((surveyStats.total / Math.max(1, registrations.length)) * 100)}% ของผู้ลงทะเบียน
                 </div>
               </div>
 
               {/* Stat 2: Average Score */}
-              <div className="bg-slate-900/80 p-4 rounded-2xl border border-white/10 space-y-1">
-                <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">
+              <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-sm space-y-1">
+                <span className="text-[11px] text-slate-500 font-bold uppercase tracking-wider block">
                   คะแนนเฉลี่ยรวม
                 </span>
                 <div className="flex items-baseline space-x-1.5">
-                  <span className="text-2xl sm:text-3xl font-black text-amber-400 font-mono">
+                  <span className="text-2xl sm:text-3xl font-black text-amber-600 font-mono">
                     {surveyStats.totalAvg}
                   </span>
-                  <span className="text-xs text-amber-300">/ 5.0 ⭐</span>
+                  <span className="text-xs text-amber-700 font-bold">/ 5.0 ⭐</span>
                 </div>
-                <div className="text-[10px] text-emerald-400 font-medium">
+                <div className="text-[10px] text-emerald-700 font-medium">
                   {Number(surveyStats.totalAvg) >= 4.5 ? "ระดับยอดเยี่ยมมาก 🌟" : Number(surveyStats.totalAvg) >= 3.5 ? "ระดับดีมาก 👍" : Number(surveyStats.totalAvg) > 0 ? "ระดับปานกลาง" : "ยังไม่มีคะแนน"}
                 </div>
               </div>
 
               {/* Stat 3: Comments Count */}
-              <div className="bg-slate-900/80 p-4 rounded-2xl border border-white/10 space-y-1">
-                <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">
+              <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-sm space-y-1">
+                <span className="text-[11px] text-slate-500 font-bold uppercase tracking-wider block">
                   ความคิดเห็น / ข้อเสนอแนะ
                 </span>
                 <div className="flex items-baseline space-x-1.5">
-                  <span className="text-2xl sm:text-3xl font-black text-teal-300 font-mono">
+                  <span className="text-2xl sm:text-3xl font-black text-teal-700 font-mono">
                     {surveyStats.totalCommentsCount}
                   </span>
-                  <span className="text-xs text-slate-400">ข้อความ</span>
+                  <span className="text-xs text-slate-500">ข้อความ</span>
                 </div>
-                <div className="text-[10px] text-slate-400">
+                <div className="text-[10px] text-slate-500">
                   แยกตาม {categories.length} หมวดหมู่
                 </div>
               </div>
 
               {/* Stat 4: System Status */}
-              <div className="bg-slate-900/80 p-4 rounded-2xl border border-white/10 space-y-1">
-                <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">
+              <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-sm space-y-1">
+                <span className="text-[11px] text-slate-500 font-bold uppercase tracking-wider block">
                   สถานะระบบแบบประเมิน
                 </span>
                 <div className="text-base sm:text-lg font-extrabold font-mono pt-1">
                   {eventConfig?.isSurveyOpen ? (
-                    <span className="text-emerald-400">🟢 เปิดรับข้อมูล</span>
+                    <span className="text-emerald-700">🟢 เปิดรับข้อมูล</span>
                   ) : (
-                    <span className="text-slate-400">🔒 ปิดระบบชั่วคราว</span>
+                    <span className="text-slate-500">🔒 ปิดระบบชั่วคราว</span>
                   )}
                 </div>
-                <div className="text-[10px] text-slate-400 truncate">
+                <div className="text-[10px] text-slate-500 truncate">
                   {eventConfig?.isSurveyOpen ? "ผู้ร่วมงานประเมินได้จากแอป" : "รอแอดมินกดเปิดระบบ"}
                 </div>
               </div>
             </div>
 
             {/* Categories & Sub-Questions Detailed Breakdown */}
-            <div className="bg-slate-900/80 p-5 rounded-2xl border border-white/10 space-y-5">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm space-y-5">
               <div className="flex items-center justify-between flex-wrap gap-2">
-                <h3 className="text-sm sm:text-base font-extrabold text-white flex items-center space-x-2">
-                  <Award className="w-5 h-5 text-amber-400" />
+                <h3 className="text-sm sm:text-base font-extrabold text-slate-900 flex items-center space-x-2">
+                  <Award className="w-5 h-5 text-amber-500" />
                   <span>ผลคะแนนเฉลี่ยแยกตามหมวดหมู่และข้อคำถามย่อย (เต็ม 5.0 คะแนน)</span>
                 </h3>
-                <span className="text-xs text-slate-400 font-mono">
+                <span className="text-xs text-slate-500 font-mono">
                   {categories.length} ด้าน • {categories.reduce((s, c) => s + (c.questions?.length || 0), 0)} ข้อย่อย
                 </span>
               </div>
@@ -3976,38 +3977,38 @@ export default function EventCheckInHub({
                   return (
                     <div
                       key={catStat.id || cIdx}
-                      className="bg-slate-950/70 border border-white/5 rounded-2xl p-4 sm:p-5 space-y-4 hover:border-amber-500/20 transition-all"
+                      className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-4 hover:border-amber-300 transition-all"
                     >
                       {/* Category Header */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-3">
                         <div className="flex items-center space-x-3">
-                          <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30">
+                          <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 border border-amber-200">
                             <IconComp className="w-4 h-4" />
                           </div>
                           <div>
                             <div className="flex items-center space-x-2">
-                              <h4 className="text-sm font-extrabold text-white">
+                              <h4 className="text-sm font-extrabold text-slate-900">
                                 {catStat.title}
                               </h4>
                               {catStat.subtitle && (
-                                <span className="text-xs text-amber-300 font-medium">
+                                <span className="text-xs text-amber-700 font-medium">
                                   {catStat.subtitle}
                                 </span>
                               )}
                             </div>
-                            <p className="text-[11px] text-slate-400">
+                            <p className="text-[11px] text-slate-500">
                               มีคำถาม {catStat.questions?.length || 0} ข้อย่อย
                             </p>
                           </div>
                         </div>
 
                         {/* Category Score Badge */}
-                        <div className="flex items-center space-x-2 self-start sm:self-auto bg-slate-900 px-3 py-1.5 rounded-xl border border-white/10">
-                          <span className="text-xs text-slate-400 font-medium">เฉลี่ยหมวดนี้:</span>
-                          <span className="font-mono text-base font-black text-amber-400">
+                        <div className="flex items-center space-x-2 self-start sm:self-auto bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-xs">
+                          <span className="text-xs text-slate-600 font-medium">เฉลี่ยหมวดนี้:</span>
+                          <span className="font-mono text-base font-black text-amber-600">
                             {catStat.avg}
                           </span>
-                          <span className="text-xs text-amber-300">/ 5.0 ⭐</span>
+                          <span className="text-xs text-amber-700 font-bold">/ 5.0 ⭐</span>
                         </div>
                       </div>
 
@@ -4018,24 +4019,24 @@ export default function EventCheckInHub({
                           return (
                             <div
                               key={qStat.id || qIdx}
-                              className="p-3 rounded-xl bg-slate-900/60 border border-white/5 space-y-1.5"
+                              className="p-3 rounded-xl bg-white border border-slate-200/90 shadow-2xs space-y-1.5"
                             >
                               <div className="flex justify-between items-start gap-2">
                                 <div className="space-y-0.5 min-w-0 flex-1">
-                                  <div className="text-xs font-bold text-slate-200 truncate flex items-center space-x-1.5">
-                                    <span className="font-mono text-amber-400 text-[11px] shrink-0 font-extrabold">
+                                  <div className="text-xs font-bold text-slate-800 truncate flex items-center space-x-1.5">
+                                    <span className="font-mono text-amber-600 text-[11px] shrink-0 font-extrabold">
                                       {cIdx + 1}.{qIdx + 1}
                                     </span>
                                     <span className="truncate">{qStat.label}</span>
                                   </div>
                                   {qStat.desc && (
-                                    <p className="text-[10px] text-slate-400 truncate">
+                                    <p className="text-[10px] text-slate-500 truncate">
                                       {qStat.desc}
                                     </p>
                                   )}
                                 </div>
                                 <div className="shrink-0 text-right">
-                                  <span className="font-mono font-black text-amber-300 text-xs">
+                                  <span className="font-mono font-black text-amber-600 text-xs">
                                     {qStat.avg}
                                   </span>
                                   <span className="text-[10px] text-slate-400 font-mono"> / 5.0</span>
@@ -4043,7 +4044,7 @@ export default function EventCheckInHub({
                               </div>
 
                               {/* Progress bar */}
-                              <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                              <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/50">
                                 <div
                                   className="bg-gradient-to-r from-amber-500 to-yellow-400 h-2 rounded-full transition-all duration-500"
                                   style={{ width: `${qPercent}%` }}
@@ -4060,11 +4061,11 @@ export default function EventCheckInHub({
             </div>
 
             {/* Feedback & Comments Stream with Category Filter */}
-            <div className="bg-slate-900/80 p-5 rounded-2xl border border-white/10 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/10">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
                 <div className="flex items-center space-x-2">
-                  <MessageSquare className="w-4 h-4 text-teal-400" />
-                  <h3 className="text-sm font-bold text-white">
+                  <MessageSquare className="w-4 h-4 text-teal-600" />
+                  <h3 className="text-sm font-bold text-slate-900">
                     ข้อเสนอแนะและความคิดเห็นจากผู้เข้าร่วมงาน ({commentsList.length} ข้อความ)
                   </h3>
                 </div>
@@ -4076,8 +4077,8 @@ export default function EventCheckInHub({
                     onClick={() => setSurveyFeedbackCategoryFilter("all")}
                     className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
                       surveyFeedbackCategoryFilter === "all"
-                        ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20"
-                        : "bg-slate-800 hover:bg-slate-700 text-slate-300"
+                        ? "bg-amber-500 text-slate-950 shadow-sm"
+                        : "bg-slate-100 hover:bg-slate-200 text-slate-700"
                     }`}
                   >
                     ทั้งหมด
@@ -4089,8 +4090,8 @@ export default function EventCheckInHub({
                       onClick={() => setSurveyFeedbackCategoryFilter(cat.id)}
                       className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
                         surveyFeedbackCategoryFilter === cat.id
-                          ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20"
-                          : "bg-slate-800 hover:bg-slate-700 text-slate-300"
+                          ? "bg-amber-500 text-slate-950 shadow-sm"
+                          : "bg-slate-100 hover:bg-slate-200 text-slate-700"
                       }`}
                     >
                       ด้านที่ {cIdx + 1}
@@ -4100,9 +4101,9 @@ export default function EventCheckInHub({
               </div>
 
               {commentsList.length === 0 ? (
-                <div className="py-12 text-center text-slate-500 space-y-2">
-                  <MessageSquare className="w-10 h-10 mx-auto opacity-30 text-teal-400" />
-                  <div className="text-sm font-semibold text-slate-400">
+                <div className="py-12 text-center text-slate-400 space-y-2 bg-slate-50/50 rounded-xl">
+                  <MessageSquare className="w-10 h-10 mx-auto opacity-30 text-teal-600" />
+                  <div className="text-sm font-semibold text-slate-600">
                     ยังไม่มีข้อเสนอแนะในหมวดนี้
                   </div>
                   <p className="text-xs text-slate-500 max-w-sm mx-auto">
@@ -4114,33 +4115,33 @@ export default function EventCheckInHub({
                   {commentsList.map((item, idx) => (
                     <div
                       key={item.id || idx}
-                      className="p-4 rounded-xl bg-slate-950/70 border border-white/5 space-y-2 text-xs hover:border-amber-500/20 transition-all"
+                      className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs hover:border-amber-300 transition-all"
                     >
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
                         <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-                          <span className="w-6 h-6 rounded-lg bg-teal-500/20 text-teal-300 font-mono font-bold flex items-center justify-center text-[11px] shrink-0">
+                          <span className="w-6 h-6 rounded-lg bg-teal-100 text-teal-800 font-mono font-bold flex items-center justify-center text-[11px] shrink-0 border border-teal-200">
                             #{idx + 1}
                           </span>
-                          <div className="font-extrabold text-white text-sm">
+                          <div className="font-extrabold text-slate-900 text-sm">
                             {item.name} {item.nickname ? `(${item.nickname})` : ''}
                           </div>
-                          <span className="font-mono text-amber-400 text-xs">
+                          <span className="font-mono text-amber-600 text-xs font-bold">
                             {item.ticketNo}
                           </span>
-                          <span className="text-slate-400 text-xs">
+                          <span className="text-slate-500 text-xs">
                             • {item.club}
                           </span>
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
                             {item.catTitle}
                           </span>
                         </div>
-                        <span className="font-mono text-[11px] text-slate-400">
+                        <span className="font-mono text-[11px] text-slate-500">
                           {item.time}
                         </span>
                       </div>
 
                       {/* Comment text */}
-                      <div className="p-3 rounded-lg bg-white/5 border border-white/5 text-slate-200 italic text-xs leading-relaxed">
+                      <div className="p-3 rounded-lg bg-white border border-slate-200 text-slate-700 italic text-xs leading-relaxed">
                         "{item.comment}"
                       </div>
                     </div>
@@ -4152,22 +4153,22 @@ export default function EventCheckInHub({
             {/* ========================================================== */}
             {/* SECTION 4: SPEED RANKING & GIVEAWAY TRACKER (จับเวลาวินาที) */}
             {/* ========================================================== */}
-            <div className="bg-slate-900/80 p-5 rounded-2xl border border-white/10 space-y-4">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-white/10">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm space-y-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-200">
                 <div className="space-y-1">
                   <div className="flex items-center space-x-2">
-                    <Trophy className="w-5 h-5 text-amber-400" />
-                    <h3 className="text-sm sm:text-base font-extrabold text-white">
+                    <Trophy className="w-5 h-5 text-amber-500" />
+                    <h3 className="text-sm sm:text-base font-extrabold text-slate-900">
                       ตารางจัดอันดับความเร็วการส่งแบบประเมิน (Speed Ranking & Giveaway Tracker)
                     </h3>
                   </div>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-slate-600">
                     จับเวลาแม่นยำระดับวินาที เรียงลำดับผู้ที่ประเมินเสร็จก่อน-หลัง เพื่อจัดเตรียมของรางวัลสำหรับ 20 หรือ 30 คนแรก
                   </p>
                 </div>
 
                 <div className="flex items-center space-x-2 self-start md:self-auto">
-                  <span className="px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 font-mono text-xs font-bold">
+                  <span className="px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 font-mono text-xs font-bold">
                     ประเมินแล้ว {speedRankingList.length} ท่าน
                   </span>
                 </div>
@@ -4182,8 +4183,8 @@ export default function EventCheckInHub({
                     onClick={() => setSurveyRankingFilter("all")}
                     className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
                       surveyRankingFilter === "all"
-                        ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20"
-                        : "bg-slate-800 hover:bg-slate-700 text-slate-300"
+                        ? "bg-amber-500 text-slate-950 shadow-sm"
+                        : "bg-slate-100 hover:bg-slate-200 text-slate-700"
                     }`}
                   >
                     ทั้งหมด ({speedRankingList.length})
@@ -4193,8 +4194,8 @@ export default function EventCheckInHub({
                     onClick={() => setSurveyRankingFilter("top20")}
                     className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
                       surveyRankingFilter === "top20"
-                        ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20"
-                        : "bg-slate-800 hover:bg-slate-700 text-slate-300"
+                        ? "bg-amber-500 text-slate-950 shadow-sm"
+                        : "bg-slate-100 hover:bg-slate-200 text-slate-700"
                     }`}
                   >
                     🏆 Top 20 แรก (สิทธิ์ของรางวัล)
@@ -4204,8 +4205,8 @@ export default function EventCheckInHub({
                     onClick={() => setSurveyRankingFilter("top30")}
                     className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
                       surveyRankingFilter === "top30"
-                        ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20"
-                        : "bg-slate-800 hover:bg-slate-700 text-slate-300"
+                        ? "bg-amber-500 text-slate-950 shadow-sm"
+                        : "bg-slate-100 hover:bg-slate-200 text-slate-700"
                     }`}
                   >
                     🎁 Top 30 แรก
@@ -4215,8 +4216,8 @@ export default function EventCheckInHub({
                     onClick={() => setSurveyRankingFilter("top50")}
                     className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
                       surveyRankingFilter === "top50"
-                        ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20"
-                        : "bg-slate-800 hover:bg-slate-700 text-slate-300"
+                        ? "bg-amber-500 text-slate-950 shadow-sm"
+                        : "bg-slate-100 hover:bg-slate-200 text-slate-700"
                     }`}
                   >
                     Top 50
@@ -4231,13 +4232,13 @@ export default function EventCheckInHub({
                     value={surveyRankingSearch}
                     onChange={(e) => setSurveyRankingSearch(e.target.value)}
                     placeholder="ค้นหาชื่อ, เบอร์, เลขบัตร..."
-                    className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-950/80 border border-white/10 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors"
+                    className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-xs placeholder-slate-400 focus:outline-none focus:bg-white focus:border-amber-400 transition-colors"
                   />
                   {surveyRankingSearch && (
                     <button
                       type="button"
                       onClick={() => setSurveyRankingSearch("")}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -4247,9 +4248,9 @@ export default function EventCheckInHub({
 
               {/* Table or Empty State */}
               {filteredRankingList.length === 0 ? (
-                <div className="py-12 text-center text-slate-500 space-y-2">
-                  <Clock className="w-10 h-10 mx-auto opacity-30 text-amber-400" />
-                  <div className="text-sm font-semibold text-slate-400">
+                <div className="py-12 text-center text-slate-400 space-y-2 bg-slate-50/50 rounded-xl">
+                  <Clock className="w-10 h-10 mx-auto opacity-30 text-amber-500" />
+                  <div className="text-sm font-semibold text-slate-600">
                     {speedRankingList.length === 0
                       ? "ยังไม่มีข้อมูลผู้ส่งแบบประเมินความพึงพอใจ"
                       : "ไม่พบข้อมูลที่ตรงกับเงื่อนไขการค้นหา"}
@@ -4261,10 +4262,10 @@ export default function EventCheckInHub({
                   </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto rounded-xl border border-white/5">
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
-                      <tr className="bg-slate-950/90 text-slate-400 border-b border-white/10 uppercase tracking-wider text-[11px] font-bold">
+                      <tr className="bg-slate-100 text-slate-700 border-b border-slate-200 uppercase tracking-wider text-[11px] font-bold">
                         <th className="py-3 px-3 text-center w-20">อันดับ</th>
                         <th className="py-3 px-3">เวลาที่ส่ง (วินาที)</th>
                         <th className="py-3 px-3">ผู้ประเมิน</th>
@@ -4274,7 +4275,7 @@ export default function EventCheckInHub({
                         <th className="py-3 px-3 text-center">สิทธิ์ของรางวัล</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-white/5">
+                    <tbody className="divide-y divide-slate-100 bg-white">
                       {filteredRankingList.map((item) => {
                         const rank = item.rank;
                         const isTop1 = rank === 1;
@@ -4286,45 +4287,45 @@ export default function EventCheckInHub({
                         return (
                           <tr
                             key={item.id || rank}
-                            className={`transition-colors hover:bg-white/5 ${
+                            className={`transition-colors hover:bg-amber-50/50 ${
                               isTop1
-                                ? "bg-amber-500/10"
+                                ? "bg-amber-50/70"
                                 : isTop2
-                                  ? "bg-slate-400/10"
+                                  ? "bg-slate-50"
                                   : isTop3
-                                    ? "bg-orange-500/10"
+                                    ? "bg-orange-50/60"
                                     : isTop20
-                                      ? "bg-amber-500/[0.03]"
+                                      ? "bg-amber-50/30"
                                       : ""
                             }`}
                           >
                             {/* อันดับ */}
                             <td className="py-3 px-3 text-center">
                               {isTop1 ? (
-                                <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 font-black text-xs shadow-md shadow-amber-500/30">
+                                <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 font-black text-xs shadow-xs">
                                   <span>🥇</span>
                                   <span>#1</span>
                                 </span>
                               ) : isTop2 ? (
-                                <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-slate-200 to-slate-400 text-slate-950 font-black text-xs shadow-md">
+                                <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-slate-200 to-slate-300 text-slate-950 font-black text-xs shadow-xs">
                                   <span>🥈</span>
                                   <span>#2</span>
                                 </span>
                               ) : isTop3 ? (
-                                <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-600 to-amber-700 text-white font-black text-xs shadow-md">
+                                <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-600 to-amber-700 text-white font-black text-xs shadow-xs">
                                   <span>🥉</span>
                                   <span>#3</span>
                                 </span>
                               ) : isTop20 ? (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-mono font-bold text-xs border border-amber-500/30">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 font-mono font-bold text-xs border border-amber-200">
                                   #{rank}
                                 </span>
                               ) : isTop30 ? (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-teal-500/20 text-teal-300 font-mono font-bold text-xs border border-teal-500/30">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-teal-100 text-teal-800 font-mono font-bold text-xs border border-teal-200">
                                   #{rank}
                                 </span>
                               ) : (
-                                <span className="font-mono text-slate-400 font-bold">
+                                <span className="font-mono text-slate-600 font-bold">
                                   #{rank}
                                 </span>
                               )}
@@ -4333,8 +4334,8 @@ export default function EventCheckInHub({
                             {/* เวลาส่งที่แม่นยำระดับวินาที */}
                             <td className="py-3 px-3">
                               <div className="flex items-center space-x-1.5 font-mono text-xs">
-                                <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                                <span className="font-bold text-amber-300 whitespace-nowrap">
+                                <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                <span className="font-bold text-amber-700 whitespace-nowrap">
                                   {item.displayTimeWithSec}
                                 </span>
                               </div>
@@ -4342,26 +4343,26 @@ export default function EventCheckInHub({
 
                             {/* ผู้ประเมิน */}
                             <td className="py-3 px-3">
-                              <div className="font-bold text-white text-xs sm:text-sm">
+                              <div className="font-bold text-slate-900 text-xs sm:text-sm">
                                 {item.name} {item.nickname ? `(${item.nickname})` : ''}
                               </div>
                             </td>
 
                             {/* เลขที่บัตร */}
                             <td className="py-3 px-3">
-                              <span className="font-mono text-amber-400 text-xs">
+                              <span className="font-mono text-amber-600 font-bold text-xs">
                                 {item.ticketNo || "-"}
                               </span>
                             </td>
 
                             {/* สังกัด */}
-                            <td className="py-3 px-3 text-slate-300">
+                            <td className="py-3 px-3 text-slate-600">
                               {item.club || "-"}
                             </td>
 
                             {/* คะแนนรวม */}
                             <td className="py-3 px-3 text-center">
-                              <span className="font-mono font-extrabold text-amber-300 text-xs bg-slate-950 px-2 py-1 rounded-md border border-white/10">
+                              <span className="font-mono font-extrabold text-amber-700 text-xs bg-amber-50 px-2 py-1 rounded-md border border-amber-200">
                                 {item.overallAverage || item.overallAvg || item.ratings?.ratingOverall || "0.00"} ⭐
                               </span>
                             </td>
@@ -4369,17 +4370,17 @@ export default function EventCheckInHub({
                             {/* สิทธิ์ของรางวัล */}
                             <td className="py-3 px-3 text-center">
                               {isTop20 ? (
-                                <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                                <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300">
                                   <span>🏆</span>
                                   <span>Top 20 (ได้รางวัล)</span>
                                 </span>
                               ) : isTop30 ? (
-                                <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-teal-500/20 text-teal-300 border border-teal-500/40">
+                                <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-teal-100 text-teal-800 border border-teal-300">
                                   <span>🎁</span>
                                   <span>Top 30 (ได้รางวัล)</span>
                                 </span>
                               ) : (
-                                <span className="text-slate-500 text-xs font-mono">-</span>
+                                <span className="text-slate-400 text-xs font-mono">-</span>
                               )}
                             </td>
                           </tr>
@@ -4704,6 +4705,8 @@ export default function EventCheckInHub({
           </div>
         </div>
       )}
+
+      </div>
 
       {/* MODAL 5: ATTENDEE PHOTO CAPTURE MODAL (1:1 SQUARE) */}
       {photoModalTarget && (

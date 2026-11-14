@@ -515,27 +515,31 @@ export default function AttendeePhotoModal({
           ) : activeMode === 'camera' ? (
             <div className="space-y-2">
               <div className="grid grid-cols-5 gap-2">
-                <button
-                  type="button"
-                  disabled={!isCameraActive || countdown !== null}
-                  onClick={handleSnapCountdown}
-                  className={`col-span-4 py-3.5 rounded-2xl font-black text-sm shadow-xl flex items-center justify-center space-x-2 transition-all disabled:opacity-50 cursor-pointer ${
-                    isShirtPhoto
-                      ? 'bg-gradient-to-r from-teal-400 to-emerald-500 hover:from-teal-300 hover:to-emerald-400 text-slate-950 shadow-teal-500/25'
-                      : 'bg-gradient-to-r from-amber-400 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 shadow-amber-500/25'
-                  }`}
-                >
-                  <Camera className="w-5 h-5" />
-                  <span>{countdown !== null ? `กำลังถ่ายใน ${countdown}...` : '📸 กดถ่ายภาพ (นับถอยหลัง 3 วิ)'}</span>
-                </button>
+                {/* 1. ปุ่มถ่ายทันที (ปุ่มใหญ่ แถบยาวสีทอง) */}
                 <button
                   type="button"
                   disabled={!isCameraActive || countdown !== null}
                   onClick={takeSnapshot}
-                  className="col-span-1 py-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs border border-white/10 flex items-center justify-center shadow-lg transition-all disabled:opacity-50 cursor-pointer"
-                  title="ถ่ายทันทีไม่ต้องรอ 3 วินาที"
+                  className="col-span-4 py-3.5 rounded-2xl font-black text-sm sm:text-base bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 text-slate-950 shadow-xl shadow-amber-500/25 flex items-center justify-center space-x-2 transition-all disabled:opacity-50 cursor-pointer active:scale-[0.98]"
+                  title="ถ่ายภาพทันที"
                 >
-                  <span>ถ่ายทันที</span>
+                  <Camera className="w-5 h-5 text-slate-950" />
+                  <span>📸 ถ่ายภาพทันที</span>
+                </button>
+
+                {/* 2. ปุ่มนับถอยหลัง 3 วิ (ปุ่มเล็ก) */}
+                <button
+                  type="button"
+                  disabled={!isCameraActive || countdown !== null}
+                  onClick={handleSnapCountdown}
+                  className="col-span-1 py-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs border border-white/10 flex flex-col items-center justify-center shadow-lg transition-all disabled:opacity-50 cursor-pointer active:scale-95"
+                  title="นับถอยหลัง 3 วินาทีแล้วถ่าย"
+                >
+                  {countdown !== null ? (
+                    <span className="font-mono text-sm font-black text-amber-400 animate-pulse">{countdown}s</span>
+                  ) : (
+                    <span>⏱️ 3วิ</span>
+                  )}
                 </button>
               </div>
 
