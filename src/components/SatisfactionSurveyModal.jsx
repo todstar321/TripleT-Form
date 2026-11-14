@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { 
   X, 
@@ -52,6 +52,8 @@ export default function SatisfactionSurveyModal({
   onSaveSurvey,
   isPreviewMode = false
 }) {
+  const modalScrollRef = useRef(null);
+
   // Use passed surveyConfig or fallback to default
   const activeConfig = useMemo(() => {
     return surveyConfig && Array.isArray(surveyConfig.categories) && surveyConfig.categories.length > 0
@@ -77,6 +79,19 @@ export default function SatisfactionSurveyModal({
   const [existingResponse, setExistingResponse] = useState(null);
   const [shakingQuestionIds, setShakingQuestionIds] = useState([]);
   const [zoomQuestion, setZoomQuestion] = useState(null);
+
+  // Scroll to top of modal when submitted or opened
+  useEffect(() => {
+    if (isSubmitted && modalScrollRef.current) {
+      modalScrollRef.current.scrollTop = 0;
+    }
+  }, [isSubmitted]);
+
+  useEffect(() => {
+    if (isOpen && modalScrollRef.current) {
+      modalScrollRef.current.scrollTop = 0;
+    }
+  }, [isOpen]);
 
   const getDraftKey = (att, isPreview) => {
     if (isPreview) return "triple_t_survey_draft_preview";
@@ -319,6 +334,9 @@ export default function SatisfactionSurveyModal({
       setError("");
       setExistingResponse(newResponse);
       setIsSubmitted(true);
+      if (modalScrollRef.current) {
+        modalScrollRef.current.scrollTop = 0;
+      }
       return;
     }
 
@@ -354,6 +372,9 @@ export default function SatisfactionSurveyModal({
     setError("");
     setIsSubmitted(true);
     setExistingResponse(newResponse);
+    if (modalScrollRef.current) {
+      modalScrollRef.current.scrollTop = 0;
+    }
   };
 
   const getScoreBadgeText = (score) => {
@@ -369,7 +390,10 @@ export default function SatisfactionSurveyModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
-      <div className="relative w-full max-w-2xl bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border border-amber-500/40 rounded-3xl p-4 sm:p-6 text-slate-100 shadow-2xl space-y-4 max-h-[94vh] overflow-y-auto">
+      <div 
+        ref={modalScrollRef}
+        className="relative w-full max-w-2xl bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border border-amber-500/40 rounded-3xl p-4 sm:p-6 text-slate-100 shadow-2xl space-y-4 max-h-[94vh] overflow-y-auto"
+      >
         
         {/* Close Button */}
         <button
@@ -402,21 +426,6 @@ export default function SatisfactionSurveyModal({
         {/* ==================================================== */}
         {isSubmitted && existingResponse ? (
           <div className="py-6 px-3 text-center space-y-5 animate-fadeIn">
-            {/* Animated Modern Sticker / Celebration Graphic */}
-            <div className="relative mx-auto w-24 h-24 sm:w-28 sm:h-28 flex items-center justify-center">
-              {/* Pulsing Glow Background */}
-              <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-amber-400/40 via-yellow-300/30 to-emerald-400/40 blur-xl animate-pulse" />
-              {/* Sticker Badge */}
-              <div className="relative w-full h-full rounded-3xl bg-gradient-to-tr from-amber-500 via-yellow-400 to-emerald-400 p-1 shadow-2xl rotate-2 hover:rotate-0 transition-transform">
-                <div className="w-full h-full rounded-[22px] bg-slate-950 flex flex-col items-center justify-center border border-white/20">
-                  <span className="text-3xl sm:text-4xl animate-bounce">🎉</span>
-                  <span className="text-[10px] font-black tracking-widest text-amber-300 uppercase pt-1">
-                    THANK YOU!
-                  </span>
-                </div>
-              </div>
-            </div>
-
             {/* Main Thank You Message */}
             <div className="space-y-2">
               <div className="inline-flex items-center space-x-1.5 px-3.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold shadow-sm">
@@ -819,7 +828,7 @@ export default function SatisfactionSurveyModal({
                       onClick={handleNext}
                       className="px-6 py-3 rounded-2xl text-xs sm:text-sm font-extrabold bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 shadow-lg shadow-amber-500/25 flex items-center space-x-2 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
                     >
-                      <span>หัวข้อถัดไป ➔</span>
+                      <span>หัวข้อถัดไป</span>
                       <ArrowRight className="w-4 h-4" />
                     </button>
                   )}
@@ -838,28 +847,28 @@ export default function SatisfactionSurveyModal({
           <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
             <div className="relative w-full max-w-lg bg-white rounded-3xl p-5 sm:p-6 text-slate-900 shadow-2xl border-2 border-amber-400 space-y-4 max-h-[90vh] overflow-y-auto">
               
-              {/* Header */}
-              <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-                <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold">
+              {/* Header (Centered Category Badge & Close Button) */}
+              <div className="relative flex items-center justify-center pb-3 border-b border-slate-200">
+                <span className="px-3.5 py-1.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-xs sm:text-sm font-bold shadow-sm text-center">
                   {zoomQuestion.catTitle || "แบบประเมิน"}
                 </span>
                 <button
                   type="button"
                   onClick={() => setZoomQuestion(null)}
-                  className="p-1.5 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors cursor-pointer"
+                  className="absolute right-0 top-1/2 -translate-y-1/2 p-1.5 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors cursor-pointer"
                   title="ปิดหน้าต่างขยาย"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              {/* Large Title & Description */}
-              <div className="space-y-3 py-1 text-left">
-                <h3 className="text-base sm:text-xl font-black text-slate-950 leading-snug">
-                  {zoomQuestion.title || zoomQuestion.label}
+              {/* Large Title & Description (Centered & Number Prefix Removed for Readability) */}
+              <div className="space-y-3 py-2 text-center">
+                <h3 className="text-xl sm:text-2xl font-black text-slate-950 leading-snug px-2">
+                  {(zoomQuestion.title || zoomQuestion.label || '').replace(/^\d+(\.\d+)*\s*/, '')}
                 </h3>
                 {zoomQuestion.desc && (
-                  <p className="text-xs sm:text-sm text-slate-700 leading-relaxed bg-slate-50 p-3 sm:p-4 rounded-2xl border border-slate-200">
+                  <p className="text-xs sm:text-sm text-slate-700 leading-relaxed bg-slate-50 p-3.5 sm:p-4 rounded-2xl border border-slate-200 text-center max-w-md mx-auto">
                     {zoomQuestion.desc}
                   </p>
                 )}
@@ -871,10 +880,17 @@ export default function SatisfactionSurveyModal({
                   แตะดาวด้านล่างเพื่อลงคะแนนความพึงพอใจ:
                 </div>
 
-                {/* Big Stars for Easy Tapping */}
-                <div className="flex items-center justify-center space-x-2 sm:space-x-3">
+                {/* Progressive Stars from 1 (Small) to 5 (Largest) */}
+                <div className="flex items-end justify-center space-x-1.5 sm:space-x-3 pt-2 pb-1">
                   {[1, 2, 3, 4, 5].map((starNum) => {
                     const isFilled = starNum <= (scores[zoomQuestion.id] || 0);
+                    const starSizeClass = 
+                      starNum === 1 ? "w-7 h-7 sm:w-8 sm:h-8" :
+                      starNum === 2 ? "w-8 h-8 sm:w-9.5 sm:h-9.5" :
+                      starNum === 3 ? "w-10 h-10 sm:w-11 sm:h-11" :
+                      starNum === 4 ? "w-12 h-12 sm:w-13 sm:h-13" :
+                      "w-14 h-14 sm:w-15 sm:h-15";
+
                     return (
                       <button
                         key={starNum}
@@ -882,17 +898,17 @@ export default function SatisfactionSurveyModal({
                         onClick={() => {
                           handleScoreClick(zoomQuestion.id, starNum);
                         }}
-                        className="p-1.5 sm:p-2 rounded-2xl hover:scale-125 transition-transform cursor-pointer group flex flex-col items-center"
+                        className="p-1 sm:p-1.5 rounded-2xl hover:scale-110 active:scale-95 transition-all cursor-pointer group flex flex-col items-center justify-end"
                         title={`ให้ ${starNum} ดาว`}
                       >
                         <Star
-                          className={`w-9 h-9 sm:w-11 sm:h-11 transition-colors ${
+                          className={`${starSizeClass} transition-all ${
                             isFilled
                               ? "fill-amber-400 text-amber-500 drop-shadow-md"
                               : "text-slate-300 group-hover:text-amber-300"
                           }`}
                         />
-                        <span className="text-xs text-slate-500 pt-1 font-mono font-bold">
+                        <span className="text-xs sm:text-sm text-slate-500 pt-1.5 font-mono font-bold">
                           {starNum}
                         </span>
                       </button>
