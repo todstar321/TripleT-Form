@@ -71,6 +71,7 @@ import SatisfactionSurveyModal from "./SatisfactionSurveyModal";
 import { defaultSurveyConfig } from "../data/smeFanData";
 import { formatThaiDisplayDateTime } from "../utils/supabaseClient";
 import { cleanPhoneNumber } from "../utils/phoneFormatter";
+import { bgAudio } from "../utils/backgroundAudio";
 
 // Shared singleton AudioContext to prevent lag, browser context exhaustion, and latency
 let sharedAudioCtx = null;
@@ -525,8 +526,27 @@ export default function EventCheckInHub({
   // Search filter for Lucky Draw candidate pool on the right side
   const [searchDrawPool, setSearchDrawPool] = useState("");
 
-  // Sound effects enabled toggle
+  // Sound effects & Background music state synced with bgAudio singleton
+  const [isMusicPlaying, setIsMusicPlaying] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
+
+  useEffect(() => {
+    bgAudio.init();
+    const unsubscribe = bgAudio.subscribe((playing) => {
+      setIsMusicPlaying(playing);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleToggleSound = () => {
+    if (isMusicPlaying) {
+      bgAudio.pause();
+      setSoundEnabled(false);
+    } else {
+      bgAudio.play();
+      setSoundEnabled(true);
+    }
+  };
 
   // Save winners history to localStorage
   useEffect(() => {
@@ -1126,18 +1146,19 @@ export default function EventCheckInHub({
               <span className="text-[11px]">หน้าบ้าน</span>
             </button>
 
-            {/* 8. เสียง */}
+            {/* 8. เสียงเพลงบรรเลง & เอฟเฟกต์ */}
             <button
               type="button"
-              onClick={() => setSoundEnabled(!soundEnabled)}
+              onClick={handleToggleSound}
               className={`p-1.5 sm:p-2 rounded-xl border text-xs transition-all shrink-0 cursor-pointer ${
-                soundEnabled 
-                  ? "bg-amber-500/20 border-amber-500/40 text-amber-300" 
-                  : "bg-white/5 border-white/10 text-slate-400 hover:text-white"
+                isMusicPlaying 
+                  ? "bg-amber-500/20 border-amber-500/40 text-amber-300 shadow-sm shadow-amber-500/20 hover:bg-amber-500/30" 
+                  : "bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10"
               }`}
-              title={soundEnabled ? "ปิดเสียงเอฟเฟกต์" : "เปิดเสียงเอฟเฟกต์"}
+              title={isMusicPlaying ? "กดเพื่อปิดเสียงเพลงบรรเลง & เอฟเฟกต์ (กำลังเปิด)" : "กดเพื่อเปิดเสียงเพลงบรรเลง & เอฟเฟกต์ (ปิดอยู่)"}
+              aria-label={isMusicPlaying ? "ปิดเสียงเพลง" : "เปิดเสียงเพลง"}
             >
-              {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+              {isMusicPlaying ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
             </button>
           </div>
         </header>
