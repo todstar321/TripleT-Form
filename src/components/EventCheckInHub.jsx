@@ -1929,57 +1929,59 @@ export default function EventCheckInHub({
               />
             </div>
 
-            <div className="inline-flex p-1 rounded-xl bg-slate-100 border border-slate-200 shadow-inner gap-1 flex-wrap">
-              <button
-                type="button"
-                onClick={() => setFilterShirtStatus("all")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer ${
-                  filterShirtStatus === "all"
-                    ? "bg-white text-slate-900 shadow-sm border border-slate-200 font-bold"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
-                }`}
-              >
-                <span>ทั้งหมด</span>
-                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                  filterShirtStatus === "all" ? "bg-slate-200 text-slate-800 font-bold" : "bg-slate-200/60 text-slate-600"
-                }`}>
-                  {shirtTotalCount}
-                </span>
-              </button>
+            <div className="overflow-x-auto no-scrollbar scrollbar-none pb-0.5 max-w-full">
+              <div className="inline-flex p-1 rounded-xl bg-slate-100 border border-slate-200 shadow-inner gap-1 shrink-0 flex-nowrap">
+                <button
+                  type="button"
+                  onClick={() => setFilterShirtStatus("all")}
+                  className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 shrink-0 whitespace-nowrap cursor-pointer ${
+                    filterShirtStatus === "all"
+                      ? "bg-white text-slate-900 shadow-sm border border-slate-200 font-bold"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+                  }`}
+                >
+                  <span>ทั้งหมด</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                    filterShirtStatus === "all" ? "bg-slate-200 text-slate-800 font-bold" : "bg-slate-200/60 text-slate-600"
+                  }`}>
+                    {shirtTotalCount}
+                  </span>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setFilterShirtStatus("received")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer ${
-                  filterShirtStatus === "received"
-                    ? "bg-emerald-600 text-white font-extrabold shadow-sm"
-                    : "text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50"
-                }`}
-              >
-                <span>🟢 รับเสื้อแล้ว</span>
-                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                  filterShirtStatus === "received" ? "bg-emerald-800 text-white font-extrabold" : "bg-emerald-100 text-emerald-800 font-bold"
-                }`}>
-                  {shirtReceivedCount}
-                </span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterShirtStatus("received")}
+                  className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 shrink-0 whitespace-nowrap cursor-pointer ${
+                    filterShirtStatus === "received"
+                      ? "bg-emerald-600 text-white font-extrabold shadow-sm"
+                      : "text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50"
+                  }`}
+                >
+                  <span>🟢 รับเสื้อแล้ว</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                    filterShirtStatus === "received" ? "bg-emerald-800 text-white font-extrabold" : "bg-emerald-100 text-emerald-800 font-bold"
+                  }`}>
+                    {shirtReceivedCount}
+                  </span>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setFilterShirtStatus("not_received")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer ${
-                  filterShirtStatus === "not_received"
-                    ? "bg-amber-500 text-slate-950 font-extrabold shadow-sm"
-                    : "text-amber-700 hover:text-amber-900 hover:bg-amber-50"
-                }`}
-              >
-                <span>⏳ ยังไม่ได้รับเสื้อ</span>
-                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                  filterShirtStatus === "not_received" ? "bg-amber-600 text-slate-950 font-extrabold" : "bg-amber-100 text-amber-800 font-bold"
-                }`}>
-                  {Math.max(0, shirtTotalCount - shirtReceivedCount)}
-                </span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterShirtStatus("not_received")}
+                  className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 shrink-0 whitespace-nowrap cursor-pointer ${
+                    filterShirtStatus === "not_received"
+                      ? "bg-amber-500 text-slate-950 font-extrabold shadow-sm"
+                      : "text-amber-700 hover:text-amber-900 hover:bg-amber-50"
+                  }`}
+                >
+                  <span>⏳ ยังไม่ได้รับเสื้อ</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                    filterShirtStatus === "not_received" ? "bg-amber-600 text-slate-950 font-extrabold" : "bg-amber-100 text-amber-800 font-bold"
+                  }`}>
+                    {Math.max(0, shirtTotalCount - shirtReceivedCount)}
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
 
