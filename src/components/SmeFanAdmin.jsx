@@ -973,27 +973,17 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
             </h2>
           </div>
 
-          <div className="flex items-center space-x-2 shrink-0 flex-wrap gap-y-2">
+          {/* Executive Action Toolbar (Organized 2-Col Grid on Mobile, Flex on Desktop) */}
+          <div className="grid grid-cols-2 sm:flex sm:items-center sm:flex-wrap gap-2 w-full sm:w-auto">
             {onForceSyncCloud && (
               <button
                 type="button"
                 onClick={onForceSyncCloud}
-                className="flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition-all hover:scale-105"
+                className="flex items-center justify-center space-x-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-xs transition-all hover:scale-105 active:scale-95 cursor-pointer whitespace-nowrap"
                 title="ซิงค์ข้อมูลล่าสุดจาก Supabase Cloud และล้างข้อมูลจำลอง"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
-                <span>🔄 ซิงค์ Cloud</span>
-              </button>
-            )}
-
-            {onResetAllRegistrations && (
-              <button
-                type="button"
-                onClick={() => setIsClearSecurityOpen(true)}
-                className="flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-rose-950/90 to-red-950/80 hover:from-rose-900 hover:to-red-900 text-rose-200 hover:text-white border border-rose-500/50 hover:border-rose-400 shadow-md shadow-rose-950/50 transition-all hover:scale-105 active:scale-95 cursor-pointer"
-                title="ระบบความปลอดภัย: เคลียร์ข้อมูล (ลบรูปหลังจบงาน / ล้างข้อมูลลงทะเบียน)"
-              >
-                <span>⛔ Clear</span>
+                <span>ซิงค์ Cloud</span>
               </button>
             )}
 
@@ -1001,10 +991,10 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
               <button
                 type="button"
                 onClick={onGoToCheckIn}
-                className="flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition-all hover:scale-105"
+                className="flex items-center justify-center space-x-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition-all hover:scale-105 active:scale-95 cursor-pointer whitespace-nowrap"
               >
                 <Camera className="w-3.5 h-3.5" />
-                <span>🎟️ ลงทะเบียนเข้างาน</span>
+                <span>ลงทะเบียนเข้างาน</span>
               </button>
             )}
 
@@ -1014,30 +1004,42 @@ CREATE POLICY "Public Delete All" ON public.registrations FOR DELETE USING (true
                 if (onSwitchToForm) onSwitchToForm();
                 else if (onViewForm) onViewForm('form_1_sme_event');
               }}
-              className="flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-sm transition-all hover:scale-105"
+              className="flex items-center justify-center space-x-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-xs transition-all hover:scale-105 active:scale-95 cursor-pointer whitespace-nowrap"
             >
               <Eye className="w-3.5 h-3.5" />
               <span>เปิดดูหน้าฟอร์ม</span>
             </button>
 
+            {onOpenGoogleSheetsModal && (
+              <button
+                type="button"
+                onClick={onOpenGoogleSheetsModal}
+                className="flex items-center justify-center space-x-1.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 transition-all cursor-pointer whitespace-nowrap"
+              >
+                <Database className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Google Sheets</span>
+              </button>
+            )}
+
             {onBackToPortal && (
               <button
                 type="button"
                 onClick={onBackToPortal}
-                className="flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all"
+                className="flex items-center justify-center space-x-1.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all cursor-pointer whitespace-nowrap"
               >
                 <span>🏢 ศูนย์ Owner</span>
               </button>
             )}
 
-            {onOpenGoogleSheetsModal && (
+            {/* Clear Button: Compact & Discreet with Clean Styling */}
+            {onResetAllRegistrations && (
               <button
                 type="button"
-                onClick={onOpenGoogleSheetsModal}
-                className="flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 transition-all"
+                onClick={() => setIsClearSecurityOpen(true)}
+                className="flex items-center justify-center space-x-1.5 px-3 py-2.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 border border-rose-200 transition-all hover:scale-105 active:scale-95 cursor-pointer whitespace-nowrap"
+                title="ระบบความปลอดภัย: เคลียร์ข้อมูล (ลบรูปหลังจบงาน / ล้างข้อมูลลงทะเบียน)"
               >
-                <Database className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Google Sheets</span>
+                <span>⛔ เคลียร์ข้อมูล</span>
               </button>
             )}
           </div>
