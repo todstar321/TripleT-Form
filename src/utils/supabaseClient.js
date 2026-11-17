@@ -236,8 +236,10 @@ export function mapCloudToRegistration(r) {
     email: r.email || '',
     regType: r.reg_type || 'member',
     club: r.club || 'สงสพัท',
-    amount: Number(r.amount) || 500,
-    paidAmount: Number(r.paid_amount) || 500,
+    amount: (r.amount !== undefined && r.amount !== null && !isNaN(Number(r.amount))) ? Number(r.amount) : 500,
+    paidAmount: (r.paid_amount !== undefined && r.paid_amount !== null && !isNaN(Number(r.paid_amount))) 
+      ? Number(r.paid_amount) 
+      : ((r.amount !== undefined && r.amount !== null && !isNaN(Number(r.amount))) ? Number(r.amount) : 500),
     paymentStatus: r.payment_status || 'paid',
     paymentSlip: r.payment_slip || null,
     slipUrl: r.payment_slip || null,
@@ -359,8 +361,10 @@ export async function upsertRegistrationToCloud(reg) {
       email: reg.email || '',
       reg_type: reg.regType || 'member',
       club: reg.club || 'สงสพัท',
-      amount: Number(reg.amount) || 500,
-      paid_amount: Number(reg.paidAmount) || 500,
+      amount: (reg.amount !== undefined && reg.amount !== null && !isNaN(Number(reg.amount))) ? Number(reg.amount) : 500,
+      paid_amount: (reg.paidAmount !== undefined && reg.paidAmount !== null && !isNaN(Number(reg.paidAmount)))
+        ? Number(reg.paidAmount)
+        : ((reg.amount !== undefined && reg.amount !== null && !isNaN(Number(reg.amount))) ? Number(reg.amount) : 500),
       payment_status: reg.paymentStatus || 'paid',
       payment_slip: reg.paymentSlip || reg.slipUrl || null,
       slip_uploaded_at: toSafeIsoTimestamp(reg.slipUploadedAt),

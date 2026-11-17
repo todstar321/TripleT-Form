@@ -319,6 +319,41 @@ export default function EventPublicDataSheetModal({
     };
   }, [registrations, consolidatedSponsors, activeClubTab]);
 
+  // Helper to extract and format payment information (normal font, red for ฟรี)
+  const getAttendeePaymentInfo = (row) => {
+    const isFree = Boolean(
+      row?.isFree === true ||
+      row?.paymentStatus === "free" ||
+      row?.status === "free"
+    );
+
+    const rawAmt =
+      row?.paidAmount !== undefined && row?.paidAmount !== null && !isNaN(Number(row?.paidAmount))
+        ? Number(row.paidAmount)
+        : (row?.amount !== undefined && row?.amount !== null && !isNaN(Number(row?.amount))
+            ? Number(row.amount)
+            : null);
+
+    if (isFree || rawAmt === 0) {
+      return { isFree: true, text: "ฟรี", amount: 0 };
+    }
+
+    const finalAmount = rawAmt !== null ? rawAmt : 500;
+    return {
+      isFree: false,
+      text: finalAmount.toLocaleString(),
+      amount: finalAmount
+    };
+  };
+
+  const totalAttendeesPaid = useMemo(() => {
+    return filteredAttendees.reduce((sum, r) => sum + getAttendeePaymentInfo(r).amount, 0);
+  }, [filteredAttendees]);
+
+  const totalGuestsPaid = useMemo(() => {
+    return filteredGuests.reduce((sum, r) => sum + getAttendeePaymentInfo(r).amount, 0);
+  }, [filteredGuests]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-fadeIn overflow-y-auto print:p-0 print:bg-white print:fixed print:inset-0">
       <div 
@@ -591,74 +626,100 @@ export default function EventPublicDataSheetModal({
                       <th className="py-2.5 px-3.5 w-24 border-r border-white/5 print:border-gray-300">เลขที่บัตร</th>
                       <th className="py-2.5 px-4 min-w-[200px] border-r border-white/5 print:border-gray-300">ชื่อ - นามสกุล (ชื่อเล่น)</th>
                       <th className="py-2.5 px-3.5 min-w-[130px] border-r border-white/5 print:border-gray-300">ประเภท / สังกัด</th>
-                      <th className="py-2.5 px-3.5 text-center min-w-[100px] print:border-gray-300">สถานะ</th>
+                      <th className="py-2.5 px-3.5 text-center min-w-[100px] border-r border-white/5 print:border-gray-300">สถานะ</th>
+                      <th className="py-2.5 px-3.5 text-center min-w-[80px] print:border-gray-300">ชำระ</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5 print:divide-gray-300">
                     {filteredAttendees.length > 0 ? (
-                      filteredAttendees.map((r, idx) => (
-                        <tr 
-                          key={r.ticketNo || idx}
-                          className="hover:bg-white/5 transition-colors print:hover:bg-transparent"
-                        >
-                          {/* ลำดับ */}
-                          <td className="py-2.5 px-3 text-center font-mono text-slate-400 border-r border-white/5 print:border-gray-300 print:text-gray-700 align-middle">
-                            {idx + 1}
-                          </td>
+                      filteredAttendees.map((r, idx) => {
+                        const paymentInfo = getAttendeePaymentInfo(r);
 
-                          {/* เลขที่บัตร */}
-                          <td className="py-2.5 px-3.5 font-mono font-bold text-amber-400 border-r border-white/5 print:border-gray-300 print:text-gray-900 whitespace-nowrap align-middle">
-                            {r.ticketNo || `SME-${String(idx + 1).padStart(3, '0')}`}
-                          </td>
+                        return (
+                          <tr 
+                            key={r.ticketNo || idx}
+                            className="hover:bg-white/5 transition-colors print:hover:bg-transparent"
+                          >
+                            {/* ลำดับ */}
+                            <td className="py-2.5 px-3 text-center font-mono text-slate-400 border-r border-white/5 print:border-gray-300 print:text-gray-700 align-middle">
+                              {idx + 1}
+                            </td>
 
-                          {/* ชื่อ - นามสกุล */}
-                          <td className="py-2.5 px-4 font-semibold text-white border-r border-white/5 print:border-gray-300 print:text-gray-900 align-middle">
-                            <div className="flex items-center space-x-1.5">
-                              <span>{r.name}</span>
-                              {r.nickname && (
-                                <span className="text-amber-300 font-normal text-[11px] print:text-gray-700">
-                                  ({r.nickname})
+                            {/* เลขที่บัตร */}
+                            <td className="py-2.5 px-3.5 font-mono font-bold text-amber-400 border-r border-white/5 print:border-gray-300 print:text-gray-900 whitespace-nowrap align-middle">
+                              {r.ticketNo || `SME-${String(idx + 1).padStart(3, '0')}`}
+                            </td>
+
+                            {/* ชื่อ - นามสกุล */}
+                            <td className="py-2.5 px-4 font-semibold text-white border-r border-white/5 print:border-gray-300 print:text-gray-900 align-middle">
+                              <div className="flex items-center space-x-1.5">
+                                <span>{r.name}</span>
+                                {r.nickname && (
+                                  <span className="text-amber-300 font-normal text-[11px] print:text-gray-700">
+                                    ({r.nickname})
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* ประเภท / สังกัด */}
+                            <td className="py-2.5 px-3.5 border-r border-white/5 print:border-gray-300 whitespace-nowrap align-middle">
+                              {r.regType === "member" ? (
+                                (r.club || '').includes('โรตารี่') ? (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-extrabold bg-red-500/20 text-red-300 border border-red-500/40 print:bg-red-100 print:text-red-900 print:border-red-300">
+                                    สมาชิก{r.club}
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 print:bg-indigo-100 print:text-indigo-900 print:border-indigo-300">
+                                    สมาชิก{r.club || "สงสพัท"}
+                                  </span>
+                                )
+                              ) : (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 print:bg-emerald-100 print:text-emerald-900 print:border-emerald-300">
+                                  แขกผู้มีเกียรติ {r.club && `(${r.club})`}
                                 </span>
                               )}
-                            </div>
-                          </td>
+                            </td>
 
-                          {/* ประเภท / สังกัด */}
-                          <td className="py-2.5 px-3.5 border-r border-white/5 print:border-gray-300 whitespace-nowrap align-middle">
-                            {r.regType === "member" ? (
-                              (r.club || '').includes('โรตารี่') ? (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-extrabold bg-red-500/20 text-red-300 border border-red-500/40 print:bg-red-100 print:text-red-900 print:border-red-300">
-                                  สมาชิก{r.club}
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 print:bg-indigo-100 print:text-indigo-900 print:border-indigo-300">
-                                  สมาชิก{r.club || "สงสพัท"}
-                                </span>
-                              )
-                            ) : (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 print:bg-emerald-100 print:text-emerald-900 print:border-emerald-300">
-                                แขกผู้มีเกียรติ {r.club && `(${r.club})`}
+                            {/* สถานะ */}
+                            <td className="py-2.5 px-3.5 text-center whitespace-nowrap border-r border-white/5 print:border-gray-300 align-middle">
+                              <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 print:bg-green-100 print:text-green-800">
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>ลงทะเบียนแล้ว</span>
                               </span>
-                            )}
-                          </td>
+                            </td>
 
-                          {/* สถานะ */}
-                          <td className="py-2.5 px-3.5 text-center whitespace-nowrap align-middle">
-                            <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 print:bg-green-100 print:text-green-800">
-                              <CheckCircle2 className="w-3 h-3" />
-                              <span>ลงทะเบียนแล้ว</span>
-                            </span>
-                          </td>
-                        </tr>
-                      ))
+                            {/* ชำระ */}
+                            <td className="py-2.5 px-3.5 text-center font-mono align-middle whitespace-nowrap">
+                              {paymentInfo.isFree ? (
+                                <span className="text-red-400 font-normal print:text-red-600">ฟรี</span>
+                              ) : (
+                                <span className="font-normal text-slate-300 print:text-gray-700">
+                                  {paymentInfo.text}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
                     ) : (
                       <tr>
-                        <td colSpan={5} className="py-8 text-center text-slate-400 text-xs">
+                        <td colSpan={6} className="py-8 text-center text-slate-400 text-xs">
                           ไม่พบข้อมูลผู้ลงทะเบียนในหมวดนี้ครับ
                         </td>
                       </tr>
                     )}
                   </tbody>
+                  <tfoot className="bg-slate-900/90 font-bold border-t-2 border-white/10 print:bg-gray-100 print:border-gray-400">
+                    <tr>
+                      <td colSpan={5} className="py-2.5 px-4 text-right text-slate-300 print:text-gray-800 font-bold border-r border-white/5 print:border-gray-300">
+                        ยอดรวมทั้งสิ้น ({filteredAttendees.length} รายการ):
+                      </td>
+                      <td className="py-2.5 px-3.5 text-center font-mono font-bold text-amber-400 print:text-gray-900 whitespace-nowrap">
+                        {totalAttendeesPaid.toLocaleString()} บาท
+                      </td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             )}
@@ -674,53 +735,77 @@ export default function EventPublicDataSheetModal({
                       <th className="py-2.5 px-4 min-w-[200px] border-r border-white/5 print:border-gray-300">ชื่อ - นามสกุล (ชื่อเล่น)</th>
                       <th className="py-2.5 px-4 min-w-[200px] border-r border-white/5 print:border-gray-300">ชื่อ - นามสกุล (ชื่อเล่น) (ผู้ชักชวน)</th>
                       <th className="py-2.5 px-3.5 min-w-[120px] text-center border-r border-white/5 print:border-gray-300">สังกัด</th>
-                      <th className="py-2.5 px-3.5 text-center min-w-[120px] print:border-gray-300">โทร</th>
+                      <th className="py-2.5 px-3.5 text-center min-w-[120px] border-r border-white/5 print:border-gray-300">โทร</th>
+                      <th className="py-2.5 px-3.5 text-center min-w-[80px] print:border-gray-300">ชำระ</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5 print:divide-gray-300">
                     {filteredGuests.length > 0 ? (
-                      filteredGuests.map((r, idx) => (
-                        <tr 
-                          key={r.ticketNo || idx}
-                          className="hover:bg-white/5 transition-colors print:hover:bg-transparent"
-                        >
-                          <td className="py-2.5 px-3 text-center font-mono text-slate-400 border-r border-white/5 print:border-gray-300 print:text-gray-700 align-middle">
-                            {idx + 1}
-                          </td>
-                          <td className="py-2.5 px-3.5 font-mono font-bold text-purple-400 border-r border-white/5 print:border-gray-300 print:text-gray-900 whitespace-nowrap align-middle">
-                            {r.ticketNo}
-                          </td>
-                          <td className="py-2.5 px-4 font-semibold text-white border-r border-white/5 print:border-gray-300 print:text-gray-900 align-middle">
-                            <div className="flex items-center space-x-1.5">
-                              <span>{r.name}</span>
-                              {r.nickname && (
-                                <span className="text-purple-300 font-normal text-[11px] print:text-gray-700">
-                                  ({r.nickname})
+                      filteredGuests.map((r, idx) => {
+                        const paymentInfo = getAttendeePaymentInfo(r);
+
+                        return (
+                          <tr 
+                            key={r.ticketNo || idx}
+                            className="hover:bg-white/5 transition-colors print:hover:bg-transparent"
+                          >
+                            <td className="py-2.5 px-3 text-center font-mono text-slate-400 border-r border-white/5 print:border-gray-300 print:text-gray-700 align-middle">
+                              {idx + 1}
+                            </td>
+                            <td className="py-2.5 px-3.5 font-mono font-bold text-purple-400 border-r border-white/5 print:border-gray-300 print:text-gray-900 whitespace-nowrap align-middle">
+                              {r.ticketNo}
+                            </td>
+                            <td className="py-2.5 px-4 font-semibold text-white border-r border-white/5 print:border-gray-300 print:text-gray-900 align-middle">
+                              <div className="flex items-center space-x-1.5">
+                                <span>{r.name}</span>
+                                {r.nickname && (
+                                  <span className="text-purple-300 font-normal text-[11px] print:text-gray-700">
+                                    ({r.nickname})
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-4 font-medium text-slate-200 border-r border-white/5 print:border-gray-300 print:text-gray-900 align-middle">
+                              {formatRecommenderDisplay(r.recommender || r.recommenderName || r.inviter)}
+                            </td>
+                            <td className="py-2.5 px-3.5 text-center border-r border-white/5 print:border-gray-300 whitespace-nowrap align-middle">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 print:bg-indigo-100 print:text-indigo-900 print:border-indigo-300">
+                                {r.club || "สงสพัท"}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3.5 text-center font-mono text-slate-300 border-r border-white/5 print:text-gray-700 whitespace-nowrap align-middle">
+                              {r.phone || "-"}
+                            </td>
+                            <td className="py-2.5 px-3.5 text-center font-mono align-middle whitespace-nowrap">
+                              {paymentInfo.isFree ? (
+                                <span className="text-red-400 font-normal print:text-red-600">ฟรี</span>
+                              ) : (
+                                <span className="font-normal text-slate-300 print:text-gray-700">
+                                  {paymentInfo.text}
                                 </span>
                               )}
-                            </div>
-                          </td>
-                          <td className="py-2.5 px-4 font-medium text-slate-200 border-r border-white/5 print:border-gray-300 print:text-gray-900 align-middle">
-                            {formatRecommenderDisplay(r.recommender || r.recommenderName || r.inviter)}
-                          </td>
-                          <td className="py-2.5 px-3.5 text-center border-r border-white/5 print:border-gray-300 whitespace-nowrap align-middle">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 print:bg-indigo-100 print:text-indigo-900 print:border-indigo-300">
-                              {r.club || "สงสพัท"}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3.5 text-center font-mono text-slate-300 print:text-gray-700 whitespace-nowrap align-middle">
-                            {r.phone || "-"}
-                          </td>
-                        </tr>
-                      ))
+                            </td>
+                          </tr>
+                        );
+                      })
                     ) : (
                       <tr>
-                        <td colSpan={6} className="py-8 text-center text-slate-400 text-xs">
+                        <td colSpan={7} className="py-8 text-center text-slate-400 text-xs">
                           ไม่พบข้อมูลแขกรับเชิญในหมวดนี้ครับ
                         </td>
                       </tr>
                     )}
                   </tbody>
+                  <tfoot className="bg-slate-900/90 font-bold border-t-2 border-white/10 print:bg-gray-100 print:border-gray-400">
+                    <tr>
+                      <td colSpan={6} className="py-2.5 px-4 text-right text-slate-300 print:text-gray-800 font-bold border-r border-white/5 print:border-gray-300">
+                        ยอดรวมทั้งสิ้น ({filteredGuests.length} รายการ):
+                      </td>
+                      <td className="py-2.5 px-3.5 text-center font-mono font-bold text-amber-400 print:text-gray-900 whitespace-nowrap">
+                        {totalGuestsPaid.toLocaleString()} บาท
+                      </td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             )}

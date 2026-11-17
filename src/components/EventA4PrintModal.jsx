@@ -42,8 +42,9 @@ function getThaiA4ExtractionTime(d = new Date()) {
   };
 }
 
-// 26 rows per page allows compact slim rows so 21 attendees fit on 1 single A4 page
-const ROWS_PER_PAGE = 26;
+// 21 rows per page guarantees 21 rows + 1 total row (22 rows total) fits exactly into 1123px A4 height without cut off
+// It also balances 42 attendees perfectly into exactly 2 pages of 21 items, and 21 club members into exactly 1 page
+const ROWS_PER_PAGE = 21;
 
 export default function EventA4PrintModal({
   isOpen,
@@ -119,6 +120,33 @@ export default function EventA4PrintModal({
       return numA - numB;
     });
   }, [registrations]);
+
+  // Helper to extract and format payment information (normal font, red for ฟรี)
+  const getAttendeePaymentInfo = (row) => {
+    const isFree = Boolean(
+      row?.isFree === true ||
+      row?.paymentStatus === "free" ||
+      row?.status === "free"
+    );
+
+    const rawAmt =
+      row?.paidAmount !== undefined && row?.paidAmount !== null && !isNaN(Number(row?.paidAmount))
+        ? Number(row.paidAmount)
+        : (row?.amount !== undefined && row?.amount !== null && !isNaN(Number(row?.amount))
+            ? Number(row.amount)
+            : null);
+
+    if (isFree || rawAmt === 0) {
+      return { isFree: true, text: "ฟรี", amount: 0 };
+    }
+
+    const finalAmount = rawAmt !== null ? rawAmt : 500;
+    return {
+      isFree: false,
+      text: finalAmount.toLocaleString(),
+      amount: finalAmount
+    };
+  };
 
   // Helper to find member information by name
   const findMemberInfo = (searchName) => {
@@ -275,10 +303,22 @@ export default function EventA4PrintModal({
       dataType, // 'registration' | 'guest' | 'inviterSummary' | 'sponsor'
       items
     }) => {
+      const sectionTotalAmount = (dataType === "registration" || dataType === "guest")
+        ? items.reduce((sum, r) => sum + getAttendeePaymentInfo(r).amount, 0)
+        : (dataType === "sponsor"
+            ? items.filter((s) => s.sponsorType === "cash").reduce((sum, s) => sum + (Number(s.amount) || 0), 0)
+            : 0);
+
       const totalPagesForSection = Math.ceil(items.length / ROWS_PER_PAGE) || 1;
 
       for (let p = 0; p < totalPagesForSection; p++) {
         const pageItems = items.slice(p * ROWS_PER_PAGE, (p + 1) * ROWS_PER_PAGE);
+        const pageTotalAmount = (dataType === "registration" || dataType === "guest")
+          ? pageItems.reduce((sum, r) => sum + getAttendeePaymentInfo(r).amount, 0)
+          : (dataType === "sponsor"
+              ? pageItems.filter((s) => s.sponsorType === "cash").reduce((sum, s) => sum + (Number(s.amount) || 0), 0)
+              : 0);
+
         pages.push({
           pageNumber: pages.length + 1,
           categoryId,
@@ -291,7 +331,9 @@ export default function EventA4PrintModal({
           pageLabel: totalPagesForSection > 1 ? `หน้า ${p + 1}/${totalPagesForSection}` : "หน้า 1/1",
           items: pageItems,
           totalItemsCount: items.length,
-          startIndex: p * ROWS_PER_PAGE + 1
+          startIndex: p * ROWS_PER_PAGE + 1,
+          sectionGrandTotal: sectionTotalAmount,
+          pageTotalAmount: pageTotalAmount
         });
       }
     };
@@ -967,13 +1009,15 @@ export default function EventA4PrintModal({
                   <th className="py-1.5 px-2.5 border border-slate-300">ชื่อ - นามสกุล (ชื่อเล่น)</th>
                   <th className="py-1.5 px-1.5 text-center w-24 border border-slate-300">เบอร์โทรศัพท์</th>
                   <th className="py-1.5 px-1.5 text-center w-20 border border-slate-300">ประเภท / สังกัด</th>
-                  <th className="py-1.5 px-1.5 text-center w-28 border border-slate-300 whitespace-nowrap">สถานะ</th>
+                  <th className="py-1.5 px-1.5 text-center w-24 border border-slate-300 whitespace-nowrap">สถานะ</th>
+                  <th className="py-1.5 px-1.5 text-center w-16 border border-slate-300 whitespace-nowrap">ชำระ</th>
                 </tr>
               </thead>
               <tbody>
                 {page.items.map((row, rIdx) => {
                   const rowNum = page.startIndex + rIdx;
                   const isRotary = (row.club || "").includes("โรตารี่");
+                  const paymentInfo = getAttendeePaymentInfo(row);
 
                   return (
                     <tr
@@ -1012,15 +1056,37 @@ export default function EventA4PrintModal({
                           {row.club || "สงสพัท"}
                         </span>
                       </td>
-                      <td className="pt-1.5 pb-2.5 px-1.5 text-center whitespace-nowrap align-middle">
+                      <td className="pt-1.5 pb-2.5 px-1.5 text-center whitespace-nowrap border-r border-slate-200 align-middle">
                         <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
                           ✓ ลงทะเบียนแล้ว
                         </span>
+                      </td>
+                      <td className="pt-1.5 pb-2.5 px-1.5 text-center font-mono align-middle text-[10.5px] whitespace-nowrap">
+                        {paymentInfo.isFree ? (
+                          <span className="text-red-600 font-normal">ฟรี</span>
+                        ) : (
+                          <span className="font-normal text-slate-700">{paymentInfo.text}</span>
+                        )}
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
+              <tfoot>
+                <tr className="bg-slate-100 font-bold border-t-2 border-slate-400">
+                  <td
+                    colSpan={6}
+                    className="pt-1.5 pb-2.5 px-3 text-right text-slate-800 border-r border-slate-300 font-bold text-[10px]"
+                  >
+                    {page.sectionTotalPages > 1
+                      ? `รวมหน้านี้ ${page.pageTotalAmount.toLocaleString()} บาท • ยอดรวมทั้งสิ้น (${page.totalItemsCount} รายการ):`
+                      : `ยอดรวมทั้งสิ้น (${page.totalItemsCount} รายการ):`}
+                  </td>
+                  <td className="pt-1.5 pb-2.5 px-1.5 text-center text-slate-900 font-mono font-bold text-[10.5px] whitespace-nowrap">
+                    {page.sectionGrandTotal.toLocaleString()} บาท
+                  </td>
+                </tr>
+              </tfoot>
             </table>
           )}
 
@@ -1034,10 +1100,11 @@ export default function EventA4PrintModal({
                 >
                   <th className="py-1.5 px-1.5 text-center w-10 border border-slate-300">ลำดับ</th>
                   <th className="py-1.5 px-1.5 text-center w-16 border border-slate-300">เลขที่บัตร</th>
-                  <th className="py-1.5 px-2.5 border border-slate-300 min-w-[150px]">ชื่อ - นามสกุล (ชื่อเล่น)</th>
-                  <th className="py-1.5 px-2.5 border border-slate-300 min-w-[160px]">ชื่อ - นามสกุล (ชื่อเล่น) (ผู้ชักชวน)</th>
-                  <th className="py-1.5 px-1.5 text-center w-20 border border-slate-300">สังกัด</th>
+                  <th className="py-1.5 px-2.5 border border-slate-300 min-w-[140px]">ชื่อ - นามสกุล (ชื่อเล่น)</th>
+                  <th className="py-1.5 px-2.5 border border-slate-300 min-w-[150px]">ชื่อ - นามสกุล (ชื่อเล่น) (ผู้ชักชวน)</th>
+                  <th className="py-1.5 px-1.5 text-center w-16 border border-slate-300">สังกัด</th>
                   <th className="py-1.5 px-1.5 text-center w-24 border border-slate-300">โทร</th>
+                  <th className="py-1.5 px-1.5 text-center w-16 border border-slate-300 whitespace-nowrap">ชำระ</th>
                 </tr>
               </thead>
               <tbody>
@@ -1046,6 +1113,7 @@ export default function EventA4PrintModal({
                     const rowNum = page.startIndex + rIdx;
                     const isRotary = (row.club || "").includes("โรตารี่");
                     const recommenderDisplay = formatRecommenderDisplay(row.recommender || row.recommenderName || row.inviter);
+                    const paymentInfo = getAttendeePaymentInfo(row);
 
                     return (
                       <tr
@@ -1086,20 +1154,42 @@ export default function EventA4PrintModal({
                             {row.club || "สงสพัท"}
                           </span>
                         </td>
-                        <td className="pt-1.5 pb-2.5 px-1.5 text-center font-mono text-slate-700 text-[10px] align-middle whitespace-nowrap">
+                        <td className="pt-1.5 pb-2.5 px-1.5 text-center font-mono text-slate-700 text-[10px] border-r border-slate-200 align-middle whitespace-nowrap">
                           {row.phone || "-"}
+                        </td>
+                        <td className="pt-1.5 pb-2.5 px-1.5 text-center font-mono align-middle text-[10.5px] whitespace-nowrap">
+                          {paymentInfo.isFree ? (
+                            <span className="text-red-600 font-normal">ฟรี</span>
+                          ) : (
+                            <span className="font-normal text-slate-700">{paymentInfo.text}</span>
+                          )}
                         </td>
                       </tr>
                     );
                   })
                 ) : (
                   <tr>
-                    <td colSpan="6" className="py-12 text-center text-slate-400 italic">
+                    <td colSpan={7} className="py-12 text-center text-slate-400 italic">
                       ยังไม่มีข้อมูลการลงทะเบียนของแขกรับเชิญ
                     </td>
                   </tr>
                 )}
               </tbody>
+              <tfoot>
+                <tr className="bg-slate-100 font-bold border-t-2 border-slate-400">
+                  <td
+                    colSpan={6}
+                    className="pt-1.5 pb-2.5 px-3 text-right text-slate-800 border-r border-slate-300 font-bold text-[10px]"
+                  >
+                    {page.sectionTotalPages > 1
+                      ? `รวมหน้านี้ ${page.pageTotalAmount.toLocaleString()} บาท • ยอดรวมทั้งสิ้น (${page.totalItemsCount} รายการ):`
+                      : `ยอดรวมทั้งสิ้น (${page.totalItemsCount} รายการ):`}
+                  </td>
+                  <td className="pt-1.5 pb-2.5 px-1.5 text-center text-slate-900 font-mono font-bold text-[10.5px] whitespace-nowrap">
+                    {page.sectionGrandTotal.toLocaleString()} บาท
+                  </td>
+                </tr>
+              </tfoot>
             </table>
           )}
 
@@ -1323,7 +1413,7 @@ export default function EventA4PrintModal({
           <div key={page.pageNumber} className="mb-8 shadow-2xl rounded">
             <div
               id={`a4-page-render-${page.pageNumber}`}
-              className="bg-white text-slate-900 p-6 sm:p-8 flex flex-col justify-between"
+              className="bg-white text-slate-900 p-6 flex flex-col justify-between"
               style={{
                 width: "794px",
                 height: "1123px",
@@ -1579,7 +1669,7 @@ export default function EventA4PrintModal({
                   >
                     <div
                       id={`a4-page-render-${page.pageNumber}`}
-                      className="bg-white text-slate-900 p-6 sm:p-8 flex flex-col justify-between"
+                      className="bg-white text-slate-900 p-6 flex flex-col justify-between"
                       style={{
                         width: "794px",
                         height: "1123px",
@@ -1718,13 +1808,15 @@ export default function EventA4PrintModal({
                         <th className="py-1.5 px-2.5 border border-slate-300">ชื่อ - นามสกุล (ชื่อเล่น)</th>
                         <th className="py-1.5 px-1.5 text-center w-24 border border-slate-300">เบอร์โทรศัพท์</th>
                         <th className="py-1.5 px-1.5 text-center w-20 border border-slate-300">ประเภท / สังกัด</th>
-                        <th className="py-1.5 px-1.5 text-center w-28 border border-slate-300 whitespace-nowrap">สถานะ</th>
+                        <th className="py-1.5 px-1.5 text-center w-24 border border-slate-300 whitespace-nowrap">สถานะ</th>
+                        <th className="py-1.5 px-1.5 text-center w-16 border border-slate-300 whitespace-nowrap">ชำระ</th>
                       </tr>
                     </thead>
                     <tbody>
                       {pg.items.map((row, rIdx) => {
                         const rowNum = pg.startIndex + rIdx;
                         const isRotary = (row.club || "").includes("โรตารี่");
+                        const paymentInfo = getAttendeePaymentInfo(row);
 
                         return (
                           <tr
@@ -1763,15 +1855,37 @@ export default function EventA4PrintModal({
                                 {isRotary ? "โรตารี่" : "สงสพัท"}
                               </span>
                             </td>
-                            <td className="pt-1.5 pb-2.5 px-1.5 text-center whitespace-nowrap align-middle">
+                            <td className="pt-1.5 pb-2.5 px-1.5 text-center whitespace-nowrap border-r border-slate-200 align-middle">
                               <span className="text-[9.5px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 whitespace-nowrap inline-block">
                                 ✓ ลงทะเบียนแล้ว
                               </span>
+                            </td>
+                            <td className="pt-1.5 pb-2.5 px-1.5 text-center font-mono align-middle text-[10.5px] whitespace-nowrap">
+                              {paymentInfo.isFree ? (
+                                <span className="text-red-600 font-normal">ฟรี</span>
+                              ) : (
+                                <span className="font-normal text-slate-700">{paymentInfo.text}</span>
+                              )}
                             </td>
                           </tr>
                         );
                       })}
                     </tbody>
+                    <tfoot>
+                      <tr className="bg-slate-100 font-bold border-t-2 border-slate-400">
+                        <td
+                          colSpan={6}
+                          className="pt-1.5 pb-2.5 px-3 text-right text-slate-800 border-r border-slate-300 font-bold text-[10px]"
+                        >
+                          {pg.sectionTotalPages > 1
+                            ? `รวมหน้านี้ ${pg.pageTotalAmount.toLocaleString()} บาท • ยอดรวมทั้งสิ้น (${pg.totalItemsCount} รายการ):`
+                            : `ยอดรวมทั้งสิ้น (${pg.totalItemsCount} รายการ):`}
+                        </td>
+                        <td className="pt-1.5 pb-2.5 px-1.5 text-center text-slate-900 font-mono font-bold text-[10.5px] whitespace-nowrap">
+                          {pg.sectionGrandTotal.toLocaleString()} บาท
+                        </td>
+                      </tr>
+                    </tfoot>
                   </table>
                 )}
 
@@ -1785,10 +1899,11 @@ export default function EventA4PrintModal({
                       >
                         <th className="py-1.5 px-1.5 text-center w-10 border border-slate-300">ลำดับ</th>
                         <th className="py-1.5 px-1.5 text-center w-16 border border-slate-300">เลขที่บัตร</th>
-                        <th className="py-1.5 px-2.5 border border-slate-300 min-w-[150px]">ชื่อ - นามสกุล (ชื่อเล่น)</th>
-                        <th className="py-1.5 px-2.5 border border-slate-300 min-w-[160px]">ชื่อ - นามสกุล (ชื่อเล่น) (ผู้ชักชวน)</th>
-                        <th className="py-1.5 px-1.5 text-center w-20 border border-slate-300">สังกัด</th>
+                        <th className="py-1.5 px-2.5 border border-slate-300 min-w-[140px]">ชื่อ - นามสกุล (ชื่อเล่น)</th>
+                        <th className="py-1.5 px-2.5 border border-slate-300 min-w-[150px]">ชื่อ - นามสกุล (ชื่อเล่น) (ผู้ชักชวน)</th>
+                        <th className="py-1.5 px-1.5 text-center w-16 border border-slate-300">สังกัด</th>
                         <th className="py-1.5 px-1.5 text-center w-24 border border-slate-300">โทร</th>
+                        <th className="py-1.5 px-1.5 text-center w-16 border border-slate-300 whitespace-nowrap">ชำระ</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1797,6 +1912,7 @@ export default function EventA4PrintModal({
                           const rowNum = pg.startIndex + rIdx;
                           const isRotary = (row.club || "").includes("โรตารี่");
                           const recommenderDisplay = formatRecommenderDisplay(row.recommender || row.recommenderName || row.inviter);
+                          const paymentInfo = getAttendeePaymentInfo(row);
 
                           return (
                             <tr
@@ -1834,23 +1950,45 @@ export default function EventA4PrintModal({
                                       : "bg-blue-100 text-blue-700 border border-blue-300"
                                   }`}
                                 >
-                                  {row.club || "สงสพัท"}
+                                  {isRotary ? "โรตารี่" : "สงสพัท"}
                                 </span>
                               </td>
-                              <td className="pt-1.5 pb-2.5 px-1.5 text-center font-mono text-slate-700 font-medium whitespace-nowrap align-middle">
+                              <td className="pt-1.5 pb-2.5 px-1.5 text-center font-mono text-slate-700 font-medium border-r border-slate-200 whitespace-nowrap align-middle">
                                 {row.phone || "-"}
+                              </td>
+                              <td className="pt-1.5 pb-2.5 px-1.5 text-center font-mono align-middle text-[10.5px] whitespace-nowrap">
+                                {paymentInfo.isFree ? (
+                                  <span className="text-red-600 font-normal">ฟรี</span>
+                                ) : (
+                                  <span className="font-normal text-slate-700">{paymentInfo.text}</span>
+                                )}
                               </td>
                             </tr>
                           );
                         })
                       ) : (
                         <tr>
-                          <td colSpan="6" className="py-12 text-center text-slate-400 italic">
+                          <td colSpan={7} className="py-12 text-center text-slate-400 italic">
                             ยังไม่มีข้อมูลการลงทะเบียนของแขกรับเชิญ
                           </td>
                         </tr>
                       )}
                     </tbody>
+                    <tfoot>
+                      <tr className="bg-slate-100 font-bold border-t-2 border-slate-400">
+                        <td
+                          colSpan={6}
+                          className="pt-1.5 pb-2.5 px-3 text-right text-slate-800 border-r border-slate-300 font-bold text-[10px]"
+                        >
+                          {pg.sectionTotalPages > 1
+                            ? `รวมหน้านี้ ${pg.pageTotalAmount.toLocaleString()} บาท • ยอดรวมทั้งสิ้น (${pg.totalItemsCount} รายการ):`
+                            : `ยอดรวมทั้งสิ้น (${pg.totalItemsCount} รายการ):`}
+                        </td>
+                        <td className="pt-1.5 pb-2.5 px-1.5 text-center text-slate-900 font-mono font-bold text-[10.5px] whitespace-nowrap">
+                          {pg.sectionGrandTotal.toLocaleString()} บาท
+                        </td>
+                      </tr>
+                    </tfoot>
                   </table>
                 )}
 
@@ -2164,7 +2302,7 @@ export default function EventA4PrintModal({
 
             {/* Quick Tip Alert */}
             <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-2.5 text-[11px] text-amber-200/90 leading-relaxed">
-              💡 <strong>สาเหตุที่ภาพสลับ:</strong> การส่งหลายไฟล์พร้อมกัน ความเร็วเน็ตของแต่ละไฟล์อาจไม่เท่ากัน ทำให้ LINE แสดงผลไฟล์ที่เสร็จก่อน แนะนำให้เลือก <strong>"รวมเป็น 1 รูปยาว"</strong> จะเรียงตามลำดับ 1 ถึง {a4Pages.length} แน่นอน 100% ครับ
+              💡 <strong>ข้อแนะนำ:</strong> การส่งรูปแยก {a4Pages.length} แผ่นเข้า LINE ทุกรูปจะมีเลขลำดับกำกับ 01 ถึง 0{a4Pages.length} ชัดเจน หรือสามารถกด <strong>"แชร์แผ่นนี้"</strong> ในแต่ละแผ่นเพื่อส่งเฉพาะหน้าที่ต้องการได้ทันทีครับ
             </div>
 
             <div className="pt-1 flex items-center justify-between border-t border-white/10">
