@@ -707,8 +707,8 @@ export default function EventPublicDataSheetModal({
                       <th className="py-2.5 px-4 min-w-[200px] border-r border-white/5 print:border-gray-300">ชื่อ - นามสกุล (ชื่อเล่น)</th>
                       <th className="py-2.5 px-3.5 min-w-[130px] border-r border-white/5 print:border-gray-300">ประเภท / สังกัด</th>
                       <th className="py-2.5 px-3.5 text-center min-w-[100px] border-r border-white/5 print:border-gray-300">สถานะ</th>
-                      <th className="py-2.5 px-3.5 text-center min-w-[80px] border-r border-white/5 print:border-gray-300">ชำระ</th>
-                      <th className="py-2.5 px-3.5 text-center min-w-[110px] print:border-gray-300">สนับสนุน</th>
+                      <th className="py-2.5 px-3.5 text-center min-w-[70px] border-r border-white/5 print:border-gray-300">ชำระ</th>
+                      <th className="py-2.5 px-3.5 text-center min-w-[70px] print:border-gray-300">สนับสนุน</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5 print:divide-gray-300">
@@ -733,8 +733,8 @@ export default function EventPublicDataSheetModal({
                             </td>
 
                             {/* ชื่อ - นามสกุล */}
-                            <td className="py-2.5 px-4 font-semibold text-white border-r border-white/5 print:border-gray-300 print:text-gray-900 align-middle">
-                              <div className="flex items-center space-x-1.5">
+                            <td className="py-2.5 px-4 font-semibold text-white border-r border-white/5 print:border-gray-300 print:text-gray-900 align-middle whitespace-nowrap">
+                              <div className="flex items-center space-x-1.5 whitespace-nowrap">
                                 <span>{r.name}</span>
                                 {r.nickname && (
                                   <span className="text-amber-300 font-normal text-[11px] print:text-gray-700">
@@ -785,9 +785,8 @@ export default function EventPublicDataSheetModal({
                                   {Number(sponsorInfo.amount).toLocaleString()}
                                 </span>
                               ) : sponsorInfo.type === "item" ? (
-                                <span className="text-[10px] leading-tight text-slate-300 print:text-gray-700 font-medium block">
-                                  {sponsorInfo.itemName}
-                                  {sponsorInfo.itemQuantity ? ` (${sponsorInfo.itemQuantity})` : ""}
+                                <span className="font-bold text-teal-300 print:text-teal-800 text-[11px] leading-tight block">
+                                  สิ่งของ
                                 </span>
                               ) : (
                                 <span className="text-slate-500 font-mono">-</span>
@@ -833,8 +832,8 @@ export default function EventPublicDataSheetModal({
                       <th className="py-2.5 px-4 min-w-[200px] border-r border-white/5 print:border-gray-300">ชื่อ - นามสกุล (ชื่อเล่น) (ผู้ชักชวน)</th>
                       <th className="py-2.5 px-3.5 min-w-[120px] text-center border-r border-white/5 print:border-gray-300">สังกัด</th>
                       <th className="py-2.5 px-3.5 text-center min-w-[120px] border-r border-white/5 print:border-gray-300">โทร</th>
-                      <th className="py-2.5 px-3.5 text-center min-w-[80px] border-r border-white/5 print:border-gray-300">ชำระ</th>
-                      <th className="py-2.5 px-3.5 text-center min-w-[110px] print:border-gray-300">สนับสนุน</th>
+                      <th className="py-2.5 px-3.5 text-center min-w-[70px] border-r border-white/5 print:border-gray-300">ชำระ</th>
+                      <th className="py-2.5 px-3.5 text-center min-w-[70px] print:border-gray-300">สนับสนุน</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5 print:divide-gray-300">
@@ -854,8 +853,8 @@ export default function EventPublicDataSheetModal({
                             <td className="py-2.5 px-3.5 font-mono font-bold text-purple-400 border-r border-white/5 print:border-gray-300 print:text-gray-900 whitespace-nowrap align-middle">
                               {r.ticketNo}
                             </td>
-                            <td className="py-2.5 px-4 font-semibold text-white border-r border-white/5 print:border-gray-300 print:text-gray-900 align-middle">
-                              <div className="flex items-center space-x-1.5">
+                            <td className="py-2.5 px-4 font-semibold text-white border-r border-white/5 print:border-gray-300 print:text-gray-900 align-middle whitespace-nowrap">
+                              <div className="flex items-center space-x-1.5 whitespace-nowrap">
                                 <span>{r.name}</span>
                                 {r.nickname && (
                                   <span className="text-purple-300 font-normal text-[11px] print:text-gray-700">
@@ -864,8 +863,10 @@ export default function EventPublicDataSheetModal({
                                 )}
                               </div>
                             </td>
-                            <td className="py-2.5 px-4 font-medium text-slate-200 border-r border-white/5 print:border-gray-300 print:text-gray-900 align-middle">
-                              {formatRecommenderDisplay(r.recommender || r.recommenderName || r.inviter)}
+                            <td className="py-2.5 px-4 font-medium text-slate-200 border-r border-white/5 print:border-gray-300 print:text-gray-900 align-middle whitespace-nowrap">
+                              <span className="whitespace-nowrap">
+                                {formatRecommenderDisplay(r.recommender || r.recommenderName || r.inviter)}
+                              </span>
                             </td>
                             <td className="py-2.5 px-3.5 text-center border-r border-white/5 print:border-gray-300 whitespace-nowrap align-middle">
                               <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 print:bg-indigo-100 print:text-indigo-900 print:border-indigo-300">
@@ -886,9 +887,8 @@ export default function EventPublicDataSheetModal({
                                   {Number(sponsorInfo.amount).toLocaleString()}
                                 </span>
                               ) : sponsorInfo.type === "item" ? (
-                                <span className="text-[10px] leading-tight text-slate-300 print:text-gray-700 font-medium block">
-                                  {sponsorInfo.itemName}
-                                  {sponsorInfo.itemQuantity ? ` (${sponsorInfo.itemQuantity})` : ""}
+                                <span className="font-bold text-teal-300 print:text-teal-800 text-[11px] leading-tight block">
+                                  สิ่งของ
                                 </span>
                               ) : (
                                 <span className="text-slate-500 font-mono">-</span>
