@@ -42,9 +42,8 @@ function getThaiA4ExtractionTime(d = new Date()) {
   };
 }
 
-// 21 rows per page guarantees 21 rows + 1 total row (22 rows total) fits exactly into 1123px A4 height without cut off
-// It also balances 42 attendees perfectly into exactly 2 pages of 21 items, and 21 club members into exactly 1 page
-const ROWS_PER_PAGE = 21;
+// 20 rows per page guarantees 20 rows + 2 total rows fits cleanly into 1123px A4 height without cut off
+const ROWS_PER_PAGE = 20;
 
 export default function EventA4PrintModal({
   isOpen,
@@ -1224,22 +1223,56 @@ export default function EventA4PrintModal({
                 })}
               </tbody>
               <tfoot>
-                <tr className="bg-slate-100 font-bold border-t-2 border-slate-400">
-                  <td
-                    colSpan={6}
-                    className="pt-1.5 pb-2.5 px-3 text-right text-slate-800 border-r border-slate-300 font-bold text-[10px]"
-                  >
-                    {page.sectionTotalPages > 1
-                      ? `รวมหน้านี้ ${page.pageRegTotalAmount.toLocaleString()} บ. • ยอดรวมชำระทั้งสิ้น (${page.totalItemsCount} รายการ):`
-                      : `ยอดรวมชำระทั้งสิ้น (${page.totalItemsCount} รายการ):`}
-                  </td>
-                  <td className="pt-1.5 pb-2.5 px-1 text-center text-slate-900 font-mono font-bold text-[10px] whitespace-nowrap border-r border-slate-300">
-                    {page.sectionRegGrandTotal.toLocaleString()}
-                  </td>
-                  <td className="pt-1.5 pb-2.5 px-1 text-center text-emerald-800 font-mono font-bold text-[10px] whitespace-nowrap">
-                    {page.sectionSponsorCashGrandTotal > 0 ? page.sectionSponsorCashGrandTotal.toLocaleString() : "-"}
-                  </td>
-                </tr>
+                {page.sectionTotalPages > 1 ? (
+                  <>
+                    {/* แถวที่ 1: ยอดรวมเฉพาะหน้านี้ (ตัวหนังสือบาง) */}
+                    <tr className="bg-slate-50 border-t-2 border-slate-300">
+                      <td
+                        colSpan={6}
+                        className="pt-1 pb-1.5 px-3 text-right text-slate-700 font-normal border-r border-slate-200 text-[10px]"
+                      >
+                        ยอดรวมเฉพาะหน้านี้ ({page.items.length} รายการ):
+                      </td>
+                      <td className="pt-1 pb-1.5 px-1 text-center text-slate-700 font-mono font-normal text-[10px] whitespace-nowrap border-r border-slate-200">
+                        {page.pageRegTotalAmount.toLocaleString()}
+                      </td>
+                      <td className="pt-1 pb-1.5 px-1 text-center text-slate-600 font-mono font-normal text-[10px] whitespace-nowrap">
+                        {page.pageSponsorCashTotal > 0 ? page.pageSponsorCashTotal.toLocaleString() : "-"}
+                      </td>
+                    </tr>
+
+                    {/* แถวที่ 2: ยอดรวมทั้งสิ้น (ตัวหนังสือหนา) */}
+                    <tr className="bg-slate-100 font-bold border-t border-slate-300">
+                      <td
+                        colSpan={6}
+                        className="pt-1.5 pb-2 px-3 text-right text-slate-900 border-r border-slate-300 font-bold text-[10px]"
+                      >
+                        ยอดรวมชำระทั้งสิ้น ({page.totalItemsCount} รายการ):
+                      </td>
+                      <td className="pt-1.5 pb-2 px-1 text-center text-slate-900 font-mono font-bold text-[10.5px] whitespace-nowrap border-r border-slate-300">
+                        {page.sectionRegGrandTotal.toLocaleString()}
+                      </td>
+                      <td className="pt-1.5 pb-2 px-1 text-center text-emerald-800 font-mono font-bold text-[10.5px] whitespace-nowrap">
+                        {page.sectionSponsorCashGrandTotal > 0 ? page.sectionSponsorCashGrandTotal.toLocaleString() : "-"}
+                      </td>
+                    </tr>
+                  </>
+                ) : (
+                  <tr className="bg-slate-100 font-bold border-t-2 border-slate-400">
+                    <td
+                      colSpan={6}
+                      className="pt-1.5 pb-2.5 px-3 text-right text-slate-800 border-r border-slate-300 font-bold text-[10px]"
+                    >
+                      ยอดรวมชำระทั้งสิ้น ({page.totalItemsCount} รายการ):
+                    </td>
+                    <td className="pt-1.5 pb-2.5 px-1 text-center text-slate-900 font-mono font-bold text-[10.5px] whitespace-nowrap border-r border-slate-300">
+                      {page.sectionRegGrandTotal.toLocaleString()}
+                    </td>
+                    <td className="pt-1.5 pb-2.5 px-1 text-center text-emerald-800 font-mono font-bold text-[10.5px] whitespace-nowrap">
+                      {page.sectionSponsorCashGrandTotal > 0 ? page.sectionSponsorCashGrandTotal.toLocaleString() : "-"}
+                    </td>
+                  </tr>
+                )}
               </tfoot>
             </table>
           )}
@@ -1352,22 +1385,56 @@ export default function EventA4PrintModal({
                 )}
               </tbody>
               <tfoot>
-                <tr className="bg-slate-100 font-bold border-t-2 border-slate-400">
-                  <td
-                    colSpan={6}
-                    className="pt-1.5 pb-2.5 px-3 text-right text-slate-800 border-r border-slate-300 font-bold text-[10px]"
-                  >
-                    {page.sectionTotalPages > 1
-                      ? `รวมหน้านี้ ${page.pageRegTotalAmount.toLocaleString()} บ. • ยอดรวมชำระทั้งสิ้น (${page.totalItemsCount} รายการ):`
-                      : `ยอดรวมชำระทั้งสิ้น (${page.totalItemsCount} รายการ):`}
-                  </td>
-                  <td className="pt-1.5 pb-2.5 px-1 text-center text-slate-900 font-mono font-bold text-[10px] whitespace-nowrap border-r border-slate-300">
-                    {page.sectionRegGrandTotal.toLocaleString()}
-                  </td>
-                  <td className="pt-1.5 pb-2.5 px-1 text-center text-emerald-800 font-mono font-bold text-[10px] whitespace-nowrap">
-                    {page.sectionSponsorCashGrandTotal > 0 ? page.sectionSponsorCashGrandTotal.toLocaleString() : "-"}
-                  </td>
-                </tr>
+                {page.sectionTotalPages > 1 ? (
+                  <>
+                    {/* แถวที่ 1: ยอดรวมเฉพาะหน้านี้ (ตัวหนังสือบาง) */}
+                    <tr className="bg-slate-50 border-t-2 border-slate-300">
+                      <td
+                        colSpan={6}
+                        className="pt-1 pb-1.5 px-3 text-right text-slate-700 font-normal border-r border-slate-200 text-[10px]"
+                      >
+                        ยอดรวมเฉพาะหน้านี้ ({page.items.length} รายการ):
+                      </td>
+                      <td className="pt-1 pb-1.5 px-1 text-center text-slate-700 font-mono font-normal text-[10px] whitespace-nowrap border-r border-slate-200">
+                        {page.pageRegTotalAmount.toLocaleString()}
+                      </td>
+                      <td className="pt-1 pb-1.5 px-1 text-center text-slate-600 font-mono font-normal text-[10px] whitespace-nowrap">
+                        {page.pageSponsorCashTotal > 0 ? page.pageSponsorCashTotal.toLocaleString() : "-"}
+                      </td>
+                    </tr>
+
+                    {/* แถวที่ 2: ยอดรวมทั้งสิ้น (ตัวหนังสือหนา) */}
+                    <tr className="bg-slate-100 font-bold border-t border-slate-300">
+                      <td
+                        colSpan={6}
+                        className="pt-1.5 pb-2 px-3 text-right text-slate-900 border-r border-slate-300 font-bold text-[10px]"
+                      >
+                        ยอดรวมชำระทั้งสิ้น ({page.totalItemsCount} รายการ):
+                      </td>
+                      <td className="pt-1.5 pb-2 px-1 text-center text-slate-900 font-mono font-bold text-[10.5px] whitespace-nowrap border-r border-slate-300">
+                        {page.sectionRegGrandTotal.toLocaleString()}
+                      </td>
+                      <td className="pt-1.5 pb-2 px-1 text-center text-emerald-800 font-mono font-bold text-[10.5px] whitespace-nowrap">
+                        {page.sectionSponsorCashGrandTotal > 0 ? page.sectionSponsorCashGrandTotal.toLocaleString() : "-"}
+                      </td>
+                    </tr>
+                  </>
+                ) : (
+                  <tr className="bg-slate-100 font-bold border-t-2 border-slate-400">
+                    <td
+                      colSpan={6}
+                      className="pt-1.5 pb-2.5 px-3 text-right text-slate-800 border-r border-slate-300 font-bold text-[10px]"
+                    >
+                      ยอดรวมชำระทั้งสิ้น ({page.totalItemsCount} รายการ):
+                    </td>
+                    <td className="pt-1.5 pb-2.5 px-1 text-center text-slate-900 font-mono font-bold text-[10.5px] whitespace-nowrap border-r border-slate-300">
+                      {page.sectionRegGrandTotal.toLocaleString()}
+                    </td>
+                    <td className="pt-1.5 pb-2.5 px-1 text-center text-emerald-800 font-mono font-bold text-[10.5px] whitespace-nowrap">
+                      {page.sectionSponsorCashGrandTotal > 0 ? page.sectionSponsorCashGrandTotal.toLocaleString() : "-"}
+                    </td>
+                  </tr>
+                )}
               </tfoot>
             </table>
           )}
@@ -2104,24 +2171,56 @@ export default function EventA4PrintModal({
                       })}
                     </tbody>
                     <tfoot>
-                      <tr className="bg-slate-100 font-bold border-t-2 border-slate-400">
-                        <td
-                          colSpan={6}
-                          className="pt-1.5 pb-2.5 px-3 text-right text-slate-800 border-r border-slate-300 font-bold text-[10px]"
-                        >
-                          {pg.sectionTotalPages > 1
-                            ? `รวมหน้านี้ ${pg.pageRegTotalAmount.toLocaleString()} บ. • ยอดรวมชำระทั้งสิ้น (${pg.totalItemsCount} รายการ):`
-                            : `ยอดรวมชำระทั้งสิ้น (${pg.totalItemsCount} รายการ):`}
-                        </td>
-                        <td className="pt-1.5 pb-2.5 px-1 text-center text-slate-900 font-mono font-bold text-[10px] whitespace-nowrap border-r border-slate-300">
-                          {pg.sectionRegGrandTotal.toLocaleString()}
-                        </td>
-                        <td className="pt-1.5 pb-2.5 px-1 text-center text-emerald-800 font-mono font-bold text-[10px] whitespace-nowrap">
-                          {pg.sectionSponsorCashGrandTotal > 0
-                            ? pg.sectionSponsorCashGrandTotal.toLocaleString()
-                            : "-"}
-                        </td>
-                      </tr>
+                      {pg.sectionTotalPages > 1 ? (
+                        <>
+                          {/* แถวที่ 1: ยอดรวมเฉพาะหน้านี้ (ตัวหนังสือบาง) */}
+                          <tr className="bg-slate-50 border-t-2 border-slate-300">
+                            <td
+                              colSpan={6}
+                              className="pt-1 pb-1.5 px-3 text-right text-slate-700 font-normal border-r border-slate-200 text-[10px]"
+                            >
+                              ยอดรวมเฉพาะหน้านี้ ({pg.items.length} รายการ):
+                            </td>
+                            <td className="pt-1 pb-1.5 px-1 text-center text-slate-700 font-mono font-normal text-[10px] whitespace-nowrap border-r border-slate-200">
+                              {pg.pageRegTotalAmount.toLocaleString()}
+                            </td>
+                            <td className="pt-1 pb-1.5 px-1 text-center text-slate-600 font-mono font-normal text-[10px] whitespace-nowrap">
+                              {pg.pageSponsorCashTotal > 0 ? pg.pageSponsorCashTotal.toLocaleString() : "-"}
+                            </td>
+                          </tr>
+
+                          {/* แถวที่ 2: ยอดรวมทั้งสิ้น (ตัวหนังสือหนา) */}
+                          <tr className="bg-slate-100 font-bold border-t border-slate-300">
+                            <td
+                              colSpan={6}
+                              className="pt-1.5 pb-2 px-3 text-right text-slate-900 border-r border-slate-300 font-bold text-[10px]"
+                            >
+                              ยอดรวมชำระทั้งสิ้น ({pg.totalItemsCount} รายการ):
+                            </td>
+                            <td className="pt-1.5 pb-2 px-1 text-center text-slate-900 font-mono font-bold text-[10.5px] whitespace-nowrap border-r border-slate-300">
+                              {pg.sectionRegGrandTotal.toLocaleString()}
+                            </td>
+                            <td className="pt-1.5 pb-2 px-1 text-center text-emerald-800 font-mono font-bold text-[10.5px] whitespace-nowrap">
+                              {pg.sectionSponsorCashGrandTotal > 0 ? pg.sectionSponsorCashGrandTotal.toLocaleString() : "-"}
+                            </td>
+                          </tr>
+                        </>
+                      ) : (
+                        <tr className="bg-slate-100 font-bold border-t-2 border-slate-400">
+                          <td
+                            colSpan={6}
+                            className="pt-1.5 pb-2.5 px-3 text-right text-slate-800 border-r border-slate-300 font-bold text-[10px]"
+                          >
+                            ยอดรวมชำระทั้งสิ้น ({pg.totalItemsCount} รายการ):
+                          </td>
+                          <td className="pt-1.5 pb-2.5 px-1 text-center text-slate-900 font-mono font-bold text-[10.5px] whitespace-nowrap border-r border-slate-300">
+                            {pg.sectionRegGrandTotal.toLocaleString()}
+                          </td>
+                          <td className="pt-1.5 pb-2.5 px-1 text-center text-emerald-800 font-mono font-bold text-[10.5px] whitespace-nowrap">
+                            {pg.sectionSponsorCashGrandTotal > 0 ? pg.sectionSponsorCashGrandTotal.toLocaleString() : "-"}
+                          </td>
+                        </tr>
+                      )}
                     </tfoot>
                   </table>
                 )}
@@ -2236,24 +2335,56 @@ export default function EventA4PrintModal({
                       )}
                     </tbody>
                     <tfoot>
-                      <tr className="bg-slate-100 font-bold border-t-2 border-slate-400">
-                        <td
-                          colSpan={6}
-                          className="pt-1.5 pb-2.5 px-3 text-right text-slate-800 border-r border-slate-300 font-bold text-[10px]"
-                        >
-                          {pg.sectionTotalPages > 1
-                            ? `รวมหน้านี้ ${pg.pageRegTotalAmount.toLocaleString()} บ. • ยอดรวมชำระทั้งสิ้น (${pg.totalItemsCount} รายการ):`
-                            : `ยอดรวมชำระทั้งสิ้น (${pg.totalItemsCount} รายการ):`}
-                        </td>
-                        <td className="pt-1.5 pb-2.5 px-1 text-center text-slate-900 font-mono font-bold text-[10px] whitespace-nowrap border-r border-slate-300">
-                          {pg.sectionRegGrandTotal.toLocaleString()}
-                        </td>
-                        <td className="pt-1.5 pb-2.5 px-1 text-center text-emerald-800 font-mono font-bold text-[10px] whitespace-nowrap">
-                          {pg.sectionSponsorCashGrandTotal > 0
-                            ? pg.sectionSponsorCashGrandTotal.toLocaleString()
-                            : "-"}
-                        </td>
-                      </tr>
+                      {pg.sectionTotalPages > 1 ? (
+                        <>
+                          {/* แถวที่ 1: ยอดรวมเฉพาะหน้านี้ (ตัวหนังสือบาง) */}
+                          <tr className="bg-slate-50 border-t-2 border-slate-300">
+                            <td
+                              colSpan={6}
+                              className="pt-1 pb-1.5 px-3 text-right text-slate-700 font-normal border-r border-slate-200 text-[10px]"
+                            >
+                              ยอดรวมเฉพาะหน้านี้ ({pg.items.length} รายการ):
+                            </td>
+                            <td className="pt-1 pb-1.5 px-1 text-center text-slate-700 font-mono font-normal text-[10px] whitespace-nowrap border-r border-slate-200">
+                              {pg.pageRegTotalAmount.toLocaleString()}
+                            </td>
+                            <td className="pt-1 pb-1.5 px-1 text-center text-slate-600 font-mono font-normal text-[10px] whitespace-nowrap">
+                              {pg.pageSponsorCashTotal > 0 ? pg.pageSponsorCashTotal.toLocaleString() : "-"}
+                            </td>
+                          </tr>
+
+                          {/* แถวที่ 2: ยอดรวมทั้งสิ้น (ตัวหนังสือหนา) */}
+                          <tr className="bg-slate-100 font-bold border-t border-slate-300">
+                            <td
+                              colSpan={6}
+                              className="pt-1.5 pb-2 px-3 text-right text-slate-900 border-r border-slate-300 font-bold text-[10px]"
+                            >
+                              ยอดรวมชำระทั้งสิ้น ({pg.totalItemsCount} รายการ):
+                            </td>
+                            <td className="pt-1.5 pb-2 px-1 text-center text-slate-900 font-mono font-bold text-[10.5px] whitespace-nowrap border-r border-slate-300">
+                              {pg.sectionRegGrandTotal.toLocaleString()}
+                            </td>
+                            <td className="pt-1.5 pb-2 px-1 text-center text-emerald-800 font-mono font-bold text-[10.5px] whitespace-nowrap">
+                              {pg.sectionSponsorCashGrandTotal > 0 ? pg.sectionSponsorCashGrandTotal.toLocaleString() : "-"}
+                            </td>
+                          </tr>
+                        </>
+                      ) : (
+                        <tr className="bg-slate-100 font-bold border-t-2 border-slate-400">
+                          <td
+                            colSpan={6}
+                            className="pt-1.5 pb-2.5 px-3 text-right text-slate-800 border-r border-slate-300 font-bold text-[10px]"
+                          >
+                            ยอดรวมชำระทั้งสิ้น ({pg.totalItemsCount} รายการ):
+                          </td>
+                          <td className="pt-1.5 pb-2.5 px-1 text-center text-slate-900 font-mono font-bold text-[10.5px] whitespace-nowrap border-r border-slate-300">
+                            {pg.sectionRegGrandTotal.toLocaleString()}
+                          </td>
+                          <td className="pt-1.5 pb-2.5 px-1 text-center text-emerald-800 font-mono font-bold text-[10.5px] whitespace-nowrap">
+                            {pg.sectionSponsorCashGrandTotal > 0 ? pg.sectionSponsorCashGrandTotal.toLocaleString() : "-"}
+                          </td>
+                        </tr>
+                      )}
                     </tfoot>
                   </table>
                 )}
