@@ -319,7 +319,12 @@ export default function EventPublicDataSheetModal({
     };
   }, [registrations, consolidatedSponsors, activeClubTab]);
 
-  // Helper to extract and format payment information (normal font, red for ฟรี)
+  // Helper to extract and format payment information
+  // เงื่อนไข:
+  // 1. ถ้ายอดโอนเกินค่าลงทะเบียน (เช่น 1,500 แต่ค่าลงทะเบียน 500) ให้แสดง 500 พอ
+  // 2. 500 บาท: ตัวหนังสือสีน้ำเงิน ตัวหนา
+  // 3. 250 บาท: ตัวหนังสือสีน้ำเงิน ตัวบาง
+  // 4. ฟรี: ตัวหนังสือสีแดง ตัวบาง
   const getAttendeePaymentInfo = (row) => {
     const isFree = Boolean(
       row?.isFree === true ||
@@ -335,14 +340,75 @@ export default function EventPublicDataSheetModal({
             : null);
 
     if (isFree || rawAmt === 0) {
-      return { isFree: true, text: "ฟรี", amount: 0 };
+      return {
+        isFree: true,
+        text: "ฟรี",
+        amount: 0,
+        className: "text-red-400 font-normal print:text-red-600"
+      };
     }
 
-    const finalAmount = rawAmt !== null ? rawAmt : 500;
+    const regFee = Number(row?.amount || 500);
+    const finalAmount = rawAmt !== null ? Math.min(rawAmt, regFee) : 500;
+
+    let className = "text-blue-400 font-normal font-mono print:text-blue-700";
+    if (finalAmount === 500) {
+      className = "text-blue-400 font-bold font-mono print:text-blue-700";
+    } else if (finalAmount === 250) {
+      className = "text-blue-400 font-normal font-mono print:text-blue-700";
+    }
+
     return {
       isFree: false,
       text: finalAmount.toLocaleString(),
-      amount: finalAmount
+      amount: finalAmount,
+      className
+    };
+  };
+
+  // Helper หาข้อมูลผู้สนับสนุนที่เชื่อมโยงกับผู้ลงทะเบียน
+  const normalize = (s) => (s ? String(s).replace(/[\u0e4c\s]/g, "").trim().toLowerCase() : "");
+
+  const getAttendeeSponsorInfo = (row) => {
+    const normRowName = normalize(row.name);
+    const normRowPhone = (row.phone || "").replace(/\D/g, "");
+    const rowTicket = (row.ticketNo || "").trim().toUpperCase();
+
+    const match = consolidatedSponsors.find((s) => {
+      const sId = String(s.id || "");
+      if (rowTicket && sId.includes(rowTicket)) return true;
+
+      const normSName = normalize(s.name);
+      if (normRowName && normSName) {
+        if (normRowName === normSName) return true;
+        if (normRowName.length >= 4 && (normRowName.includes(normSName) || normSName.includes(normRowName))) {
+          return true;
+        }
+      }
+
+      const normSPhone = (s.phone || "").replace(/\D/g, "");
+      if (normRowPhone && normSPhone && normRowPhone.length >= 9 && normRowPhone === normSPhone) {
+        return true;
+      }
+      return false;
+    });
+
+    if (!match) return { type: "none" };
+
+    if (match.sponsorType === "cash") {
+      return {
+        type: "cash",
+        amount: Number(match.amount || 0),
+        source: match.source
+      };
+    }
+
+    return {
+      type: "item",
+      itemName: match.itemName || "",
+      itemQuantity: match.itemQuantity || "",
+      itemNote: match.itemNote || "",
+      source: match.source
     };
   };
 
@@ -350,9 +416,23 @@ export default function EventPublicDataSheetModal({
     return filteredAttendees.reduce((sum, r) => sum + getAttendeePaymentInfo(r).amount, 0);
   }, [filteredAttendees]);
 
+  const totalAttendeesSponsorCash = useMemo(() => {
+    return filteredAttendees.reduce((sum, r) => {
+      const s = getAttendeeSponsorInfo(r);
+      return sum + (s.type === "cash" ? s.amount : 0);
+    }, 0);
+  }, [filteredAttendees, consolidatedSponsors]);
+
   const totalGuestsPaid = useMemo(() => {
     return filteredGuests.reduce((sum, r) => sum + getAttendeePaymentInfo(r).amount, 0);
   }, [filteredGuests]);
+
+  const totalGuestsSponsorCash = useMemo(() => {
+    return filteredGuests.reduce((sum, r) => {
+      const s = getAttendeeSponsorInfo(r);
+      return sum + (s.type === "cash" ? s.amount : 0);
+    }, 0);
+  }, [filteredGuests, consolidatedSponsors]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-fadeIn overflow-y-auto print:p-0 print:bg-white print:fixed print:inset-0">
@@ -627,13 +707,15 @@ export default function EventPublicDataSheetModal({
                       <th className="py-2.5 px-4 min-w-[200px] border-r border-white/5 print:border-gray-300">ชื่อ - นามสกุล (ชื่อเล่น)</th>
                       <th className="py-2.5 px-3.5 min-w-[130px] border-r border-white/5 print:border-gray-300">ประเภท / สังกัด</th>
                       <th className="py-2.5 px-3.5 text-center min-w-[100px] border-r border-white/5 print:border-gray-300">สถานะ</th>
-                      <th className="py-2.5 px-3.5 text-center min-w-[80px] print:border-gray-300">ชำระ</th>
+                      <th className="py-2.5 px-3.5 text-center min-w-[80px] border-r border-white/5 print:border-gray-300">ชำระ</th>
+                      <th className="py-2.5 px-3.5 text-center min-w-[110px] print:border-gray-300">สนับสนุน</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5 print:divide-gray-300">
                     {filteredAttendees.length > 0 ? (
                       filteredAttendees.map((r, idx) => {
                         const paymentInfo = getAttendeePaymentInfo(r);
+                        const sponsorInfo = getAttendeeSponsorInfo(r);
 
                         return (
                           <tr 
@@ -690,13 +772,25 @@ export default function EventPublicDataSheetModal({
                             </td>
 
                             {/* ชำระ */}
-                            <td className="py-2.5 px-3.5 text-center font-mono align-middle whitespace-nowrap">
-                              {paymentInfo.isFree ? (
-                                <span className="text-red-400 font-normal print:text-red-600">ฟรี</span>
-                              ) : (
-                                <span className="font-normal text-slate-300 print:text-gray-700">
-                                  {paymentInfo.text}
+                            <td className="py-2.5 px-3.5 text-center align-middle whitespace-nowrap border-r border-white/5 print:border-gray-300">
+                              <span className={paymentInfo.className}>
+                                {paymentInfo.text}
+                              </span>
+                            </td>
+
+                            {/* สนับสนุน */}
+                            <td className="py-2.5 px-3.5 text-center align-middle whitespace-nowrap">
+                              {sponsorInfo.type === "cash" ? (
+                                <span className="font-bold font-mono text-emerald-400 print:text-emerald-700">
+                                  {Number(sponsorInfo.amount).toLocaleString()}
                                 </span>
+                              ) : sponsorInfo.type === "item" ? (
+                                <span className="text-[10px] leading-tight text-slate-300 print:text-gray-700 font-medium block">
+                                  {sponsorInfo.itemName}
+                                  {sponsorInfo.itemQuantity ? ` (${sponsorInfo.itemQuantity})` : ""}
+                                </span>
+                              ) : (
+                                <span className="text-slate-500 font-mono">-</span>
                               )}
                             </td>
                           </tr>
@@ -704,7 +798,7 @@ export default function EventPublicDataSheetModal({
                       })
                     ) : (
                       <tr>
-                        <td colSpan={6} className="py-8 text-center text-slate-400 text-xs">
+                        <td colSpan={7} className="py-8 text-center text-slate-400 text-xs">
                           ไม่พบข้อมูลผู้ลงทะเบียนในหมวดนี้ครับ
                         </td>
                       </tr>
@@ -715,8 +809,11 @@ export default function EventPublicDataSheetModal({
                       <td colSpan={5} className="py-2.5 px-4 text-right text-slate-300 print:text-gray-800 font-bold border-r border-white/5 print:border-gray-300">
                         ยอดรวมทั้งสิ้น ({filteredAttendees.length} รายการ):
                       </td>
-                      <td className="py-2.5 px-3.5 text-center font-mono font-bold text-amber-400 print:text-gray-900 whitespace-nowrap">
+                      <td className="py-2.5 px-3.5 text-center font-mono font-bold text-blue-400 print:text-blue-800 whitespace-nowrap border-r border-white/5 print:border-gray-300">
                         {totalAttendeesPaid.toLocaleString()} บาท
+                      </td>
+                      <td className="py-2.5 px-3.5 text-center font-mono font-bold text-emerald-400 print:text-emerald-800 whitespace-nowrap">
+                        {totalAttendeesSponsorCash > 0 ? `${totalAttendeesSponsorCash.toLocaleString()} บาท` : "-"}
                       </td>
                     </tr>
                   </tfoot>
@@ -736,13 +833,15 @@ export default function EventPublicDataSheetModal({
                       <th className="py-2.5 px-4 min-w-[200px] border-r border-white/5 print:border-gray-300">ชื่อ - นามสกุล (ชื่อเล่น) (ผู้ชักชวน)</th>
                       <th className="py-2.5 px-3.5 min-w-[120px] text-center border-r border-white/5 print:border-gray-300">สังกัด</th>
                       <th className="py-2.5 px-3.5 text-center min-w-[120px] border-r border-white/5 print:border-gray-300">โทร</th>
-                      <th className="py-2.5 px-3.5 text-center min-w-[80px] print:border-gray-300">ชำระ</th>
+                      <th className="py-2.5 px-3.5 text-center min-w-[80px] border-r border-white/5 print:border-gray-300">ชำระ</th>
+                      <th className="py-2.5 px-3.5 text-center min-w-[110px] print:border-gray-300">สนับสนุน</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5 print:divide-gray-300">
                     {filteredGuests.length > 0 ? (
                       filteredGuests.map((r, idx) => {
                         const paymentInfo = getAttendeePaymentInfo(r);
+                        const sponsorInfo = getAttendeeSponsorInfo(r);
 
                         return (
                           <tr 
@@ -776,13 +875,23 @@ export default function EventPublicDataSheetModal({
                             <td className="py-2.5 px-3.5 text-center font-mono text-slate-300 border-r border-white/5 print:text-gray-700 whitespace-nowrap align-middle">
                               {r.phone || "-"}
                             </td>
-                            <td className="py-2.5 px-3.5 text-center font-mono align-middle whitespace-nowrap">
-                              {paymentInfo.isFree ? (
-                                <span className="text-red-400 font-normal print:text-red-600">ฟรี</span>
-                              ) : (
-                                <span className="font-normal text-slate-300 print:text-gray-700">
-                                  {paymentInfo.text}
+                            <td className="py-2.5 px-3.5 text-center align-middle whitespace-nowrap border-r border-white/5 print:border-gray-300">
+                              <span className={paymentInfo.className}>
+                                {paymentInfo.text}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3.5 text-center align-middle whitespace-nowrap">
+                              {sponsorInfo.type === "cash" ? (
+                                <span className="font-bold font-mono text-emerald-400 print:text-emerald-700">
+                                  {Number(sponsorInfo.amount).toLocaleString()}
                                 </span>
+                              ) : sponsorInfo.type === "item" ? (
+                                <span className="text-[10px] leading-tight text-slate-300 print:text-gray-700 font-medium block">
+                                  {sponsorInfo.itemName}
+                                  {sponsorInfo.itemQuantity ? ` (${sponsorInfo.itemQuantity})` : ""}
+                                </span>
+                              ) : (
+                                <span className="text-slate-500 font-mono">-</span>
                               )}
                             </td>
                           </tr>
@@ -790,7 +899,7 @@ export default function EventPublicDataSheetModal({
                       })
                     ) : (
                       <tr>
-                        <td colSpan={7} className="py-8 text-center text-slate-400 text-xs">
+                        <td colSpan={8} className="py-8 text-center text-slate-400 text-xs">
                           ไม่พบข้อมูลแขกรับเชิญในหมวดนี้ครับ
                         </td>
                       </tr>
@@ -801,8 +910,11 @@ export default function EventPublicDataSheetModal({
                       <td colSpan={6} className="py-2.5 px-4 text-right text-slate-300 print:text-gray-800 font-bold border-r border-white/5 print:border-gray-300">
                         ยอดรวมทั้งสิ้น ({filteredGuests.length} รายการ):
                       </td>
-                      <td className="py-2.5 px-3.5 text-center font-mono font-bold text-amber-400 print:text-gray-900 whitespace-nowrap">
+                      <td className="py-2.5 px-3.5 text-center font-mono font-bold text-blue-400 print:text-blue-800 whitespace-nowrap border-r border-white/5 print:border-gray-300">
                         {totalGuestsPaid.toLocaleString()} บาท
+                      </td>
+                      <td className="py-2.5 px-3.5 text-center font-mono font-bold text-emerald-400 print:text-emerald-800 whitespace-nowrap">
+                        {totalGuestsSponsorCash > 0 ? `${totalGuestsSponsorCash.toLocaleString()} บาท` : "-"}
                       </td>
                     </tr>
                   </tfoot>
@@ -998,6 +1110,31 @@ export default function EventPublicDataSheetModal({
                       </tr>
                     )}
                   </tbody>
+                  <tfoot className="bg-slate-900/90 font-bold border-t-2 border-white/10 print:bg-gray-100 print:border-gray-400">
+                    <tr>
+                      <td
+                        colSpan={4}
+                        className="py-2.5 px-4 text-right text-slate-300 print:text-gray-800 font-bold border-r border-white/5 print:border-gray-300"
+                      >
+                        ยอดรวมผู้สนับสนุนทั้งหมด ({filteredSponsors.length} รายการ):
+                      </td>
+                      <td
+                        colSpan={2}
+                        className="py-2.5 px-4 text-left font-bold text-xs"
+                      >
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                          <span className="text-emerald-400 print:text-emerald-700 font-mono font-bold">
+                            💵 เงินสดรวม: ฿{filteredSponsors.filter(s => s.sponsorType === "cash").reduce((sum, s) => sum + (Number(s.amount) || 0), 0).toLocaleString()} บาท
+                          </span>
+                          {filteredSponsors.filter(s => s.sponsorType === "item").length > 0 && (
+                            <span className="text-teal-300 print:text-teal-800 font-bold">
+                              🎁 สิ่งของ / รางวัลรวม: {filteredSponsors.filter(s => s.sponsorType === "item").length} รายการ
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             )}
