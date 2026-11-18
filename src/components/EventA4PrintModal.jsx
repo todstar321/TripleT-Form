@@ -544,32 +544,106 @@ export default function EventA4PrintModal({
 
   // LINE Share Summary Text
   const lineShareSummaryText = useMemo(() => {
-    const cashSponsorsTotal = sponsors
-      .filter((s) => s.sponsorType === "cash")
-      .reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
-    const itemSponsorsCount = sponsors.filter((s) => s.sponsorType === "item").length;
+    const songCount = cat2Items.length;
+    const rotaryCount = cat3Items.length;
 
-    const topInviter = inviterSummaryList[0];
+    let count500 = 0;
+    let count250 = 0;
+    let countFree = 0;
+    let otherCount = 0;
+    let otherAmount = 0;
+    let totalRegFee = 0;
+
+    sortedRegistrations.forEach((row) => {
+      const payInfo = getAttendeePaymentInfo(row);
+      if (payInfo.isFree || payInfo.amount === 0) {
+        countFree++;
+      } else if (payInfo.amount === 500) {
+        count500++;
+        totalRegFee += 500;
+      } else if (payInfo.amount === 250) {
+        count250++;
+        totalRegFee += 250;
+      } else {
+        otherCount++;
+        otherAmount += payInfo.amount;
+        totalRegFee += payInfo.amount;
+      }
+    });
+
+    const guestSongCount = guestItems.filter((r) => (r.club || "สงสพัท").includes("สงสพัท")).length;
+    const guestRotaryCount = guestItems.filter((r) => (r.club || "").includes("โรตารี่")).length;
+
+    const top3Inviters = inviterSummaryList.slice(0, 3);
+    const formatInviterLine = (inv, idx) => {
+      let name = (inv.inviterName || "").trim();
+      if (/^(นาย|นางสาว|นาง)\s*/.test(name)) {
+        name = name.replace(/^(นาย|นางสาว|นาง)\s*/, "คุณ");
+      } else if (!name.startsWith("คุณ")) {
+        name = `คุณ${name}`;
+      }
+      const nick = inv.inviterNickname ? ` (${inv.inviterNickname})` : "";
+      return `   ${idx + 1}.${name}${nick} (${inv.count} คน)`;
+    };
+
+    const cashSponsors = consolidatedSponsorsList.filter(
+      (s) => s.sponsorType === "cash" || Number(s.amount) > 0
+    );
+    const cashSponsorsTotal = cashSponsors.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
+
+    const itemSponsors = consolidatedSponsorsList.filter(
+      (s) => s.sponsorType === "item" || (!s.sponsorType && s.itemName)
+    );
+
+    const netTotal = totalRegFee + cashSponsorsTotal;
 
     return (
       `สรุปการลงทะเบียนเข้าร่วมกิจกรรมปีใหม่\n` +
       `${printTimestamp.dateStr}\n` +
       `${printTimestamp.timeStr}\n` +
       `━━━━━━━━━━\n` +
-      `📋 สรุปยอดล่าสุด:\n` +
+      `📋 สรุปข้อมูลล่าสุด :\n` +
       `• ผู้ลงทะเบียนรวม ${sortedRegistrations.length} ท่าน\n` +
-      `  - สโมสรสงสพัท ${cat2Items.length} ท่าน\n` +
-      `  - สโมสรโรตารี่ ${cat3Items.length} ท่าน\n` +
-      `  - แขกรับเชิญ/ผู้มีเกียรติ ${guestItems.length} ท่าน\n` +
-      (topInviter ? `  - ผู้เชิญแขกสูงสุด: ${topInviter.inviterName}${topInviter.inviterNickname ? ` (${topInviter.inviterNickname})` : ""} (${topInviter.count} คน)\n` : "") +
-      `• ผู้สนับสนุนกิจกรรม: ${sponsors.length} ราย\n` +
-      `  - ยอดเงินสดสนับสนุน ${cashSponsorsTotal.toLocaleString()} บาท\n` +
-      `  - ของสนับสนุน/ของขวัญ: ${itemSponsorsCount} รายการ\n` +
+      `  - สโมสรสงสพัท ${songCount} ท่าน\n` +
+      `  - สโมสรโรตารี่ ${rotaryCount} ท่าน\n` +
+      `       --v---v---v--\n` +
+      `• สรุปยอดชำระจาก ${sortedRegistrations.length} ท่าน\n` +
+      `  - ชำระ 500 : ${count500} ท่าน (${(count500 * 500).toLocaleString()} บาท)\n` +
+      `  - ชำระ 250 : ${count250} ท่าน (${(count250 * 250).toLocaleString()} บาท)\n` +
+      `  - เข้างานฟรี : ${countFree} ท่าน\n` +
+      (otherCount > 0 ? `  - ชำระอื่นๆ : ${otherCount} ท่าน (${otherAmount.toLocaleString()} บาท)\n` : "") +
+      `ยอดเงินรวมทั้งสิ้น ${totalRegFee.toLocaleString()} บาท\n` +
+      `------------------------\n` +
+      `• แขกรับเชิญ/ผู้มีเกียรติ ${guestItems.length} ท่าน\n` +
+      `  - สโมสรสงสพัท ${guestSongCount} ท่าน\n` +
+      `  - สโมสรโรตารี่ ${guestRotaryCount} ท่าน\n` +
+      `       --v---v---v--\n` +
+      `• ผู้เชิญแขกสูงสุด 3 ท่านแรก \n` +
+      (top3Inviters.length > 0
+        ? top3Inviters.map((inv, idx) => formatInviterLine(inv, idx)).join("\n") + "\n"
+        : "   - ไม่มีข้อมูลผู้เชิญแขก\n") +
+      `------------------------\n` +
+      `• ผู้สนับสนุนกิจกรรม: ${consolidatedSponsorsList.length} ราย\n` +
+      `  - ยอดเงิน (${cashSponsors.length} ท่าน)  ${cashSponsorsTotal.toLocaleString()} บาท\n` +
+      `  - ของสนับสนุน/ของขวัญ  ${itemSponsors.length} ท่าน\n` +
+      `================\n` +
+      `สรุปยอดเงินรับสุทธิ\n` +
+      `  - เงินลงทะเบียน ${totalRegFee.toLocaleString()} บาท\n` +
+      `  - เงินสนับสนุน  ${cashSponsorsTotal.toLocaleString()} บาท\n` +
+      `เงินรับสุทธิ ${netTotal.toLocaleString()} บาท\n` +
       `━━━━━━━━━━\n` +
       `🔗 ตรวจสอบข้อมูลแบบ Real-time:\n` +
       `https://triple-t-form.vercel.app`
     );
-  }, [printTimestamp, sortedRegistrations, cat2Items, cat3Items, guestItems, inviterSummaryList, sponsors]);
+  }, [
+    printTimestamp,
+    sortedRegistrations,
+    cat2Items,
+    cat3Items,
+    guestItems,
+    inviterSummaryList,
+    consolidatedSponsorsList
+  ]);
 
   // Handle Copy Summary Text
   const handleCopyText = () => {
