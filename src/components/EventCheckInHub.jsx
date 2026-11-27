@@ -54,7 +54,8 @@ import {
   Sliders,
   ChevronUp,
   ChevronDown,
-  Layers
+  Layers,
+  Armchair
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import QRCode from "qrcode";
@@ -68,8 +69,23 @@ import ClearSecurityModal from "./ClearSecurityModal";
 import AttendeeInspectionModal from "./AttendeeInspectionModal";
 import AdminSurveyManagerModal from "./AdminSurveyManagerModal";
 import SatisfactionSurveyModal from "./SatisfactionSurveyModal";
+import TableSeatingHub from "./TableSeatingHub";
 import { defaultSurveyConfig } from "../data/smeFanData";
-import { formatThaiDisplayDateTime } from "../utils/supabaseClient";
+import {
+  formatThaiDisplayDateTime,
+  isSupabaseConfigured,
+  fetchSeatingPlanFromCloud,
+  saveSeatingPlanToCloud,
+  subscribeToSeatingPlan
+} from "../utils/supabaseClient";
+import {
+  SEATING_STORAGE_KEY,
+  createDefaultSeatingPlan,
+  buildAttendeeSeatMap,
+  getTableOccupancyMap,
+  getSeatingStats,
+  getSeatCode
+} from "../utils/seatingPlanHelper";
 import { cleanPhoneNumber } from "../utils/phoneFormatter";
 import { bgAudio } from "../utils/backgroundAudio";
 
@@ -111,8 +127,74 @@ export default function EventCheckInHub({
   onUpdateRegistration,
   lastCloudSync
 }) {
-  // Main Tab: "checkin" | "gifts" | "shirts" | "contest" | "lucky_draw" | "survey"
+  // Main Tab: "checkin" | "seating" | "gifts" | "shirts" | "contest" | "lucky_draw" | "survey"
   const [activeMainTab, setActiveMainTab] = useState("checkin");
+
+  // ==========================================================
+  // SEATING PLAN & TABLE BOOKING STATE (LocalStorage + Supabase Realtime)
+  // ==========================================================
+  const [seatingPlan, setSeatingPlan] = useState(() => {
+    try {
+      const saved = localStorage.getItem(SEATING_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && Array.isArray(parsed.items)) return parsed;
+      }
+    } catch (e) {}
+    return createDefaultSeatingPlan();
+  });
+
+  const isRemoteSeatingSyncRef = useRef(false);
+
+  // Hydrate seatingPlan from Supabase Cloud & subscribe to Realtime updates
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+    let active = true;
+
+    fetchSeatingPlanFromCloud().then((cloudPlan) => {
+      if (active && cloudPlan && Array.isArray(cloudPlan.items)) {
+        isRemoteSeatingSyncRef.current = true;
+        setSeatingPlan(cloudPlan);
+        try {
+          localStorage.setItem(SEATING_STORAGE_KEY, JSON.stringify(cloudPlan));
+        } catch (e) {}
+      }
+    }).catch(() => {});
+
+    const unsubscribe = subscribeToSeatingPlan((cloudPlan) => {
+      if (active && cloudPlan && Array.isArray(cloudPlan.items)) {
+        isRemoteSeatingSyncRef.current = true;
+        setSeatingPlan(cloudPlan);
+        try {
+          localStorage.setItem(SEATING_STORAGE_KEY, JSON.stringify(cloudPlan));
+        } catch (e) {}
+      }
+    });
+
+    return () => {
+      active = false;
+      if (typeof unsubscribe === "function") unsubscribe();
+    };
+  }, []);
+
+  // Persist local updates to localStorage & Supabase Cloud
+  const handleUpdateSeatingPlan = (updater) => {
+    setSeatingPlan((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      try {
+        localStorage.setItem(SEATING_STORAGE_KEY, JSON.stringify(next));
+      } catch (e) {}
+      if (isSupabaseConfigured() && currentUser && ["owner", "manager", "admin"].includes(currentUser.role)) {
+        saveSeatingPlanToCloud(next).catch((err) => {
+          console.warn("Seating plan cloud sync warning:", err);
+        });
+      }
+      return next;
+    });
+  };
+
+  const attendeeSeatMap = useMemo(() => buildAttendeeSeatMap(seatingPlan), [seatingPlan]);
+  const seatingStats = useMemo(() => getSeatingStats(seatingPlan, registrations), [seatingPlan, registrations]);
 
   // Survey Responses State (from LocalStorage)
   const [surveyResponses, setSurveyResponses] = useState(() => {
@@ -466,9 +548,16 @@ export default function EventCheckInHub({
       setContestTeams([]);
       setGrandPrizeWinners([]);
       setGiftQueueWinners([]);
+      setTableDrawWinners([]);
       setLastCheckInAttendee(null);
       setPhotoModalTarget(null);
       setPhotoViewerTarget(null);
+      // Clear seat assignments while preserving room layout
+      handleUpdateSeatingPlan((prev) => ({
+        ...prev,
+        assignments: {},
+        updatedAt: new Date().toISOString()
+      }));
     };
     window.addEventListener('triple_t_reset_registrations', handleGlobalReset);
     return () => window.removeEventListener('triple_t_reset_registrations', handleGlobalReset);
@@ -487,7 +576,16 @@ export default function EventCheckInHub({
   const [searchGiftAttendee, setSearchGiftAttendee] = useState("");
 
   // Tab 3: Lucky Draw State
-  const [drawSubTab, setDrawSubTab] = useState("general"); // "general" | "grand" | "gift_exclusive"
+  const [drawSubTab, setDrawSubTab] = useState("general"); // "general" | "grand" | "gift_exclusive" | "table_seat"
+  const [tableDrawMode, setTableDrawMode] = useState("seat"); // "seat" (สุ่มเก้าอี้นำโชค) | "table" (สุ่มโต๊ะนำโชคยกโต๊ะ)
+  const [tableDrawWinners, setTableDrawWinners] = useState(() => {
+    try {
+      const saved = localStorage.getItem("sme_fan_table_draw_winners_v1");
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
   const [prizeNameInput, setPrizeNameInput] = useState("รางวัลพิเศษงานปีใหม่");
   const [isSpinning, setIsSpinning] = useState(false);
   const [currentWinner, setCurrentWinner] = useState(null);
@@ -566,6 +664,12 @@ export default function EventCheckInHub({
       localStorage.setItem("sme_fan_general_draw_counts_v1", JSON.stringify(generalDrawCounts));
     } catch (e) {}
   }, [generalDrawCounts]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("sme_fan_table_draw_winners_v1", JSON.stringify(tableDrawWinners));
+    } catch (e) {}
+  }, [tableDrawWinners]);
 
   // Audio synthesizer for sound effects
   const playAudioEffect = (type = "beep") => {
@@ -876,6 +980,55 @@ export default function EventCheckInHub({
       // Gift exclusive: Only members who brought gifts, NOT already in queue
       const wonTicketNos = new Set(giftQueueWinners.map(w => w.ticketNo));
       return giftList.filter(r => !wonTicketNos.has(r.ticketNo));
+    } else if (drawSubTab === "table_seat") {
+      const regMap = new Map(registrations.map(r => [r.ticketNo, r]));
+      const tables = (seatingPlan?.items || []).filter(it => it.type === "table");
+      if (tableDrawMode === "table") {
+        // Pool of tables with at least 1 seated attendee, excluding already won tables
+        const wonTableIds = new Set(tableDrawWinners.filter(w => w.mode === "table").map(w => w.tableId));
+        return tables
+          .map(t => {
+            const occ = getTableOccupancyMap(seatingPlan, t.id, regMap);
+            const members = Array.from(occ.values())
+              .sort((a, b) => a.seatNo - b.seatNo)
+              .map(o => ({ ...o.attendee, seatNo: o.seatNo, seatCode: getSeatCode(t, o.seatNo) }));
+            return {
+              isTableCandidate: true,
+              id: t.id,
+              tableId: t.id,
+              tableLabel: t.label,
+              tableCode: t.code || "",
+              name: t.label,
+              ticketNo: `${members.length}/${t.capacity || 8} ท่าน`,
+              club: `โต๊ะนั่งแขก`,
+              members
+            };
+          })
+          .filter(t => t.members.length > 0 && !wonTableIds.has(t.tableId));
+      } else {
+        // Pool of occupied seats, excluding already won seats
+        const wonSeatKeys = new Set(tableDrawWinners.filter(w => w.mode === "seat").map(w => w.seatKey));
+        const seats = [];
+        tables.forEach(t => {
+          const occ = getTableOccupancyMap(seatingPlan, t.id, regMap);
+          occ.forEach((o, seatNo) => {
+            const seatKey = `${t.id}:${seatNo}`;
+            if (!wonSeatKeys.has(seatKey) && o.attendee) {
+              seats.push({
+                ...o.attendee,
+                isSeatCandidate: true,
+                seatKey,
+                tableId: t.id,
+                tableLabel: t.label,
+                tableCode: t.code || "",
+                seatNo,
+                seatCode: getSeatCode(t, seatNo)
+              });
+            }
+          });
+        });
+        return seats.sort((a, b) => String(a.seatCode).localeCompare(String(b.seatCode), "th", { numeric: true }));
+      }
     }
     return [];
   };
@@ -997,10 +1150,59 @@ export default function EventCheckInHub({
     setDisplayedCandidate(null);
   };
 
+  // Confirm Table / Seat Lucky Draw Winner
+  const handleConfirmTableDrawWinner = () => {
+    if (!currentWinner) return;
+    const isTable = Boolean(currentWinner.isTableCandidate);
+    const newRecord = isTable
+      ? {
+          id: "td_" + Date.now(),
+          mode: "table",
+          tableId: currentWinner.tableId,
+          tableLabel: currentWinner.tableLabel,
+          membersCount: currentWinner.members?.length || 0,
+          members: currentWinner.members || [],
+          prizeName: prizeNameInput.trim() || "รางวัลโต๊ะนำโชค",
+          wonAt: new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) + " น."
+        }
+      : {
+          id: "td_" + Date.now(),
+          mode: "seat",
+          seatKey: currentWinner.seatKey,
+          tableId: currentWinner.tableId,
+          tableLabel: currentWinner.tableLabel,
+          seatCode: currentWinner.seatCode,
+          ticketNo: currentWinner.ticketNo,
+          name: currentWinner.name,
+          nickname: currentWinner.nickname || "",
+          club: currentWinner.club || "",
+          photoUrl: currentWinner.photoUrl || null,
+          prizeName: prizeNameInput.trim() || "รางวัลเก้าอี้นำโชค",
+          wonAt: new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) + " น."
+        };
+    setTableDrawWinners(prev => [newRecord, ...prev]);
+    setCurrentWinner(null);
+    setDisplayedCandidate(null);
+  };
+
+  const handleRestoreTableDrawWinner = (winnerId) => {
+    if (window.confirm("ต้องการดึงรายการนี้กลับเข้าสู่โถสุ่มโต๊ะ/เก้าอี้ใช่หรือไม่?")) {
+      setTableDrawWinners(prev => prev.filter(w => w.id !== winnerId));
+    }
+  };
+
+  const handleResetTableDrawWinners = () => {
+    if (window.confirm("ต้องการล้างประวัติรางวัลโต๊ะ/เก้าอี้นำโชคทั้งหมดใช่หรือไม่?")) {
+      setTableDrawWinners([]);
+      setCurrentWinner(null);
+      setDisplayedCandidate(null);
+    }
+  };
+
   // Current candidate pool for lucky draw
   const candidatePool = useMemo(() => {
     return getCandidatePool();
-  }, [drawSubTab, checkedInList, registrations, grandPrizeWinners, giftQueueWinners, giftList]);
+  }, [drawSubTab, tableDrawMode, checkedInList, registrations, grandPrizeWinners, giftQueueWinners, tableDrawWinners, giftList, seatingPlan]);
 
   // Search filtered pool for Right-Side Panel
   const filteredCandidatePool = useMemo(() => {
@@ -1011,7 +1213,8 @@ export default function EventCheckInHub({
       const matchNick = r.nickname?.toLowerCase().includes(q);
       const matchTicket = r.ticketNo?.toLowerCase().includes(q);
       const matchClub = r.club?.toLowerCase().includes(q);
-      return matchName || matchNick || matchTicket || matchClub;
+      const matchSeat = r.seatCode?.toLowerCase().includes(q) || r.tableLabel?.toLowerCase().includes(q);
+      return matchName || matchNick || matchTicket || matchClub || matchSeat;
     });
   }, [candidatePool, searchDrawPool]);
 
@@ -1088,6 +1291,13 @@ export default function EventCheckInHub({
               <span className="text-emerald-300">เข้างาน:</span>
               <strong className="text-emerald-300 font-mono">{checkedInCount}</strong>
               <span className="text-[10px] text-emerald-400/80">({totalCount > 0 ? Math.round((checkedInCount / totalCount) * 100) : 0}%)</span>
+            </div>
+
+            {/* 2.5 ที่นั่ง/โต๊ะ */}
+            <div className="px-2.5 py-1 rounded-xl bg-sky-950/70 border border-sky-500/30 flex items-center space-x-1.5 shrink-0 text-[11px] whitespace-nowrap">
+              <Armchair className="w-3.5 h-3.5 text-sky-400" />
+              <span className="text-sky-300">โต๊ะ:</span>
+              <strong className="text-sky-300 font-mono">{seatingStats.bookedCount}/{seatingStats.openCapacity}</strong>
             </div>
 
             {/* 3. ของขวัญ */}
@@ -1179,6 +1389,20 @@ export default function EventCheckInHub({
             >
               <Camera className="w-4 h-4" />
               <span>ลงทะเบียนเข้า ({checkedInCount}/{totalCount})</span>
+            </button>
+
+            {/* Tab 2: เลือกโต๊ะ/ที่นั่ง */}
+            <button
+              type="button"
+              onClick={() => setActiveMainTab("seating")}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
+                activeMainTab === "seating"
+                  ? "bg-sky-500 text-slate-950 shadow-md shadow-sky-500/30"
+                  : "text-slate-400 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              <Armchair className="w-4 h-4" />
+              <span>เลือกโต๊ะ/ที่นั่ง ({seatingStats.bookedCount}/{seatingStats.openCapacity})</span>
             </button>
 
             {/* Tab 2: ลงทะเบียนจับของขวัญ */}
@@ -1747,7 +1971,26 @@ export default function EventCheckInHub({
       )}
 
       {/* ========================================================== */}
-      {/* TAB 2: แถบลงทะเบียนจับของขวัญ (GIFT EXCHANGE)              */}
+      {/* TAB 2: เลือกโต๊ะ/ที่นั่ง (TABLE & SEAT RESERVATION HUB)      */}
+      {/* ========================================================== */}
+      {activeMainTab === "seating" && (
+        <TableSeatingHub
+          seatingPlan={seatingPlan}
+          onUpdateSeatingPlan={handleUpdateSeatingPlan}
+          registrations={registrations}
+          currentUser={currentUser}
+          onPlayEffect={playAudioEffect}
+          onGoToTableLuckyDraw={() => {
+            setDrawSubTab("table_seat");
+            setCurrentWinner(null);
+            setDisplayedCandidate(null);
+            setActiveMainTab("lucky_draw");
+          }}
+        />
+      )}
+
+      {/* ========================================================== */}
+      {/* TAB 3: แถบลงทะเบียนจับของขวัญ (GIFT EXCHANGE)              */}
       {/* ========================================================== */}
       {activeMainTab === "gifts" && (
         <main className="max-w-7xl w-full mx-auto p-3 sm:p-6 space-y-4">
@@ -3007,7 +3250,7 @@ export default function EventCheckInHub({
 
               <button
                 type="button"
-                onClick={() => { setDrawSubTab("gift_exclusive"); setCurrentWinner(null); setSearchDrawPool(""); }}
+                onClick={() => { setDrawSubTab("gift_exclusive"); setCurrentWinner(null); setDisplayedCandidate(null); setSearchDrawPool(""); }}
                 className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer whitespace-nowrap ${
                   drawSubTab === "gift_exclusive"
                     ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20"
@@ -3018,6 +3261,19 @@ export default function EventCheckInHub({
                 <span>Random เฉพาะคนมีของขวัญ</span>
               </button>
 
+              <button
+                type="button"
+                onClick={() => { setDrawSubTab("table_seat"); setCurrentWinner(null); setDisplayedCandidate(null); setSearchDrawPool(""); }}
+                className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer whitespace-nowrap ${
+                  drawSubTab === "table_seat"
+                    ? "bg-sky-500 text-slate-950 shadow-md shadow-sky-500/20"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                }`}
+              >
+                <Armchair className="w-4 h-4" />
+                <span>Random สุ่มโต๊ะ / เก้าอี้</span>
+              </button>
+
             </div>
 
             {/* Candidate Pool Indicator (ชนซ้ายขวา เต็มความกว้างบนมือถือ) */}
@@ -3025,7 +3281,9 @@ export default function EventCheckInHub({
               <span>โถสุ่มปัจจุบัน:</span>
               <div className="flex items-center space-x-1 ml-2">
                 <strong className="text-amber-700 font-mono text-sm font-black">{getCandidatePool().length}</strong>
-                <span className="text-slate-500 text-[11px]">ท่าน</span>
+                <span className="text-slate-500 text-[11px]">
+                  {drawSubTab === "table_seat" ? (tableDrawMode === "table" ? "โต๊ะ" : "เก้าอี้") : "ท่าน"}
+                </span>
               </div>
             </div>
           </div>
@@ -3047,8 +3305,45 @@ export default function EventCheckInHub({
                     {drawSubTab === "general" && "โหมดสุ่มทั่วไป (เล่นเกม / ตอบคำถาม / สุ่มซ้ำได้เรื่อยๆ)"}
                     {drawSubTab === "grand" && "โหมดสุ่มรางวัลใหญ่ (ตัดชื่อออกจากโถสุ่มถาวร)"}
                     {drawSubTab === "gift_exclusive" && "โหมดสุ่มคิวจับของขวัญ (เฉพาะผู้ที่นำของขวัญมาแลก)"}
+                    {drawSubTab === "table_seat" && (tableDrawMode === "table" ? "โหมดสุ่มโต๊ะนำโชค (รับรางวัลยกโต๊ะ)" : "โหมดสุ่มเก้าอี้นำโชค (ระบุโต๊ะ + หมายเลขเก้าอี้)")}
                   </span>
                 </span>
+
+                {drawSubTab === "table_seat" && (
+                  <div className="pt-2 flex flex-col items-center gap-2">
+                    <div className="inline-flex rounded-xl bg-slate-950 p-1 border border-white/10">
+                      <button
+                        type="button"
+                        onClick={() => { setTableDrawMode("seat"); setCurrentWinner(null); setDisplayedCandidate(null); }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+                          tableDrawMode === "seat"
+                            ? "bg-sky-500 text-slate-950 shadow-sm"
+                            : "text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        🪑 สุ่มเก้าอี้นำโชค (รายตัว)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setTableDrawMode("table"); setCurrentWinner(null); setDisplayedCandidate(null); }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+                          tableDrawMode === "table"
+                            ? "bg-amber-500 text-slate-950 shadow-sm"
+                            : "text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        🍽️ สุ่มโต๊ะนำโชค (ยกโต๊ะ)
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      value={prizeNameInput}
+                      onChange={(e) => setPrizeNameInput(e.target.value)}
+                      placeholder="ระบุชื่อรางวัลโต๊ะ/เก้าอี้นำโชค..."
+                      className="bg-slate-950 border border-sky-500/40 rounded-xl px-4 py-2 text-xs sm:text-sm text-center text-sky-300 font-bold focus:outline-none focus:border-sky-400 w-full max-w-sm"
+                    />
+                  </div>
+                )}
 
                 {drawSubTab === "grand" && (
                   <div className="pt-2">
@@ -3072,29 +3367,82 @@ export default function EventCheckInHub({
                 {/* Candidate Display */}
                 <div className="min-h-[120px] flex flex-col items-center justify-center">
                   {displayedCandidate ? (
-                    <div className="space-y-2 animate-fadeIn">
-                      <div className="text-2xl sm:text-4xl font-black text-white tracking-tight">
-                        {displayedCandidate.name}
-                        {displayedCandidate.nickname && (
-                          <span className="text-amber-400 ml-2 font-bold text-xl sm:text-2xl">
-                            ({displayedCandidate.nickname})
-                          </span>
+                    displayedCandidate.isTableCandidate ? (
+                      <div className="space-y-3 animate-fadeIn w-full">
+                        <div className="inline-flex items-center space-x-2 px-4 py-1.5 rounded-2xl bg-sky-500/20 border border-sky-400/40 text-sky-300 font-black text-sm">
+                          <Armchair className="w-4 h-4" />
+                          <span>รางวัลยกโต๊ะ!</span>
+                        </div>
+                        <div className="text-3xl sm:text-5xl font-black text-amber-400 tracking-tight">
+                          {displayedCandidate.tableLabel}
+                        </div>
+                        <div className="text-xs text-slate-300 font-bold">
+                          สมาชิกในโต๊ะทั้งหมด {displayedCandidate.members?.length || 0} ท่าน
+                        </div>
+                        {!isSpinning && displayedCandidate.members?.length > 0 && (
+                          <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                            {displayedCandidate.members.map((m) => (
+                              <div
+                                key={m.ticketNo}
+                                className="flex items-center space-x-1.5 px-2.5 py-1 rounded-xl bg-slate-900 border border-white/10 text-xs text-white"
+                              >
+                                {m.photoUrl && (
+                                  <img
+                                    src={m.photoUrl}
+                                    alt={m.name}
+                                    className="w-5 h-5 rounded-full object-cover"
+                                  />
+                                )}
+                                <span className="font-mono text-[10px] text-amber-300 font-black">{m.seatCode}</span>
+                                <span className="font-bold">{m.nickname || m.name.split(" ")[0]}</span>
+                              </div>
+                            ))}
+                          </div>
                         )}
                       </div>
-                      <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
-                        <span className="font-mono text-xs px-2.5 py-0.5 rounded-lg bg-slate-900 border border-white/10 text-amber-300 font-bold">
-                          {displayedCandidate.ticketNo}
-                        </span>
-                        <span className="text-xs px-2.5 py-0.5 rounded-lg bg-indigo-500/20 text-indigo-300 font-bold border border-indigo-500/30">
-                          {displayedCandidate.club || "สงสพัท"}
-                        </span>
-                        {displayedCandidate.giftNumber && (
-                          <span className="text-xs px-2.5 py-0.5 rounded-lg bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
-                            🎁 ของขวัญ #{displayedCandidate.giftNumber}
-                          </span>
+                    ) : (
+                      <div className="space-y-2 animate-fadeIn flex flex-col items-center">
+                        {displayedCandidate.isSeatCandidate && (
+                          <div className="inline-flex items-center space-x-1.5 px-4 py-1 rounded-2xl bg-sky-500/20 border border-sky-400/40 text-sky-300 font-black text-base sm:text-lg mb-1">
+                            <Armchair className="w-4 h-4" />
+                            <span>{displayedCandidate.tableLabel} • เก้าอี้ {displayedCandidate.seatCode}</span>
+                          </div>
                         )}
+                        {displayedCandidate.photoUrl && !isSpinning && (
+                          <img
+                            src={displayedCandidate.photoUrl}
+                            alt={displayedCandidate.name}
+                            className="w-20 h-20 rounded-full object-cover ring-4 ring-amber-400/70 shadow-xl mb-1"
+                          />
+                        )}
+                        <div className="text-2xl sm:text-4xl font-black text-white tracking-tight">
+                          {displayedCandidate.name}
+                          {displayedCandidate.nickname && (
+                            <span className="text-amber-400 ml-2 font-bold text-xl sm:text-2xl">
+                              ({displayedCandidate.nickname})
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                          <span className="font-mono text-xs px-2.5 py-0.5 rounded-lg bg-slate-900 border border-white/10 text-amber-300 font-bold">
+                            {displayedCandidate.ticketNo}
+                          </span>
+                          <span className="text-xs px-2.5 py-0.5 rounded-lg bg-indigo-500/20 text-indigo-300 font-bold border border-indigo-500/30">
+                            {displayedCandidate.club || "สงสพัท"}
+                          </span>
+                          {!displayedCandidate.isSeatCandidate && attendeeSeatMap.get(displayedCandidate.ticketNo) && (
+                            <span className="text-xs px-2.5 py-0.5 rounded-lg bg-sky-500/20 text-sky-300 font-bold border border-sky-500/30">
+                              🪑 {attendeeSeatMap.get(displayedCandidate.ticketNo).tableLabel} • {attendeeSeatMap.get(displayedCandidate.ticketNo).seatCode}
+                            </span>
+                          )}
+                          {displayedCandidate.giftNumber && (
+                            <span className="text-xs px-2.5 py-0.5 rounded-lg bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+                              🎁 ของขวัญ #{displayedCandidate.giftNumber}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
+                    )
                   ) : (
                     <div className="text-slate-500 text-sm font-medium">
                       กดปุ่ม "เริ่มสุ่มรางวัล" ด้านล่างเพื่อเริ่มการสุ่ม
@@ -3137,6 +3485,17 @@ export default function EventCheckInHub({
                       >
                         <Check className="w-4 h-4 stroke-[3]" />
                         <span>บันทึกเข้าคิวจับของขวัญ (คิวที่ {giftQueueWinners.length + 1})</span>
+                      </button>
+                    )}
+
+                    {drawSubTab === "table_seat" && (
+                      <button
+                        type="button"
+                        onClick={handleConfirmTableDrawWinner}
+                        className="px-6 py-3.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-extrabold text-sm shadow-lg shadow-sky-500/30 hover:scale-105 active:scale-95 transition-all flex items-center space-x-2"
+                      >
+                        <Check className="w-4 h-4 stroke-[3]" />
+                        <span>🪑 ยืนยันรับรางวัล (บันทึกประวัติ & ตัดออก)</span>
                       </button>
                     )}
 
@@ -3444,6 +3803,94 @@ export default function EventCheckInHub({
                 </div>
               )}
 
+              {/* ======================================================== */}
+              {/* MODE 4: สุ่มโต๊ะ / เก้าอี้นำโชค - โถสุ่มฝั่งขวา              */}
+              {/* ======================================================== */}
+              {drawSubTab === "table_seat" && (
+                <div className="bg-slate-900/90 rounded-3xl p-4 sm:p-5 border border-sky-500/30 shadow-2xl flex flex-col h-[520px]">
+                  <div className="border-b border-white/10 pb-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2 text-sky-400">
+                        <Armchair className="w-4 h-4" />
+                        <h3 className="font-extrabold text-sm text-white">
+                          {tableDrawMode === "table" ? "รายชื่อโต๊ะที่มีสิทธิ์ลุ้นรางวัล" : "เก้าอี้ที่มีผู้จองแล้วในโถสุ่ม"}
+                        </h3>
+                      </div>
+                      <span className="font-mono text-xs px-2.5 py-0.5 rounded-lg bg-sky-500/20 text-sky-300 font-bold border border-sky-500/30">
+                        {candidatePool.length} {tableDrawMode === "table" ? "โต๊ะ" : "เก้าอี้"}
+                      </span>
+                    </div>
+
+                    <div className="relative pt-1">
+                      <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                      <input
+                        type="text"
+                        placeholder={tableDrawMode === "table" ? "ค้นหาชื่อโต๊ะ..." : "ค้นหาเก้าอี้ (เช่น A1), ชื่อ, ชื่อเล่น..."}
+                        value={searchDrawPool}
+                        onChange={(e) => setSearchDrawPool(e.target.value)}
+                        className="w-full bg-slate-950 border border-white/10 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto space-y-2 py-3 pr-1">
+                    {filteredCandidatePool.map((item) => (
+                      <div
+                        key={item.isTableCandidate ? item.tableId : item.seatKey}
+                        className="p-2.5 rounded-2xl bg-slate-950/70 border border-white/5 hover:border-sky-500/30 transition-all flex items-center justify-between text-xs"
+                      >
+                        {item.isTableCandidate ? (
+                          <>
+                            <div>
+                              <div className="font-black text-white">{item.tableLabel}</div>
+                              <div className="text-[10px] text-slate-400 truncate max-w-[200px]">
+                                {item.members.map(m => m.nickname || m.name.split(" ")[0]).join(", ")}
+                              </div>
+                            </div>
+                            <span className="px-2.5 py-1 rounded-xl bg-sky-500/20 text-sky-300 font-mono font-bold text-[11px] shrink-0">
+                              {item.members.length} ท่าน
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex items-center space-x-2.5 min-w-0">
+                              <span className="px-2 py-1 rounded-lg bg-sky-500/20 border border-sky-400/30 text-sky-300 font-mono font-black text-[11px] shrink-0">
+                                {item.seatCode}
+                              </span>
+                              <div className="min-w-0">
+                                <div className="font-bold text-white truncate">
+                                  {item.name} {item.nickname && <span className="text-amber-400 font-normal">({item.nickname})</span>}
+                                </div>
+                                <div className="text-[10px] text-slate-400">
+                                  {item.tableLabel} • {item.ticketNo}
+                                </div>
+                              </div>
+                            </div>
+                            {item.photoUrl && (
+                              <img src={item.photoUrl} alt={item.name} className="w-7 h-7 rounded-full object-cover ring-1 ring-sky-400/50 shrink-0 ml-2" />
+                            )}
+                          </>
+                        )}
+                      </div>
+                    ))}
+
+                    {filteredCandidatePool.length === 0 && (
+                      <div className="py-12 text-center text-slate-500 text-xs space-y-2">
+                        <Armchair className="w-8 h-8 text-sky-400/30 mx-auto" />
+                        <div>ยังไม่มีโต๊ะหรือเก้าอี้ที่มีผู้จองในโถสุ่ม</div>
+                        <button
+                          type="button"
+                          onClick={() => setActiveMainTab("seating")}
+                          className="px-3 py-1.5 rounded-xl bg-sky-500/20 text-sky-300 border border-sky-400/30 font-bold hover:bg-sky-500/30 cursor-pointer"
+                        >
+                          ไปที่หน้าเลือกโต๊ะ/ที่นั่ง →
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
             </div>
 
           </div>
@@ -3633,11 +4080,92 @@ export default function EventCheckInHub({
             </div>
           )}
 
+          {/* ======================================================== */}
+          {/* BOTTOM SECTION FOR MODE 4: ทำเนียบรางวัลโต๊ะ / เก้าอี้นำโชค  */}
+          {/* ======================================================== */}
+          {drawSubTab === "table_seat" && (
+            <div className="bg-slate-900/90 rounded-3xl p-5 sm:p-6 border border-sky-500/30 shadow-2xl space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
+                <div className="space-y-0.5">
+                  <div className="flex items-center space-x-2 text-sky-400">
+                    <Armchair className="w-5 h-5" />
+                    <h3 className="font-extrabold text-base text-white">
+                      🪑 ทำเนียบผู้โชคดีรางวัลโต๊ะ / เก้าอี้นำโชค
+                    </h3>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    บันทึกรางวัลที่สุ่มได้จากเก้าอี้หรือโต๊ะ สามารถกดดึงกลับเข้าโถสุ่มหรือล้างประวัติได้
+                  </p>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <span className="font-mono text-xs px-3 py-1 rounded-xl bg-sky-500/20 text-sky-300 font-bold border border-sky-500/30">
+                    บันทึกแล้ว {tableDrawWinners.length} รางวัล
+                  </span>
+                  {tableDrawWinners.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleResetTableDrawWinners}
+                      className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-400 hover:to-rose-500 text-white font-extrabold text-xs shadow-md transition-all flex items-center space-x-1.5 cursor-pointer"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>ล้างประวัติทั้งหมด</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {tableDrawWinners.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                  {tableDrawWinners.map((w) => (
+                    <div
+                      key={w.id}
+                      className="p-3.5 rounded-2xl bg-slate-950/80 border border-sky-500/25 flex items-start justify-between text-xs gap-2"
+                    >
+                      <div className="space-y-1 min-w-0">
+                        <div className="flex items-center space-x-1.5 flex-wrap">
+                          <span className="px-2 py-0.5 rounded-lg bg-sky-500/20 text-sky-300 font-black">
+                            {w.mode === "table" ? `🍽️ ${w.tableLabel} (ยกโต๊ะ)` : `🪑 ${w.tableLabel} • ${w.seatCode}`}
+                          </span>
+                          <span className="text-[10px] text-amber-300 font-bold">{w.prizeName}</span>
+                        </div>
+                        {w.mode === "table" ? (
+                          <div className="text-[11px] text-slate-300">
+                            สมาชิก {w.membersCount} ท่าน: {(w.members || []).map(m => m.nickname || m.name.split(" ")[0]).join(", ")}
+                          </div>
+                        ) : (
+                          <div className="font-bold text-white text-sm">
+                            {w.name} {w.nickname && <span className="text-amber-300 font-normal text-xs">({w.nickname})</span>}
+                          </div>
+                        )}
+                        <div className="text-[10px] text-slate-500 font-mono">{w.wonAt}</div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleRestoreTableDrawWinner(w.id)}
+                        className="p-1.5 rounded-lg hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 transition-all shrink-0 cursor-pointer"
+                        title="ดึงกลับเข้าโถสุ่ม"
+                      >
+                        <Undo2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-10 text-center text-slate-500 text-xs space-y-1">
+                  <Armchair className="w-8 h-8 text-sky-400/30 mx-auto" />
+                  <div className="font-semibold text-slate-400">ยังไม่มีประวัติรางวัลโต๊ะ/เก้าอี้นำโชค</div>
+                  <div className="text-[11px] text-slate-500">
+                    กดปุ่ม "🎲 เริ่มสุ่มรางวัล" ด้านบนเพื่อสุ่มเก้าอี้หรือโต๊ะนำโชคได้เลย
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
         </main>
       )}
-
-      {/* ========================================================== */}
-      {/* TAB 6: แบบประเมินความพึงพอใจ (SATISFACTION SURVEY HUB)      */}
       {/* ========================================================== */}
       {activeMainTab === "survey" && (() => {
         const categories = currentSurveyConfig.categories || [];

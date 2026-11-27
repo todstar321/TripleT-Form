@@ -1,0 +1,348 @@
+/**
+ * Seating Plan & Table Booking Data Helpers
+ * Shared between EventCheckInHub, TableSeatingHub, and Lucky Draw
+ */
+
+export const SEATING_STORAGE_KEY = "sme_fan_seating_plan_v1";
+
+export const ITEM_TYPES = {
+  table: {
+    type: "table",
+    label: "โต๊ะนั่งแขก",
+    shortLabel: "โต๊ะ",
+    defaultW: 2,
+    defaultH: 2,
+    defaultCapacity: 8,
+    defaultShape: "round"
+  },
+  stage: {
+    type: "stage",
+    label: "เวที (Stage)",
+    shortLabel: "เวที",
+    defaultW: 2,
+    defaultH: 1
+  },
+  buffet: {
+    type: "buffet",
+    label: "โซนบุฟเฟ่ต์ / โต๊ะอาหาร",
+    shortLabel: "บุฟเฟ่ต์",
+    defaultW: 1,
+    defaultH: 2
+  },
+  gift: {
+    type: "gift",
+    label: "โต๊ะของขวัญ / จับรางวัล",
+    shortLabel: "ของขวัญ",
+    defaultW: 2,
+    defaultH: 1
+  },
+  entrance: {
+    type: "entrance",
+    label: "ทางเข้า / จุดลงทะเบียน",
+    shortLabel: "ทางเข้า",
+    defaultW: 2,
+    defaultH: 1
+  }
+};
+
+export function createDefaultSeatingPlan() {
+  return {
+    gridCols: 10,
+    gridRows: 10,
+    roomTitle: "ห้องจัดเลี้ยง โรงแรมบุรีศรีภู (ผังที่นั่งงาน SME FAN 2026)",
+    updatedAt: new Date().toISOString(),
+    items: [
+      {
+        id: "entrance_1",
+        type: "entrance",
+        label: "ทางเข้า / จุดลงทะเบียน",
+        x: 0,
+        y: 0,
+        w: 2,
+        h: 1
+      },
+      {
+        id: "stage_1",
+        type: "stage",
+        label: "เวทีหลัก (STAGE)",
+        x: 2,
+        y: 0,
+        w: 6,
+        h: 1
+      },
+      {
+        id: "gift_1",
+        type: "gift",
+        label: "โต๊ะของขวัญ",
+        x: 8,
+        y: 0,
+        w: 2,
+        h: 1
+      },
+      {
+        id: "buffet_1",
+        type: "buffet",
+        label: "โซนบุฟเฟ่ต์อาหาร",
+        x: 0,
+        y: 2,
+        w: 1,
+        h: 6
+      },
+      {
+        id: "tbl_A",
+        type: "table",
+        code: "A",
+        label: "โต๊ะ A",
+        capacity: 8,
+        shape: "round",
+        isOpen: true,
+        x: 2,
+        y: 2,
+        w: 2,
+        h: 2
+      },
+      {
+        id: "tbl_B",
+        type: "table",
+        code: "B",
+        label: "โต๊ะ B",
+        capacity: 8,
+        shape: "round",
+        isOpen: true,
+        x: 5,
+        y: 2,
+        w: 2,
+        h: 2
+      },
+      {
+        id: "tbl_C",
+        type: "table",
+        code: "C",
+        label: "โต๊ะ C",
+        capacity: 8,
+        shape: "round",
+        isOpen: true,
+        x: 8,
+        y: 2,
+        w: 2,
+        h: 2
+      },
+      {
+        id: "tbl_D",
+        type: "table",
+        code: "D",
+        label: "โต๊ะ D",
+        capacity: 8,
+        shape: "round",
+        isOpen: true,
+        x: 2,
+        y: 5,
+        w: 2,
+        h: 2
+      },
+      {
+        id: "tbl_E",
+        type: "table",
+        code: "E",
+        label: "โต๊ะ E",
+        capacity: 8,
+        shape: "round",
+        isOpen: true,
+        x: 5,
+        y: 5,
+        w: 2,
+        h: 2
+      },
+      {
+        id: "tbl_F",
+        type: "table",
+        code: "F",
+        label: "โต๊ะ F",
+        capacity: 8,
+        shape: "round",
+        isOpen: true,
+        x: 8,
+        y: 5,
+        w: 2,
+        h: 2
+      },
+      {
+        id: "tbl_G",
+        type: "table",
+        code: "G",
+        label: "โต๊ะ G",
+        capacity: 8,
+        shape: "round",
+        isOpen: true,
+        x: 2,
+        y: 8,
+        w: 2,
+        h: 2
+      },
+      {
+        id: "tbl_H",
+        type: "table",
+        code: "H",
+        label: "โต๊ะ H",
+        capacity: 8,
+        shape: "round",
+        isOpen: true,
+        x: 5,
+        y: 8,
+        w: 2,
+        h: 2
+      }
+    ],
+    assignments: {}
+  };
+}
+
+export function createEmptySeatingPlan(gridCols = 10, gridRows = 10, roomTitle = "ห้องจัดเลี้ยง โรงแรมบุรีศรีภู") {
+  return {
+    gridCols,
+    gridRows,
+    roomTitle,
+    updatedAt: new Date().toISOString(),
+    items: [],
+    assignments: {}
+  };
+}
+
+/**
+ * Generates next table letter/code (A..Z, AA..AZ, etc.) not yet used
+ */
+export function getNextTableCode(items = []) {
+  const existingCodes = new Set(
+    items
+      .filter((it) => it.type === "table")
+      .map((it) => String(it.code || "").trim().toUpperCase())
+  );
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  for (let i = 0; i < alphabet.length; i++) {
+    if (!existingCodes.has(alphabet[i])) return alphabet[i];
+  }
+  let n = 1;
+  while (existingCodes.has(`T${n}`)) n++;
+  return `T${n}`;
+}
+
+/**
+ * Seat code label e.g. table code "A" + seatNo 3 => "A3"
+ */
+export function getSeatCode(table, seatNo) {
+  const code = (table?.code || table?.label?.replace(/^โต๊ะ\s*/i, "") || "T").trim();
+  return `${code}${seatNo}`;
+}
+
+/**
+ * Check if a rectangle (x, y, w, h) fits within gridCols x gridRows without overlapping other items
+ */
+export function canPlaceItem(items, gridCols, gridRows, x, y, w, h, ignoreId = null) {
+  if (x < 0 || y < 0 || w < 1 || h < 1) return false;
+  if (x + w > gridCols || y + h > gridRows) return false;
+
+  for (const item of items) {
+    if (ignoreId && item.id === ignoreId) continue;
+    const overlapX = x < item.x + item.w && x + w > item.x;
+    const overlapY = y < item.y + item.h && y + h > item.y;
+    if (overlapX && overlapY) return false;
+  }
+  return true;
+}
+
+/**
+ * Returns a Map<ticketNo, { tableId, tableLabel, tableCode, seatNo, seatCode, assignedAt, assignedBy }>
+ */
+export function buildAttendeeSeatMap(seatingPlan) {
+  const map = new Map();
+  if (!seatingPlan || !seatingPlan.assignments) return map;
+  const tableById = new Map();
+  (seatingPlan.items || []).forEach((it) => {
+    if (it.type === "table") tableById.set(it.id, it);
+  });
+
+  Object.entries(seatingPlan.assignments).forEach(([key, val]) => {
+    if (!val || !val.ticketNo) return;
+    const [tableId, seatNoStr] = key.split(":");
+    const seatNo = parseInt(seatNoStr, 10);
+    const table = tableById.get(tableId);
+    if (!table || isNaN(seatNo) || seatNo < 1 || seatNo > (table.capacity || 8)) return;
+    map.set(val.ticketNo, {
+      key,
+      tableId,
+      tableLabel: table.label || `โต๊ะ ${table.code || ""}`,
+      tableCode: table.code || "",
+      seatNo,
+      seatCode: getSeatCode(table, seatNo),
+      assignedAt: val.assignedAt || null,
+      assignedBy: val.assignedBy || ""
+    });
+  });
+
+  return map;
+}
+
+/**
+ * Returns all occupied seats for a given tableId as Map<seatNo, { ticketNo, attendee, assignedAt, assignedBy }>
+ */
+export function getTableOccupancyMap(seatingPlan, tableId, registrationsByTicket) {
+  const seatMap = new Map();
+  if (!seatingPlan?.assignments) return seatMap;
+  const prefix = `${tableId}:`;
+  Object.entries(seatingPlan.assignments).forEach(([key, val]) => {
+    if (!key.startsWith(prefix) || !val?.ticketNo) return;
+    const seatNo = parseInt(key.slice(prefix.length), 10);
+    if (isNaN(seatNo)) return;
+    const attendee = registrationsByTicket ? registrationsByTicket.get(val.ticketNo) : null;
+    if (registrationsByTicket && !attendee) return; // Ignore orphaned ticket if wiped
+    seatMap.set(seatNo, {
+      seatNo,
+      ticketNo: val.ticketNo,
+      attendee,
+      assignedAt: val.assignedAt,
+      assignedBy: val.assignedBy
+    });
+  });
+  return seatMap;
+}
+
+/**
+ * Compute overall seating summary stats
+ */
+export function getSeatingStats(seatingPlan, registrations = []) {
+  const regMap = new Map(registrations.map((r) => [r.ticketNo, r]));
+  const tables = (seatingPlan?.items || []).filter((it) => it.type === "table");
+  const openTables = tables.filter((t) => t.isOpen !== false);
+  let totalCapacity = 0;
+  let openCapacity = 0;
+  let bookedCount = 0;
+
+  tables.forEach((t) => {
+    const cap = Number(t.capacity) || 8;
+    totalCapacity += cap;
+    if (t.isOpen !== false) openCapacity += cap;
+    const occ = getTableOccupancyMap(seatingPlan, t.id, regMap);
+    bookedCount += occ.size;
+  });
+
+  return {
+    totalTables: tables.length,
+    openTables: openTables.length,
+    closedTables: tables.length - openTables.length,
+    totalCapacity,
+    openCapacity,
+    bookedCount,
+    availableSeats: Math.max(0, openCapacity - bookedCount)
+  };
+}
+
+/**
+ * Get initials for avatar fallback
+ */
+export function getInitials(name = "", nickname = "") {
+  const src = (nickname || name || "?").trim();
+  if (!src) return "?";
+  // Thai or Latin first 2 visible chars (skip common Thai prefixes if using full name)
+  const cleaned = src.replace(/^(คุณ|นาย|นางสาว|นาง|ดร\.|ผอ\.|พ\.ต\.อ\.|ว่าที่\s*ร\.ต\.)\s*/i, "").trim() || src;
+  return cleaned.slice(0, 2);
+}

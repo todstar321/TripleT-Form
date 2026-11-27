@@ -673,6 +673,7 @@ export default function App() {
   // Handle Check-in Attendee at Event
   const handleCheckIn = (ticketNo, status = true) => {
     if (!ticketNo) return;
+    const nowIso = new Date().toISOString();
     const nowTime = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
     setRegistrations(prev => {
       let updatedTicket = null;
@@ -681,7 +682,8 @@ export default function App() {
           updatedTicket = {
             ...r,
             checkedIn: status,
-            checkedInAt: status ? nowTime : null
+            checkedInAt: status ? nowTime : null,
+            checkedInAtIso: status ? nowIso : null
           };
           return updatedTicket;
         }
@@ -785,7 +787,8 @@ export default function App() {
               ...r,
               photoUrl: photoUrl,
               checkedIn: alsoCheckIn ? true : (r.checkedIn || false),
-              checkedInAt: (alsoCheckIn || r.checkedIn) ? (r.checkedInAt || nowTime) : null
+              checkedInAt: (alsoCheckIn || r.checkedIn) ? (r.checkedInAt || nowTime) : null,
+              checkedInAtIso: (alsoCheckIn || r.checkedIn) ? (r.checkedInAtIso || new Date().toISOString()) : null
             };
           }
           return updatedTicket;

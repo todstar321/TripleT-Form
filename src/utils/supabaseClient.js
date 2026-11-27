@@ -251,6 +251,7 @@ export function mapCloudToRegistration(r) {
     shirtReceivedAt: r.shirt_received_at ? formatThaiDisplayTime(r.shirt_received_at) : null,
     checkedIn: Boolean(r.checked_in),
     checkedInAt: r.checked_in_at ? formatThaiDisplayTime(r.checked_in_at) : null,
+    checkedInAtIso: r.checked_in_at || null,
     giftNumber: r.gift_number || null,
     giftRegisteredAt: r.gift_registered_at ? formatThaiDisplayTime(r.gift_registered_at) : null,
     photoUrl: r.photo_url || null,
@@ -476,7 +477,7 @@ export function subscribeToEventConfig(onConfigChange) {
         { event: '*', schema: 'public', table: 'event_config' },
         (payload) => {
           if (!onConfigChange) return;
-          if (payload.new && payload.new.config) {
+          if (payload.new && payload.new.id === 'current' && payload.new.config) {
             onConfigChange(payload.new.config);
           }
         }
@@ -570,6 +571,84 @@ export async function saveEventConfigToCloud(config) {
   } catch (err) {
     console.warn('saveEventConfigToCloud warning:', err);
     return false;
+  }
+}
+
+// ===================================================================
+// SEATING PLAN & TABLE BOOKING CLOUD SYNC (event_config id: 'seating_plan')
+// ===================================================================
+export async function fetchSeatingPlanFromCloud() {
+  const client = getSupabase();
+  if (!client) return null;
+
+  try {
+    const { data, error } = await client
+      .from('event_config')
+      .select('config')
+      .eq('id', 'seating_plan')
+      .maybeSingle();
+
+    if (error || !data || !data.config) return null;
+    return data.config;
+  } catch (err) {
+    console.warn('fetchSeatingPlanFromCloud warning:', err);
+    return null;
+  }
+}
+
+export async function saveSeatingPlanToCloud(seatingPlan) {
+  const client = getSupabase();
+  if (!client || !seatingPlan) return false;
+
+  try {
+    const { error } = await client
+      .from('event_config')
+      .upsert({
+        id: 'seating_plan',
+        config: seatingPlan,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'id' });
+
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.warn('saveSeatingPlanToCloud warning:', err);
+    return false;
+  }
+}
+
+export function subscribeToSeatingPlan(onSeatingChange) {
+  const client = getSupabase();
+  if (!client) return null;
+
+  try {
+    const channelName = `realtime_seating_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    const channel = client
+      .channel(channelName)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'event_config' },
+        (payload) => {
+          if (!onSeatingChange) return;
+          if (payload.new && payload.new.id === 'seating_plan' && payload.new.config) {
+            onSeatingChange(payload.new.config);
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('🟢 Supabase Realtime channel connected for seating_plan');
+        }
+      });
+
+    return () => {
+      try {
+        client.removeChannel(channel);
+      } catch (e) {}
+    };
+  } catch (err) {
+    console.warn('Failed to setup seating_plan realtime subscription:', err);
+    return null;
   }
 }
 
