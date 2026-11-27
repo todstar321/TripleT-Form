@@ -40,9 +40,16 @@ import {
   ChevronRight,
   LayoutGrid,
   ListChecks,
-  Compass
+  Compass,
+  QrCode,
+  Upload,
+  KeyRound,
+  Crown,
+  Banknote,
+  AlertTriangle
 } from "lucide-react";
 import confetti from "canvas-confetti";
+import { uploadToCloudinaryWithMeta, deleteCloudinaryByToken } from "../utils/cloudinary";
 import {
   ITEM_TYPES,
   CUSTOM_COLOR_THEMES,
@@ -50,6 +57,9 @@ import {
   CUSTOM_ITEM_PRESETS,
   DEFAULT_PALETTE_TYPES,
   HOLD_DURATION_OPTIONS,
+  HOLD_TIER_OPTIONS,
+  getHoldTierOption,
+  isValidOwnerPin,
   getPaletteTypes,
   getHoldDurationMinutes,
   isAssignmentExpired,
@@ -151,6 +161,7 @@ export default function TableSeatingHub({
   onUpdateSeatingPlan,
   registrations = [],
   currentUser,
+  eventConfig = null,
   onPlayEffect,
   onGoToTableLuckyDraw,
   initialSelectedTicketNo = null,
@@ -205,6 +216,21 @@ export default function TableSeatingHub({
   const [kioskSuccessBanner, setKioskSuccessBanner] = useState(null); // { attendee, tableLabel, seatCode }
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState(null);
+
+  // Advance Hold Booking Modal (Step 1: Booker -> Step 2: Seat Owner -> Step 3: Tier 15/30/60/120 VIP)
+  const [advanceHoldTarget, setAdvanceHoldTarget] = useState(null); // { table, seatNo }
+  const [holdBookerTicketNo, setHoldBookerTicketNo] = useState("");
+  const [holdBookerSearch, setHoldBookerSearch] = useState("");
+  const [holdOwnerTicketNo, setHoldOwnerTicketNo] = useState("");
+  const [holdOwnerSearch, setHoldOwnerSearch] = useState("");
+  const [holdTierMinutes, setHoldTierMinutes] = useState(15);
+  const [vipPinInput, setVipPinInput] = useState("");
+  const [vipPinError, setVipPinError] = useState("");
+
+  // Owner Fine QR Code Upload & Fine History Ledger
+  const [isUploadingFineQr, setIsUploadingFineQr] = useState(false);
+  const [isFineLedgerOpen, setIsFineLedgerOpen] = useState(false);
+  const [viewingProofUrl, setViewingProofUrl] = useState(null);
 
   // Force exit edit mode if user loses owner privilege
   useEffect(() => {
@@ -656,7 +682,9 @@ export default function TableSeatingHub({
     commitPlan({
       ...def,
       holdDurationMinutes: getHoldDurationMinutes(seatingPlan),
-      paletteTypes: getPaletteTypes(seatingPlan)
+      paletteTypes: getPaletteTypes(seatingPlan),
+      fineQrCodeUrl: seatingPlan.fineQrCodeUrl || null,
+      fineQrDeleteToken: seatingPlan.fineQrDeleteToken || null
     });
     setSelectedItemId(null);
     showToast("สร้างผังห้องตัวอย่างเรียบร้อยแล้ว!");
@@ -665,20 +693,23 @@ export default function TableSeatingHub({
   const handleClearToEmptyRoom = () => {
     if (!isOwner) return;
     if (!window.confirm("ต้องการล้างวัตถุทั้งหมดให้เป็นพื้นที่ห้องว่างเปล่าใช่หรือไม่?")) return;
-    commitPlan(
-      createEmptySeatingPlan(
-        seatingPlan.gridCols,
-        seatingPlan.gridRows,
-        seatingPlan.roomTitle,
-        getPaletteTypes(seatingPlan),
-        getHoldDurationMinutes(seatingPlan)
-      )
+    const emptyPlan = createEmptySeatingPlan(
+      seatingPlan.gridCols,
+      seatingPlan.gridRows,
+      seatingPlan.roomTitle,
+      getPaletteTypes(seatingPlan),
+      getHoldDurationMinutes(seatingPlan)
     );
+    commitPlan({
+      ...emptyPlan,
+      fineQrCodeUrl: seatingPlan.fineQrCodeUrl || null,
+      fineQrDeleteToken: seatingPlan.fineQrDeleteToken || null
+    });
     setSelectedItemId(null);
     showToast("ล้างผังเป็นห้องว่างเปล่าเรียบร้อย พร้อมจัดวางใหม่!");
   };
 
-  // Owner-only: update temporary hold duration (minutes)
+  // Owner-only: update default temporary hold duration (minutes)
   const handleUpdateHoldDuration = (minutes) => {
     if (!isOwner) return;
     const mins = Math.max(1, Math.min(180, Number(minutes) || 15));
@@ -686,14 +717,100 @@ export default function TableSeatingHub({
       ...prev,
       holdDurationMinutes: mins
     }));
-    showToast(`ตั้งเวลาจองล่วงหน้าสำหรับผู้ที่ยังไม่เข้างานเป็น ${mins} นาทีแล้ว`);
+    showToast(`ตั้งเวลาจองล่วงหน้าเริ่มต้นเป็น ${mins} นาทีแล้ว`);
+  };
+
+  // Owner-only: Upload or replace Fine Payment QR Code (deletes previous Cloudinary image to save storage!)
+  const handleUploadFineQrCode = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !isOwner) return;
+    setIsUploadingFineQr(true);
+    try {
+      // Resize/compress QR cleanly to max 720px JPEG/PNG
+      const compressedDataUrl = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const img = new Image();
+          img.onload = () => {
+            const maxDim = 720;
+            let { width, height } = img;
+            if (width > maxDim || height > maxDim) {
+              if (width >= height) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              } else {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, width, height);
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL("image/jpeg", 0.88));
+          };
+          img.onerror = () => resolve(ev.target.result);
+          img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+
+      // Delete old QR image on Cloudinary if delete_token exists (saves cloud storage!)
+      const oldDeleteToken = seatingPlan?.fineQrDeleteToken;
+      if (oldDeleteToken) {
+        deleteCloudinaryByToken(oldDeleteToken).catch(() => {});
+      }
+
+      const uploaded = await uploadToCloudinaryWithMeta(compressedDataUrl, {}, "fine_qr");
+      commitPlan((prev) => ({
+        ...prev,
+        fineQrCodeUrl: uploaded.url,
+        fineQrDeleteToken: uploaded.deleteToken || null
+      }));
+      showToast("อัปโหลดรูป QR Code รับค่าปรับเรียบร้อย (ลบรูปเดิมแล้ว)");
+    } catch (err) {
+      showToast("เกิดข้อผิดพลาดในการอัปโหลด QR Code", "rose");
+    } finally {
+      setIsUploadingFineQr(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleDeleteFineQrCode = () => {
+    if (!isOwner) return;
+    if (!window.confirm("ต้องการลบรูป QR Code รับค่าปรับออกใช่หรือไม่?")) return;
+    if (seatingPlan?.fineQrDeleteToken) {
+      deleteCloudinaryByToken(seatingPlan.fineQrDeleteToken).catch(() => {});
+    }
+    commitPlan((prev) => ({
+      ...prev,
+      fineQrCodeUrl: null,
+      fineQrDeleteToken: null
+    }));
+    showToast("ลบรูป QR Code รับค่าปรับเรียบร้อย", "amber");
+  };
+
+  // Open Advance Hold Booking Modal (Step 1: Booker -> Step 2: Seat Owner -> Step 3: Duration)
+  const openAdvanceHoldModal = (table, seatNo, preselectedOwner = null) => {
+    setAdvanceHoldTarget({ table, seatNo });
+    setHoldBookerTicketNo("");
+    setHoldBookerSearch("");
+    setHoldOwnerTicketNo(preselectedOwner ? preselectedOwner.ticketNo : "");
+    setHoldOwnerSearch("");
+    setHoldTierMinutes(getHoldDurationMinutes(seatingPlan));
+    setVipPinInput("");
+    setVipPinError("");
+    setPickingSeatNoForInlineAssign(null);
   };
 
   // =====================================================================
   // SEAT BOOKING & APPROVAL HANDLERS
   // =====================================================================
 
-  const handleAssignSeat = (table, seatNo, attendee) => {
+  const handleAssignSeat = (table, seatNo, attendee, advanceHoldMeta = null) => {
     if (!table || !attendee) return;
     if (table.isOpen === false) {
       showToast(`${table.label} ถูกปิดรับจองโดยเจ้าของแอป`, "rose");
@@ -722,9 +839,15 @@ export default function TableSeatingHub({
       return;
     }
 
-    // Rule: Checked-in => Permanent confirmed seat. Not checked-in => Temporary hold (default 15 mins)!
+    // If attendee is NOT checked in yet and no advanceHoldMeta supplied -> open 3-step Advance Hold Modal!
     const isCheckedIn = Boolean(attendee.checkedIn);
-    const holdMins = getHoldDurationMinutes(seatingPlan);
+    if (!isCheckedIn && !advanceHoldMeta) {
+      openAdvanceHoldModal(table, seatNo, attendee);
+      return;
+    }
+
+    const holdMins = advanceHoldMeta?.minutes || getHoldDurationMinutes(seatingPlan);
+    const tierDef = getHoldTierOption(holdMins);
     const bookingStatus = isCheckedIn ? "confirmed" : "hold";
     const holdExpiresAt = isCheckedIn
       ? null
@@ -742,6 +865,16 @@ export default function TableSeatingHub({
         ticketNo: attendee.ticketNo,
         status: bookingStatus,
         holdExpiresAt,
+        ...(bookingStatus === "hold"
+          ? {
+              holdDurationMinutes: holdMins,
+              fineAmount: advanceHoldMeta?.fineAmount ?? tierDef.fineAmount,
+              isVipGuest: Boolean(advanceHoldMeta?.isVipGuest ?? tierDef.isVip),
+              bookedByTicketNo: advanceHoldMeta?.booker?.ticketNo || "",
+              bookedByName: advanceHoldMeta?.booker?.name || currentUser?.name || "",
+              bookedByNickname: advanceHoldMeta?.booker?.nickname || ""
+            }
+          : {}),
         assignedAt: new Date().toISOString(),
         assignedBy: currentUser?.name || "Admin"
       };
@@ -772,6 +905,7 @@ export default function TableSeatingHub({
       });
       setActiveTableModalId(null);
       setPickingSeatNoForInlineAssign(null);
+      setAdvanceHoldTarget(null);
       setTimeout(() => {
         setKioskSuccessBanner(null);
         setSelectedAttendeeTicketNo(null);
@@ -782,19 +916,52 @@ export default function TableSeatingHub({
       if (isCheckedIn) {
         showToast(`✅ ยืนยันที่นั่ง ${table.label} • เก้าอี้ ${seatCode} ให้คุณ ${attendee.nickname || attendee.name} สำเร็จ!`);
       } else {
+        const fineNote =
+          tierDef.fineAmount > 0 ? ` (หากมาไม่ทัน ปรับ ${tierDef.fineAmount} บาท)` : tierDef.isVip ? " (แขกผู้ใหญ่)" : " (ฟรี)";
         showToast(
-          `⏳ จองล่วงหน้า ${table.label} • ${seatCode} ให้คุณ ${attendee.nickname || attendee.name} (ต้องมาเช็กอินภายใน ${holdMins} นาที มิฉะนั้นจะหลุดอัตโนมัติ)`,
+          `⏳ จองล่วงหน้า ${table.label} • ${seatCode} ให้คุณ ${attendee.nickname || attendee.name} ${holdMins} นาที${fineNote}`,
           "amber"
         );
       }
       setPickingSeatNoForInlineAssign(null);
       setInlineAssignSearch("");
+      setAdvanceHoldTarget(null);
       if (selectedAttendeeTicketNo === attendee.ticketNo) {
         setSelectedAttendeeTicketNo(null);
       }
       // Always return focus to checked-in attendees after each booking
       setQueueFilterMode("checked_in");
     }
+  };
+
+  // Submit Advance Hold Booking Modal
+  const handleSubmitAdvanceHold = (e) => {
+    if (e) e.preventDefault();
+    if (!advanceHoldTarget) return;
+    const booker = regMap.get(holdBookerTicketNo);
+    const ownerGuest = regMap.get(holdOwnerTicketNo);
+    if (!booker) {
+      showToast("กรุณาเลือก 'ผู้จอง' ในขั้นตอนที่ 1 ก่อนครับ", "amber");
+      return;
+    }
+    if (!ownerGuest) {
+      showToast("กรุณาเลือก 'เจ้าของเก้าอี้' ในขั้นตอนที่ 2 ครับ", "amber");
+      return;
+    }
+    const tier = getHoldTierOption(holdTierMinutes);
+    if (tier.requiresOwnerPin) {
+      if (!isValidOwnerPin(vipPinInput, eventConfig)) {
+        setVipPinError("รหัสเจ้าของแอปไม่ถูกต้อง (กรุณากรอกเบอร์โทรศัพท์เจ้าของแอป 0937925665)");
+        return;
+      }
+    }
+    setVipPinError("");
+    handleAssignSeat(advanceHoldTarget.table, advanceHoldTarget.seatNo, ownerGuest, {
+      booker,
+      minutes: tier.minutes,
+      fineAmount: tier.fineAmount,
+      isVipGuest: tier.isVip
+    });
   };
 
   // Owner-only: remove / cancel a seat directly
@@ -2005,15 +2172,32 @@ export default function TableSeatingHub({
                                   )}
                                   <span className="font-mono">{occ.attendee.ticketNo}</span>
                                   {occ.status === "hold" ? (
-                                    <span className="px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-300 font-mono font-black text-[9px]">
-                                      ⏳ เหลือ {formatCountdownMmSs(occ.remainingMs)}
-                                    </span>
+                                    <>
+                                      <span className="px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-300 font-mono font-black text-[9px]">
+                                        ⏳ เหลือ {formatCountdownMmSs(occ.remainingMs)}
+                                      </span>
+                                      {occ.isVipGuest && (
+                                        <span className="px-1.5 py-0.5 rounded-md bg-violet-100 text-violet-800 border border-violet-300 font-bold text-[9px]">
+                                          👑 แขกผู้ใหญ่
+                                        </span>
+                                      )}
+                                      {occ.fineAmount > 0 && (
+                                        <span className="px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-700 font-bold text-[9px]">
+                                          ปรับ {occ.fineAmount}฿
+                                        </span>
+                                      )}
+                                    </>
                                   ) : (
                                     <span className="px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-700 font-bold text-[9px]">
                                       ✓ ยืนยันแล้ว
                                     </span>
                                   )}
                                 </div>
+                                {occ.status === "hold" && occ.bookedByName && (
+                                  <div className="text-[9px] text-indigo-600 font-bold truncate mt-0.5">
+                                    ผู้จอง: {occ.bookedByNickname || occ.bookedByName}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           )}
@@ -2111,6 +2295,16 @@ export default function TableSeatingHub({
                       {/* Inline Quick-Pick Unassigned Attendee Dropdown */}
                       {isEmpty && isPickingThis && !selectedAttendee && (
                         <div className="mt-2.5 pt-2.5 border-t border-indigo-200 space-y-2">
+                          {/* Quick CTA for Advance Hold Booking (Booker -> Seat Owner -> 15/30/60/120 VIP) */}
+                          <button
+                            type="button"
+                            onClick={() => openAdvanceHoldModal(table, seatNo, null)}
+                            className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-amber-400 to-orange-400 hover:from-amber-300 hover:to-orange-300 text-slate-950 text-[11px] font-black flex items-center justify-center space-x-1.5 shadow-xs cursor-pointer"
+                          >
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>⏳ จองล่วงหน้าให้เพื่อนที่ยังไม่เข้างาน (เลือกผู้จองก่อน)</span>
+                          </button>
+
                           <div className="relative">
                             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
                             <input
@@ -2307,6 +2501,17 @@ export default function TableSeatingHub({
               <ListChecks className="w-3.5 h-3.5 text-slate-600" />
               <span>สรุปรายชื่อตามโต๊ะ</span>
             </button>
+
+            {Object.keys(seatingPlan?.expiredHoldFines || {}).length > 0 && (
+              <button
+                type="button"
+                onClick={() => setIsFineLedgerOpen(true)}
+                className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-extrabold flex items-center space-x-1.5 transition-all cursor-pointer"
+              >
+                <Banknote className="w-3.5 h-3.5" />
+                <span>ประวัติค่าปรับ ({Object.keys(seatingPlan?.expiredHoldFines || {}).length})</span>
+              </button>
+            )}
 
             {onGoToTableLuckyDraw && (
               <button
@@ -2524,33 +2729,85 @@ export default function TableSeatingHub({
               </div>
             </div>
 
-            {/* Row 1.5: Owner Hold Duration Setting (4 Buttons: 15, 30, 60, 120 นาที) */}
-            <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs font-black text-slate-800 flex items-center space-x-1.5">
-                  <Clock className="w-4 h-4 text-amber-600" />
-                  <span>ตั้งเวลาจองล่วงหน้ากรณีพิเศษ (ยังไม่เข้างาน):</span>
-                </span>
-                <div className="flex items-center space-x-1.5">
+            {/* Row 1.5: Owner Fine QR Code Uploader (Auto-Deletes Old Image) + Default Hold Duration */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5">
+              {/* Left: Fine Payment QR Code Upload (Owner) */}
+              <div className="lg:col-span-6 flex items-center justify-between gap-3 bg-indigo-50/70 border border-indigo-200 rounded-xl px-3 py-2">
+                <div className="flex items-center space-x-3 min-w-0">
+                  {seatingPlan?.fineQrCodeUrl ? (
+                    <img
+                      src={seatingPlan.fineQrCodeUrl}
+                      alt="QR รับค่าปรับ"
+                      className="w-12 h-12 rounded-xl object-contain bg-white border border-indigo-200 p-0.5 shrink-0 shadow-xs"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-xl bg-white border border-dashed border-indigo-300 flex items-center justify-center text-indigo-400 shrink-0">
+                      <QrCode className="w-6 h-6" />
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <div className="text-xs font-black text-indigo-950">
+                      QR Code รับชำระค่าปรับมาสาย (50฿ / 100฿)
+                    </div>
+                    <div className="text-[10px] text-indigo-700 leading-tight">
+                      {seatingPlan?.fineQrCodeUrl
+                        ? "พร้อมแสดงตอนลงทะเบียนเข้างาน (เปลี่ยนรูปใหม่จะลบรูปเดิมอัตโนมัติ)"
+                        : "อัปโหลดรูป QR พร้อมเพย์สำหรับแสดงเมื่อแขกมาสายกว่าเวลาจองล่วงหน้า"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-1.5 shrink-0">
+                  <label className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-extrabold flex items-center space-x-1 cursor-pointer shadow-xs">
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>{isUploadingFineQr ? "กำลังอัป..." : seatingPlan?.fineQrCodeUrl ? "เปลี่ยนรูป QR" : "อัปโหลด QR"}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleUploadFineQrCode}
+                      disabled={isUploadingFineQr}
+                      className="hidden"
+                    />
+                  </label>
+                  {seatingPlan?.fineQrCodeUrl && (
+                    <button
+                      type="button"
+                      onClick={handleDeleteFineQrCode}
+                      title="ลบรูป QR Code"
+                      className="p-1.5 rounded-lg bg-white hover:bg-rose-50 border border-rose-200 text-rose-600 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Right: Default Hold Duration Reference (15, 30, 60, 120) */}
+              <div className="lg:col-span-6 flex flex-wrap items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs font-black text-slate-800 flex items-center space-x-1">
+                    <Clock className="w-3.5 h-3.5 text-amber-600" />
+                    <span>ค่าเริ่มต้นจองล่วงหน้า:</span>
+                  </span>
                   {HOLD_DURATION_OPTIONS.map((mins) => (
                     <button
                       key={mins}
                       type="button"
                       onClick={() => handleUpdateHoldDuration(mins)}
-                      className={`px-3 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer border ${
+                      className={`px-2 py-1 rounded-lg text-[11px] font-extrabold transition-all cursor-pointer border ${
                         holdDurationMinutes === mins
                           ? "bg-amber-500 border-amber-600 text-slate-950 shadow-sm"
                           : "bg-white border-slate-200 text-slate-700 hover:bg-amber-50 hover:border-amber-300"
                       }`}
                     >
-                      {mins >= 60 ? `${mins} นาที (${mins / 60} ชม.)` : `${mins} นาที`}
+                      {mins === 120 ? "แขกผู้ใหญ่" : `${mins}น.`}
                     </button>
                   ))}
                 </div>
+                <span className="text-[10px] text-slate-500">
+                  15น.=ฟรี • 30น.=50฿ • 60น.=100฿ • 120น.=แขกผู้ใหญ่
+                </span>
               </div>
-              <span className="text-[11px] text-slate-500 font-medium">
-                * มีผลเฉพาะการจองล่วงหน้ารายถัดไป ไม่เปลี่ยนแปลงเวลาของแขกที่จองไว้ก่อนหน้า
-              </span>
             </div>
 
             {/* Row 2: Dynamic Tool Palette for Placing Items (+ Add / Remove Types) */}
@@ -3291,7 +3548,7 @@ export default function TableSeatingHub({
                                   </span>
                                 ) : (
                                   <span className="px-1.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 font-bold">
-                                    ⏳ ยังไม่เข้างาน (จองได้ {holdDurationMinutes}น.)
+                                    ⏳ ยังไม่เข้างาน (จองล่วงหน้าได้)
                                   </span>
                                 )}
                               </div>
@@ -3324,17 +3581,35 @@ export default function TableSeatingHub({
                                 <span
                                   className={`px-2 py-1 rounded-lg border font-black text-[11px] ${
                                     seatInfo.status === "hold"
-                                      ? "bg-amber-100 border-amber-400 text-amber-900"
+                                      ? seatInfo.isVipGuest
+                                        ? "bg-violet-100 border-violet-400 text-violet-900"
+                                        : "bg-amber-100 border-amber-400 text-amber-900"
                                       : "bg-sky-100 border-sky-300 text-sky-900"
                                   }`}
                                 >
-                                  {seatInfo.status === "hold" ? "⏳ " : "🪑 "}
+                                  {seatInfo.status === "hold" ? (seatInfo.isVipGuest ? "👑 " : "⏳ ") : "🪑 "}
                                   {seatInfo.tableLabel} • {seatInfo.seatCode}
                                 </span>
                                 {seatInfo.status === "hold" && (
-                                  <span className="text-[10px] font-mono font-extrabold text-amber-700">
-                                    เหลือ {formatCountdownMmSs(seatInfo.remainingMs)} น.
-                                  </span>
+                                  <div className="flex flex-col items-end gap-0.5">
+                                    <span className="text-[10px] font-mono font-extrabold text-amber-700">
+                                      เหลือ {formatCountdownMmSs(seatInfo.remainingMs)} น.
+                                    </span>
+                                    {seatInfo.bookedByName && (
+                                      <span className="text-[9px] font-bold text-slate-500 max-w-[130px] truncate">
+                                        ผู้จอง: {seatInfo.bookedByNickname || seatInfo.bookedByName}
+                                      </span>
+                                    )}
+                                    {seatInfo.isVipGuest ? (
+                                      <span className="text-[9px] font-black text-violet-700 bg-violet-50 border border-violet-200 px-1.5 py-0.5 rounded">
+                                        👑 แขกผู้ใหญ่
+                                      </span>
+                                    ) : seatInfo.fineAmount > 0 ? (
+                                      <span className="text-[9px] font-black text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded">
+                                        สายปรับ {seatInfo.fineAmount}฿
+                                      </span>
+                                    ) : null}
+                                  </div>
                                 )}
                                 {isOwner ? (
                                   <button
@@ -3832,6 +4107,613 @@ export default function TableSeatingHub({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================= */}
+      {/* ADVANCE HOLD BOOKING MODAL (Step 1: Booker -> Step 2: Owner -> Step 3: Tier) */}
+      {/* ================================================================= */}
+      {advanceHoldTarget && (() => {
+        const targetSeatCode = getSeatCode(advanceHoldTarget.table, advanceHoldTarget.seatNo);
+        const selectedBooker = holdBookerTicketNo ? regMap.get(holdBookerTicketNo) : null;
+        const selectedOwnerGuest = holdOwnerTicketNo ? regMap.get(holdOwnerTicketNo) : null;
+        const selectedTier = getHoldTierOption(holdTierMinutes);
+
+        const bookerQ = holdBookerSearch.trim().toLowerCase();
+        const bookerCandidates = sortedRegistrations
+          .filter((r) => {
+            if (!bookerQ) return true;
+            return (
+              r.name?.toLowerCase().includes(bookerQ) ||
+              r.nickname?.toLowerCase().includes(bookerQ) ||
+              r.ticketNo?.toLowerCase().includes(bookerQ) ||
+              r.phone?.includes(bookerQ) ||
+              r.club?.toLowerCase().includes(bookerQ)
+            );
+          })
+          .slice(0, 30);
+
+        const ownerQ = holdOwnerSearch.trim().toLowerCase();
+        const ownerCandidates = unassignedList
+          .filter((r) => !r.checkedIn)
+          .filter((r) => {
+            if (!ownerQ) return true;
+            return (
+              r.name?.toLowerCase().includes(ownerQ) ||
+              r.nickname?.toLowerCase().includes(ownerQ) ||
+              r.ticketNo?.toLowerCase().includes(ownerQ) ||
+              r.phone?.includes(ownerQ) ||
+              r.club?.toLowerCase().includes(ownerQ)
+            );
+          })
+          .slice(0, 30);
+
+        const canSubmitHold =
+          Boolean(selectedBooker) &&
+          Boolean(selectedOwnerGuest) &&
+          (!selectedTier.requiresOwnerPin || vipPinInput.trim().length > 0);
+
+        return (
+          <div
+            className="fixed inset-0 z-[85] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-2.5 sm:p-4"
+            onClick={() => setAdvanceHoldTarget(null)}
+          >
+            <div
+              className="bg-white rounded-3xl border border-amber-200 shadow-2xl w-full max-w-xl max-h-[92vh] flex flex-col overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="px-5 py-4 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 text-white flex items-center justify-between shrink-0">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center shrink-0">
+                    <Clock className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm sm:text-base font-black leading-tight">
+                      จองเก้าอี้ล่วงหน้าให้เพื่อนที่ยังไม่เข้างาน
+                    </h3>
+                    <p className="text-xs text-amber-100 font-bold mt-0.5">
+                      ตำแหน่งที่นั่ง: {advanceHoldTarget.table.label} • เก้าอี้ {targetSeatCode}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAdvanceHoldTarget(null)}
+                  className="p-2 rounded-xl bg-white/15 hover:bg-white/25 text-white cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <form onSubmit={handleSubmitAdvanceHold} className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+                {/* STEP 1: SELECT BOOKER (MANDATORY FIRST) */}
+                <div
+                  className={`rounded-2xl border-2 p-3.5 space-y-2.5 transition-all ${
+                    selectedBooker
+                      ? "border-emerald-300 bg-emerald-50/40"
+                      : "border-amber-400 bg-amber-50/50 ring-2 ring-amber-300/40"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center space-x-2">
+                      <span
+                        className={`w-6 h-6 rounded-full text-xs font-black flex items-center justify-center ${
+                          selectedBooker ? "bg-emerald-600 text-white" : "bg-amber-500 text-slate-950"
+                        }`}
+                      >
+                        1
+                      </span>
+                      <div>
+                        <div className="text-xs sm:text-sm font-black text-slate-900">
+                          เลือก &ldquo;ผู้จอง&rdquo; ก่อน (จำเป็น)
+                        </div>
+                        <div className="text-[10px] text-slate-500">
+                          เลือกได้ทั้งคนที่เข้างานแล้ว หรือยังไม่เข้างานก็ได้ (บันทึกไว้แจ้งเตือนตอนมาสาย)
+                        </div>
+                      </div>
+                    </div>
+                    {selectedBooker && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHoldBookerTicketNo("");
+                          setHoldBookerSearch("");
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-[11px] font-bold text-slate-600 cursor-pointer shrink-0"
+                      >
+                        เปลี่ยนผู้จอง
+                      </button>
+                    )}
+                  </div>
+
+                  {selectedBooker ? (
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-emerald-200">
+                      <div className="flex items-center space-x-2.5 min-w-0">
+                        {selectedBooker.photoUrl ? (
+                          <img
+                            src={selectedBooker.photoUrl}
+                            alt={selectedBooker.name}
+                            className="w-9 h-9 rounded-full object-cover ring-2 ring-emerald-200 shrink-0"
+                          />
+                        ) : (
+                          <div
+                            className={`w-9 h-9 rounded-full ${getAvatarColor(selectedBooker.ticketNo)} text-white font-black flex items-center justify-center text-center px-0.5 break-words shrink-0 ${getAvatarTextSizeClass(
+                              getInitials(selectedBooker.name, selectedBooker.nickname),
+                              "md"
+                            )}`}
+                          >
+                            {getInitials(selectedBooker.name, selectedBooker.nickname)}
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <div className="text-xs font-black text-slate-900 truncate">
+                            {selectedBooker.name}
+                            {selectedBooker.nickname && (
+                              <span className="text-indigo-600 ml-1">({selectedBooker.nickname})</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mt-0.5">
+                            <span className="font-mono font-bold">{selectedBooker.ticketNo}</span>
+                            <span
+                              className={`px-1.5 py-0.5 rounded-full font-bold ${
+                                selectedBooker.checkedIn
+                                  ? "bg-emerald-100 text-emerald-700"
+                                  : "bg-amber-100 text-amber-800"
+                              }`}
+                            >
+                              {selectedBooker.checkedIn ? "✓ เข้างานแล้ว" : "ยังไม่เข้างาน"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          value={holdBookerSearch}
+                          onChange={(e) => setHoldBookerSearch(e.target.value)}
+                          placeholder="ค้นหาชื่อ, ชื่อเล่น, เลขบัตร หรือเบอร์โทร ผู้จอง..."
+                          className="w-full pl-8 pr-3 py-2 rounded-xl bg-white border border-amber-300 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-500"
+                        />
+                      </div>
+                      <div className="max-h-36 overflow-y-auto space-y-1 bg-white rounded-xl border border-slate-200 p-1.5">
+                        {bookerCandidates.length === 0 ? (
+                          <div className="text-center py-4 text-[11px] text-slate-400">
+                            ไม่พบรายชื่อผู้จองที่ค้นหา
+                          </div>
+                        ) : (
+                          bookerCandidates.map((r) => (
+                            <button
+                              key={r.ticketNo}
+                              type="button"
+                              onClick={() => setHoldBookerTicketNo(r.ticketNo)}
+                              className="w-full px-2.5 py-2 rounded-lg hover:bg-amber-50 flex items-center justify-between text-left transition-colors cursor-pointer"
+                            >
+                              <div className="min-w-0 pr-2">
+                                <div className="text-xs font-extrabold text-slate-900 truncate">
+                                  {r.name}
+                                  {r.nickname ? ` (${r.nickname})` : ""}
+                                </div>
+                                <div className="text-[10px] text-slate-500 font-mono">
+                                  {r.ticketNo} • {r.club || "สงสพัท"}
+                                </div>
+                              </div>
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                                  r.checkedIn
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : "bg-slate-100 text-slate-600"
+                                }`}
+                              >
+                                {r.checkedIn ? "เข้างานแล้ว" : "ยังไม่เข้างาน"}
+                              </span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* STEP 2: SELECT SEAT OWNER (UNLOCKS AFTER BOOKER IS CHOSEN) */}
+                <div
+                  className={`rounded-2xl border-2 p-3.5 space-y-2.5 transition-all ${
+                    !selectedBooker
+                      ? "border-slate-200 bg-slate-50/70 opacity-60 pointer-events-none"
+                      : selectedOwnerGuest
+                      ? "border-emerald-300 bg-emerald-50/40"
+                      : "border-amber-400 bg-amber-50/50 ring-2 ring-amber-300/40"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center space-x-2">
+                      <span
+                        className={`w-6 h-6 rounded-full text-xs font-black flex items-center justify-center ${
+                          !selectedBooker
+                            ? "bg-slate-300 text-slate-600"
+                            : selectedOwnerGuest
+                            ? "bg-emerald-600 text-white"
+                            : "bg-amber-500 text-slate-950"
+                        }`}
+                      >
+                        2
+                      </span>
+                      <div>
+                        <div className="text-xs sm:text-sm font-black text-slate-900">
+                          เลือก &ldquo;เจ้าของเก้าอี้&rdquo; (ผู้ที่ยังไม่เข้างาน)
+                        </div>
+                        <div className="text-[10px] text-slate-500">
+                          {!selectedBooker
+                            ? "กรุณาเลือกผู้จองในขั้นตอนที่ 1 ก่อน จึงจะเลือกเจ้าของเก้าอี้ได้"
+                            : "เลือกชื่อเพื่อนที่ยังไม่ลงทะเบียนเข้างานและยังไม่มีโต๊ะ"}
+                        </div>
+                      </div>
+                    </div>
+                    {selectedBooker && selectedOwnerGuest && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHoldOwnerTicketNo("");
+                          setHoldOwnerSearch("");
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-[11px] font-bold text-slate-600 cursor-pointer shrink-0"
+                      >
+                        เปลี่ยนเจ้าของเก้าอี้
+                      </button>
+                    )}
+                  </div>
+
+                  {selectedOwnerGuest ? (
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-emerald-200">
+                      <div className="flex items-center space-x-2.5 min-w-0">
+                        <div
+                          className={`w-9 h-9 rounded-full ${getAvatarColor(selectedOwnerGuest.ticketNo)} text-white font-black flex items-center justify-center text-center px-0.5 break-words shrink-0 ${getAvatarTextSizeClass(
+                            getInitials(selectedOwnerGuest.name, selectedOwnerGuest.nickname),
+                            "md"
+                          )}`}
+                        >
+                          {getInitials(selectedOwnerGuest.name, selectedOwnerGuest.nickname)}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-black text-slate-900 truncate">
+                            {selectedOwnerGuest.name}
+                            {selectedOwnerGuest.nickname && (
+                              <span className="text-indigo-600 ml-1">({selectedOwnerGuest.nickname})</span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-slate-500 font-mono">
+                            {selectedOwnerGuest.ticketNo} • ยังไม่ลงทะเบียนเข้างาน
+                          </div>
+                        </div>
+                      </div>
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          disabled={!selectedBooker}
+                          value={holdOwnerSearch}
+                          onChange={(e) => setHoldOwnerSearch(e.target.value)}
+                          placeholder="ค้นหาชื่อเพื่อนที่ยังไม่เข้างาน..."
+                          className="w-full pl-8 pr-3 py-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-500"
+                        />
+                      </div>
+                      <div className="max-h-36 overflow-y-auto space-y-1 bg-white rounded-xl border border-slate-200 p-1.5">
+                        {ownerCandidates.length === 0 ? (
+                          <div className="text-center py-4 text-[11px] text-slate-400">
+                            ไม่มีรายชื่อที่ยังไม่เข้างานและยังว่างอยู่
+                          </div>
+                        ) : (
+                          ownerCandidates.map((r) => (
+                            <button
+                              key={r.ticketNo}
+                              type="button"
+                              onClick={() => setHoldOwnerTicketNo(r.ticketNo)}
+                              className="w-full px-2.5 py-2 rounded-lg hover:bg-amber-50 flex items-center justify-between text-left transition-colors cursor-pointer"
+                            >
+                              <div className="min-w-0 pr-2">
+                                <div className="text-xs font-extrabold text-slate-900 truncate">
+                                  {r.name}
+                                  {r.nickname ? ` (${r.nickname})` : ""}
+                                </div>
+                                <div className="text-[10px] text-slate-500 font-mono">
+                                  {r.ticketNo} • {r.club || "สงสพัท"}
+                                </div>
+                              </div>
+                              <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold shrink-0">
+                                เลือกคนนี้
+                              </span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* STEP 3: CHOOSE EXPECTED ARRIVAL DURATION & FINE POLICY */}
+                <div
+                  className={`rounded-2xl border-2 p-3.5 space-y-3 transition-all ${
+                    !selectedBooker || !selectedOwnerGuest
+                      ? "border-slate-200 bg-slate-50/70 opacity-60 pointer-events-none"
+                      : "border-indigo-200 bg-indigo-50/30"
+                  }`}
+                >
+                  <div className="flex items-center space-x-2">
+                    <span
+                      className={`w-6 h-6 rounded-full text-xs font-black flex items-center justify-center ${
+                        !selectedBooker || !selectedOwnerGuest
+                          ? "bg-slate-300 text-slate-600"
+                          : "bg-indigo-600 text-white"
+                      }`}
+                    >
+                      3
+                    </span>
+                    <div>
+                      <div className="text-xs sm:text-sm font-black text-slate-900">
+                        ระบุเวลาที่จะมาถึง (และเงื่อนไขค่าปรับหากมาไม่ทัน)
+                      </div>
+                      <div className="text-[10px] text-slate-500">
+                        หากเลยเวลาที่จอง เก้าอี้จะหลุดเป็นว่างอัตโนมัติ และแจ้งเตือนค่าปรับตอนลงทะเบียนเข้างาน
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    {HOLD_TIER_OPTIONS.map((tier) => {
+                      const active = holdTierMinutes === tier.minutes;
+                      return (
+                        <button
+                          key={tier.minutes}
+                          type="button"
+                          onClick={() => {
+                            setHoldTierMinutes(tier.minutes);
+                            setVipPinError("");
+                          }}
+                          className={`p-3 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                            active
+                              ? tier.isVip
+                                ? "border-violet-500 bg-violet-50 ring-2 ring-violet-300/50 shadow-sm"
+                                : tier.fineAmount > 0
+                                ? "border-rose-500 bg-rose-50 ring-2 ring-rose-300/50 shadow-sm"
+                                : "border-emerald-500 bg-emerald-50 ring-2 ring-emerald-300/50 shadow-sm"
+                              : "border-slate-200 bg-white hover:border-slate-300"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-xs sm:text-sm font-black text-slate-900 flex items-center space-x-1">
+                              {tier.isVip && <Crown className="w-3.5 h-3.5 text-violet-600 shrink-0" />}
+                              <span>{tier.label}</span>
+                            </span>
+                            {active && <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />}
+                          </div>
+                          <div
+                            className={`text-[11px] font-extrabold mt-1 ${
+                              tier.isVip
+                                ? "text-violet-700"
+                                : tier.fineAmount > 0
+                                ? "text-rose-600"
+                                : "text-emerald-700"
+                            }`}
+                          >
+                            {tier.isVip
+                              ? "ฟรี • ต้องใช้รหัสเจ้าของแอป"
+                              : tier.fineAmount > 0
+                              ? `มาไม่ทัน ปรับ ${tier.fineAmount} บาท`
+                              : "ฟรี (ไม่มีค่าปรับ)"}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Owner PIN Input for VIP 120-min tier */}
+                  {selectedTier.requiresOwnerPin && (
+                    <div className="p-3 rounded-2xl bg-violet-50 border border-violet-200 space-y-2">
+                      <label className="flex items-center space-x-1.5 text-xs font-black text-violet-900">
+                        <KeyRound className="w-4 h-4 text-violet-600" />
+                        <span>กรอกรหัสเจ้าของแอปเพื่อยืนยันสิทธิ์ &ldquo;แขกผู้ใหญ่&rdquo; *</span>
+                      </label>
+                      <input
+                        type="password"
+                        inputMode="numeric"
+                        value={vipPinInput}
+                        onChange={(e) => {
+                          setVipPinInput(e.target.value);
+                          setVipPinError("");
+                        }}
+                        placeholder="กรอกเบอร์โทรศัพท์เจ้าของแอป..."
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-violet-300 text-sm font-mono font-bold text-slate-900 focus:outline-none focus:border-violet-600"
+                      />
+                      {vipPinError && (
+                        <div className="text-[11px] font-bold text-rose-600 flex items-center space-x-1">
+                          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                          <span>{vipPinError}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer Actions */}
+                <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setAdvanceHoldTarget(null)}
+                    className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!canSubmitHold}
+                    className={`px-5 py-2.5 rounded-xl text-xs sm:text-sm font-black shadow-md flex items-center space-x-1.5 transition-all ${
+                      canSubmitHold
+                        ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 cursor-pointer"
+                        : "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
+                    }`}
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>ยืนยันจองเก้าอี้ล่วงหน้า ({selectedTier.minutes} นาที)</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ================================================================= */}
+      {/* FINE HISTORY & PROOF LEDGER MODAL                                 */}
+      {/* ================================================================= */}
+      {isFineLedgerOpen && (() => {
+        const fines = Object.values(seatingPlan?.expiredHoldFines || {}).sort(
+          (a, b) => new Date(b.expiredAt || 0).getTime() - new Date(a.expiredAt || 0).getTime()
+        );
+        const paidFines = fines.filter((f) => f.status === "paid");
+        const unpaidFines = fines.filter((f) => f.status !== "paid");
+        const totalCollected = paidFines.reduce((sum, f) => sum + (Number(f.fineAmount) || 0), 0);
+        const totalPending = unpaidFines.reduce((sum, f) => sum + (Number(f.fineAmount) || 0), 0);
+
+        return (
+          <div
+            className="fixed inset-0 z-[85] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6"
+            onClick={() => setIsFineLedgerOpen(false)}
+          >
+            <div
+              className="bg-white rounded-3xl border border-rose-200 shadow-2xl w-full max-w-3xl max-h-[88vh] flex flex-col overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-5 py-4 bg-gradient-to-r from-rose-700 to-red-700 text-white flex items-center justify-between">
+                <div>
+                  <h3 className="text-base sm:text-lg font-black flex items-center space-x-2">
+                    <Banknote className="w-5 h-5 text-amber-300" />
+                    <span>รายการค่าปรับจองล่วงหน้ามาสาย ({fines.length} รายการ)</span>
+                  </h3>
+                  <p className="text-xs text-rose-100 mt-0.5">
+                    ชำระแล้ว {paidFines.length} รายการ (รวม {totalCollected.toLocaleString()} บาท) • ค้างชำระ {unpaidFines.length} รายการ ({totalPending.toLocaleString()} บาท)
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsFineLedgerOpen(false)}
+                  className="p-2 rounded-xl bg-white/15 hover:bg-white/25 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 space-y-2.5 bg-slate-50">
+                {fines.length === 0 ? (
+                  <div className="text-center py-12 text-slate-400 text-sm">
+                    ยังไม่มีรายการค่าปรับมาสาย
+                  </div>
+                ) : (
+                  fines.map((fine) => {
+                    const guest = regMap.get(fine.ticketNo);
+                    const isPaid = fine.status === "paid";
+                    return (
+                      <div
+                        key={fine.ticketNo}
+                        className={`p-3.5 rounded-2xl border bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                          isPaid ? "border-emerald-200" : "border-rose-200"
+                        }`}
+                      >
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center flex-wrap gap-2">
+                            <span className="text-sm font-black text-slate-900">
+                              {guest ? `${guest.name}${guest.nickname ? ` (${guest.nickname})` : ""}` : fine.ticketNo}
+                            </span>
+                            <span className="text-[11px] font-mono text-slate-500">{fine.ticketNo}</span>
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                                isPaid
+                                  ? "bg-emerald-100 text-emerald-700"
+                                  : "bg-rose-100 text-rose-700"
+                              }`}
+                            >
+                              {isPaid
+                                ? `✅ ชำระแล้ว (${fine.paymentMethod === "cash" ? "เงินสด" : "สลิป QR"})`
+                                : "⏳ ค้างชำระตอนเข้างาน"}
+                            </span>
+                          </div>
+                          <div className="text-xs text-slate-600 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                            <span>
+                              เก้าอี้เดิม: <strong>{fine.tableLabel} • {fine.seatCode}</strong>
+                            </span>
+                            <span>•</span>
+                            <span>
+                              จองล่วงหน้า <strong>{fine.holdDurationMinutes} นาที</strong>
+                            </span>
+                            <span>•</span>
+                            <span className="text-rose-700 font-black">
+                              ปรับ {fine.fineAmount} บาท
+                            </span>
+                          </div>
+                          {fine.bookedByName && (
+                            <div className="text-[11px] text-amber-800 font-bold">
+                              ผู้จองให้: {fine.bookedByName}
+                              {fine.bookedByNickname ? ` (${fine.bookedByNickname})` : ""}
+                            </div>
+                          )}
+                        </div>
+
+                        {fine.proofPhotoUrl && (
+                          <button
+                            type="button"
+                            onClick={() => setViewingProofUrl(fine.proofPhotoUrl)}
+                            className="flex items-center space-x-2 p-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 shrink-0 cursor-pointer"
+                          >
+                            <img
+                              src={fine.proofPhotoUrl}
+                              alt="หลักฐานชำระค่าปรับ"
+                              className="w-12 h-12 rounded-lg object-cover border border-emerald-200"
+                            />
+                            <span className="text-[11px] font-extrabold text-emerald-800 pr-1.5">
+                              ดูรูปหลักฐาน
+                            </span>
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Proof Photo Lightbox */}
+      {viewingProofUrl && (
+        <div
+          className="fixed inset-0 z-[95] bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setViewingProofUrl(null)}
+        >
+          <div className="relative max-w-2xl w-full flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setViewingProofUrl(null)}
+              className="self-end mb-2 px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-bold flex items-center space-x-1 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+              <span>ปิดรูป</span>
+            </button>
+            <img
+              src={viewingProofUrl}
+              alt="หลักฐานการชำระค่าปรับ"
+              className="max-h-[80vh] max-w-full rounded-2xl shadow-2xl border-2 border-white/20 object-contain"
+            />
           </div>
         </div>
       )}

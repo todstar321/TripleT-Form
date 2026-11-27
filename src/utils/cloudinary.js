@@ -40,19 +40,23 @@ export function isCloudinaryConfigured() {
   return Boolean(config.cloudName && config.uploadPreset);
 }
 
-export async function uploadToCloudinary(fileOrDataUrl, config = {}, customSubfolder = "slips") {
+export async function uploadToCloudinaryWithMeta(fileOrDataUrl, config = {}, customSubfolder = "slips") {
   const effectiveConfig = getCloudinaryConfig(config);
   const { cloudName, uploadPreset, folderPrefix } = effectiveConfig;
 
-  // Fallback to local data URL if Cloudinary is not configured
-  if (!cloudName || !uploadPreset) {
-    console.log("Cloudinary not configured; storing image locally as Data URL");
-    if (typeof fileOrDataUrl === 'string') return fileOrDataUrl;
-    return new Promise((resolve) => {
+  const fallbackLocal = async () => {
+    if (typeof fileOrDataUrl === 'string') return { url: fileOrDataUrl, deleteToken: null, publicId: null };
+    const dataUrl = await new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = (e) => resolve(e.target.result);
       reader.readAsDataURL(fileOrDataUrl);
     });
+    return { url: dataUrl, deleteToken: null, publicId: null };
+  };
+
+  if (!cloudName || !uploadPreset) {
+    console.log("Cloudinary not configured; storing image locally as Data URL");
+    return fallbackLocal();
   }
 
   try {
@@ -75,17 +79,38 @@ export async function uploadToCloudinary(fileOrDataUrl, config = {}, customSubfo
     }
 
     const data = await response.json();
-    return data.secure_url || data.url;
+    return {
+      url: data.secure_url || data.url,
+      deleteToken: data.delete_token || null,
+      publicId: data.public_id || null
+    };
   } catch (error) {
     console.error("Cloudinary upload error:", error);
-    // If upload fails, fallback to local data url so user flow is not broken
-    if (typeof fileOrDataUrl === 'string') return fileOrDataUrl;
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = (e) => resolve(e.target.result);
-      reader.readAsDataURL(fileOrDataUrl);
-    });
+    return fallbackLocal();
   }
+}
+
+export async function deleteCloudinaryByToken(deleteToken, config = {}) {
+  if (!deleteToken) return false;
+  const { cloudName } = getCloudinaryConfig(config);
+  if (!cloudName) return false;
+  try {
+    const formData = new FormData();
+    formData.append("token", deleteToken);
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/delete_by_token`, {
+      method: "POST",
+      body: formData
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn("deleteCloudinaryByToken warning:", err);
+    return false;
+  }
+}
+
+export async function uploadToCloudinary(fileOrDataUrl, config = {}, customSubfolder = "slips") {
+  const result = await uploadToCloudinaryWithMeta(fileOrDataUrl, config, customSubfolder);
+  return result.url;
 }
 
 // Test Cloudinary connection using a 1x1 transparent pixel

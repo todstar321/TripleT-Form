@@ -6,6 +6,73 @@
 export const SEATING_STORAGE_KEY = "sme_fan_seating_plan_v1";
 export const DEFAULT_HOLD_DURATION_MINUTES = 15;
 export const HOLD_DURATION_OPTIONS = [15, 30, 60, 120];
+export const OWNER_VIP_PIN = "0937925665";
+
+export const HOLD_TIER_OPTIONS = [
+  {
+    minutes: 15,
+    label: "15 นาที",
+    sublabel: "ฟรี (ไม่มีค่าปรับ)",
+    fineAmount: 0,
+    requiresOwnerPin: false,
+    isVip: false,
+    tone: "emerald"
+  },
+  {
+    minutes: 30,
+    label: "30 นาที",
+    sublabel: "มาไม่ทัน ปรับ 50 บาท",
+    fineAmount: 50,
+    requiresOwnerPin: false,
+    isVip: false,
+    tone: "amber"
+  },
+  {
+    minutes: 60,
+    label: "60 นาที",
+    sublabel: "มาไม่ทัน ปรับ 100 บาท",
+    fineAmount: 100,
+    requiresOwnerPin: false,
+    isVip: false,
+    tone: "orange"
+  },
+  {
+    minutes: 120,
+    label: "แขกผู้ใหญ่ (120 นาที)",
+    sublabel: "ใส่รหัสเจ้าของแอป",
+    fineAmount: 0,
+    requiresOwnerPin: true,
+    isVip: true,
+    tone: "violet"
+  }
+];
+
+export function getHoldTierOption(minutes) {
+  const m = Number(minutes) || 15;
+  return HOLD_TIER_OPTIONS.find((t) => t.minutes === m) || {
+    minutes: m,
+    label: `${m} นาที`,
+    sublabel: m === 30 ? "มาไม่ทัน ปรับ 50 บาท" : m === 60 ? "มาไม่ทัน ปรับ 100 บาท" : "ฟรี",
+    fineAmount: m === 30 ? 50 : m === 60 ? 100 : 0,
+    requiresOwnerPin: m >= 120,
+    isVip: m >= 120,
+    tone: "amber"
+  };
+}
+
+/**
+ * Validate Owner VIP PIN (0937925665 or configured owner phone digits)
+ */
+export function isValidOwnerPin(input = "", eventConfig = null) {
+  const digits = String(input || "").replace(/\D/g, "");
+  if (!digits) return false;
+  if (digits === OWNER_VIP_PIN) return true;
+  const ownerUsers = (eventConfig?.adminUsers || []).filter((u) => u.role === "owner");
+  return ownerUsers.some((u) => {
+    const uPhone = String(u.phone || "").replace(/\D/g, "");
+    return uPhone && uPhone === digits;
+  });
+}
 
 export const CUSTOM_COLOR_THEMES = {
   violet: {
@@ -364,9 +431,12 @@ export function createDefaultSeatingPlan() {
       }
     ],
     holdDurationMinutes: DEFAULT_HOLD_DURATION_MINUTES,
+    fineQrCodeUrl: null,
+    fineQrDeleteToken: null,
     paletteTypes: DEFAULT_PALETTE_TYPES,
     assignments: {},
-    seatChangeRequests: {}
+    seatChangeRequests: {},
+    expiredHoldFines: {}
   };
 }
 
@@ -375,18 +445,23 @@ export function createEmptySeatingPlan(
   gridRows = 10,
   roomTitle = "ห้องจัดเลี้ยง โรงแรมบุรีศรีภู",
   paletteTypes = DEFAULT_PALETTE_TYPES,
-  holdDurationMinutes = DEFAULT_HOLD_DURATION_MINUTES
+  holdDurationMinutes = DEFAULT_HOLD_DURATION_MINUTES,
+  fineQrCodeUrl = null,
+  fineQrDeleteToken = null
 ) {
   return {
     gridCols,
     gridRows,
     roomTitle,
     holdDurationMinutes: Number(holdDurationMinutes) || DEFAULT_HOLD_DURATION_MINUTES,
+    fineQrCodeUrl,
+    fineQrDeleteToken,
     updatedAt: new Date().toISOString(),
     paletteTypes: Array.isArray(paletteTypes) && paletteTypes.length > 0 ? paletteTypes : DEFAULT_PALETTE_TYPES,
     items: [],
     assignments: {},
-    seatChangeRequests: {}
+    seatChangeRequests: {},
+    expiredHoldFines: {}
   };
 }
 
@@ -438,18 +513,58 @@ export function hasAnyHolds(seatingPlan) {
 }
 
 /**
- * Remove any expired temporary hold assignments from seatingPlan (pure function)
+ * Remove any expired temporary hold assignments from seatingPlan (pure function).
+ * If an expired hold had a fineAmount > 0 (e.g. 30 min = 50 THB, 60 min = 100 THB),
+ * records an unpaid fine in seatingPlan.expiredHoldFines[ticketNo] so it pops up upon check-in!
  */
 export function pruneExpiredHolds(seatingPlan, nowMs = Date.now()) {
   if (!seatingPlan?.assignments) return { changed: false, plan: seatingPlan, expiredCount: 0 };
   let expiredCount = 0;
   const nextAssignments = {};
   const expiredTickets = new Set();
+  const nextFines = { ...(seatingPlan.expiredHoldFines || {}) };
+
+  const tableById = new Map();
+  (seatingPlan.items || []).forEach((it) => {
+    if (it.type === "table") tableById.set(it.id, it);
+  });
 
   Object.entries(seatingPlan.assignments).forEach(([key, val]) => {
     if (isAssignmentExpired(val, nowMs)) {
       expiredCount++;
-      if (val?.ticketNo) expiredTickets.add(val.ticketNo);
+      if (val?.ticketNo) {
+        expiredTickets.add(val.ticketNo);
+        const holdMins = Number(val.holdDurationMinutes) || 15;
+        const computedFine =
+          val.fineAmount !== undefined && val.fineAmount !== null
+            ? Number(val.fineAmount)
+            : getHoldTierOption(holdMins).fineAmount;
+
+        if (computedFine > 0) {
+          const [tableId, seatNoStr] = key.split(":");
+          const table = tableById.get(tableId);
+          const seatNo = parseInt(seatNoStr, 10);
+          const seatCode = table && !isNaN(seatNo) ? getSeatCode(table, seatNo) : seatNoStr || "";
+          nextFines[val.ticketNo] = {
+            id: `fine_${val.ticketNo}_${Date.now()}`,
+            ticketNo: val.ticketNo,
+            tableLabel: table?.label || "โต๊ะ",
+            seatCode,
+            holdDurationMinutes: holdMins,
+            fineAmount: computedFine,
+            bookedByTicketNo: val.bookedByTicketNo || "",
+            bookedByName: val.bookedByName || val.assignedBy || "ผู้จองล่วงหน้า",
+            bookedByNickname: val.bookedByNickname || "",
+            bookedAt: val.assignedAt || null,
+            expiredAt: val.holdExpiresAt || new Date(nowMs).toISOString(),
+            status: "unpaid",
+            paidAt: null,
+            paymentMethod: null,
+            proofPhotoUrl: null,
+            collectedBy: null
+          };
+        }
+      }
     } else {
       nextAssignments[key] = val;
     }
@@ -472,9 +587,62 @@ export function pruneExpiredHolds(seatingPlan, nowMs = Date.now()) {
       ...seatingPlan,
       assignments: nextAssignments,
       seatChangeRequests: nextRequests,
+      expiredHoldFines: nextFines,
       updatedAt: new Date().toISOString()
     }
   };
+}
+
+/**
+ * Look up any unpaid late-hold fine for a ticket (checks both recorded expiredHoldFines
+ * and any just-expired hold still sitting in assignments before background prune ran).
+ */
+export function getUnpaidFineForTicket(seatingPlan, ticketNo, nowMs = Date.now()) {
+  if (!seatingPlan || !ticketNo) return null;
+
+  // 1. Check recorded expiredHoldFines
+  const existing = seatingPlan.expiredHoldFines?.[ticketNo];
+  if (existing && existing.status === "unpaid" && Number(existing.fineAmount) > 0) {
+    return existing;
+  }
+
+  // 2. Check if an assignment just expired right now before background prune
+  const tableById = new Map();
+  (seatingPlan.items || []).forEach((it) => {
+    if (it.type === "table") tableById.set(it.id, it);
+  });
+
+  for (const [key, val] of Object.entries(seatingPlan.assignments || {})) {
+    if (val?.ticketNo === ticketNo && isAssignmentExpired(val, nowMs)) {
+      const holdMins = Number(val.holdDurationMinutes) || 15;
+      const computedFine =
+        val.fineAmount !== undefined && val.fineAmount !== null
+          ? Number(val.fineAmount)
+          : getHoldTierOption(holdMins).fineAmount;
+      if (computedFine > 0) {
+        const [tableId, seatNoStr] = key.split(":");
+        const table = tableById.get(tableId);
+        const seatNo = parseInt(seatNoStr, 10);
+        return {
+          id: `fine_${ticketNo}_${nowMs}`,
+          ticketNo,
+          seatKeyToPrune: key,
+          tableLabel: table?.label || "โต๊ะ",
+          seatCode: table && !isNaN(seatNo) ? getSeatCode(table, seatNo) : seatNoStr || "",
+          holdDurationMinutes: holdMins,
+          fineAmount: computedFine,
+          bookedByTicketNo: val.bookedByTicketNo || "",
+          bookedByName: val.bookedByName || val.assignedBy || "ผู้จองล่วงหน้า",
+          bookedByNickname: val.bookedByNickname || "",
+          bookedAt: val.assignedAt || null,
+          expiredAt: val.holdExpiresAt || new Date(nowMs).toISOString(),
+          status: "unpaid"
+        };
+      }
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -549,6 +717,12 @@ export function buildAttendeeSeatMap(seatingPlan, nowMs = Date.now()) {
       status,
       holdExpiresAt: status === "hold" ? val.holdExpiresAt || null : null,
       remainingMs: status === "hold" ? getHoldRemainingMs(val, nowMs) : 0,
+      holdDurationMinutes: val.holdDurationMinutes || null,
+      fineAmount: val.fineAmount || 0,
+      isVipGuest: Boolean(val.isVipGuest),
+      bookedByTicketNo: val.bookedByTicketNo || "",
+      bookedByName: val.bookedByName || "",
+      bookedByNickname: val.bookedByNickname || "",
       assignedAt: val.assignedAt || null,
       assignedBy: val.assignedBy || ""
     });
@@ -558,7 +732,7 @@ export function buildAttendeeSeatMap(seatingPlan, nowMs = Date.now()) {
 }
 
 /**
- * Returns all occupied seats for a given tableId as Map<seatNo, { seatNo, ticketNo, attendee, status, holdExpiresAt, remainingMs, assignedAt, assignedBy }>
+ * Returns all occupied seats for a given tableId as Map<seatNo, { seatNo, ticketNo, attendee, status, holdExpiresAt, remainingMs, bookedByName, fineAmount, assignedAt, assignedBy }>
  * Automatically ignores expired temporary holds!
  */
 export function getTableOccupancyMap(seatingPlan, tableId, registrationsByTicket, nowMs = Date.now()) {
@@ -580,6 +754,12 @@ export function getTableOccupancyMap(seatingPlan, tableId, registrationsByTicket
       status,
       holdExpiresAt: status === "hold" ? val.holdExpiresAt || null : null,
       remainingMs: status === "hold" ? getHoldRemainingMs(val, nowMs) : 0,
+      holdDurationMinutes: val.holdDurationMinutes || null,
+      fineAmount: val.fineAmount || 0,
+      isVipGuest: Boolean(val.isVipGuest),
+      bookedByTicketNo: val.bookedByTicketNo || "",
+      bookedByName: val.bookedByName || "",
+      bookedByNickname: val.bookedByNickname || "",
       assignedAt: val.assignedAt,
       assignedBy: val.assignedBy
     });

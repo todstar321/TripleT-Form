@@ -70,6 +70,7 @@ import AttendeeInspectionModal from "./AttendeeInspectionModal";
 import AdminSurveyManagerModal from "./AdminSurveyManagerModal";
 import SatisfactionSurveyModal from "./SatisfactionSurveyModal";
 import TableSeatingHub from "./TableSeatingHub";
+import LateHoldFineModal from "./LateHoldFineModal";
 import { defaultSurveyConfig } from "../data/smeFanData";
 import {
   formatThaiDisplayDateTime,
@@ -86,7 +87,8 @@ import {
   getSeatingStats,
   getSeatCode,
   hasAnyHolds,
-  formatCountdownMmSs
+  formatCountdownMmSs,
+  getUnpaidFineForTicket
 } from "../utils/seatingPlanHelper";
 import { cleanPhoneNumber } from "../utils/phoneFormatter";
 import { bgAudio } from "../utils/backgroundAudio";
@@ -175,12 +177,25 @@ export default function EventCheckInHub({
   const attendeeSeatMap = useMemo(() => buildAttendeeSeatMap(seatingPlan, seatingNowMs), [seatingPlan, seatingNowMs]);
   const seatingStats = useMemo(() => getSeatingStats(seatingPlan, registrations, seatingNowMs), [seatingPlan, registrations, seatingNowMs]);
 
-  // Check-in Held Seat Confirmation Modal State & Pre-select Ticket for Owner Seat Change
+  // Check-in Held Seat Confirmation Modal State, Late Fine Payment Modal State & Pre-select Ticket for Owner Seat Change
   const [pendingCheckInSeatConfirm, setPendingCheckInSeatConfirm] = useState(null); // { attendee, seatInfo }
+  const [pendingLateFineCheckIn, setPendingLateFineCheckIn] = useState(null); // { attendee, fine }
   const [preselectedSeatingTicketNo, setPreselectedSeatingTicketNo] = useState(null);
 
-  // Unified Check-In Wrapper: Checks if attendee has a temporary seat hold and immediately prompts to confirm!
+  // Unified Check-In Wrapper:
+  // 1) If attendee has an unpaid late-hold fine -> block check-in & open LateHoldFineModal!
+  // 2) Otherwise check in and if attendee has an active temporary seat hold -> prompt to confirm!
   const handleCheckInWithSeatCheck = (ticketNo, status = true) => {
+    if (status === true && ticketNo) {
+      const unpaidFine = getUnpaidFineForTicket(seatingPlan, ticketNo, Date.now());
+      if (unpaidFine) {
+        const attendee = registrations.find((r) => r.ticketNo === ticketNo);
+        if (attendee) {
+          setPendingLateFineCheckIn({ attendee, fine: unpaidFine });
+          return false;
+        }
+      }
+    }
     if (onCheckIn) onCheckIn(ticketNo, status);
     if (status === true && ticketNo) {
       const liveMap = buildAttendeeSeatMap(seatingPlan, Date.now());
@@ -192,6 +207,44 @@ export default function EventCheckInHub({
         }
       }
     }
+    return true;
+  };
+
+  // Complete Late Hold Fine Payment (after capturing slip/cash photo proof) -> mark fine paid & complete check-in!
+  const handleCompleteLateFineAndCheckIn = ({ fine, attendee, paymentMethod, proofPhotoUrl }) => {
+    if (!attendee || !fine) return;
+    handleUpdateSeatingPlan((prev) => {
+      const nextAssignments = { ...(prev.assignments || {}) };
+      if (
+        fine.seatKeyToPrune &&
+        nextAssignments[fine.seatKeyToPrune]?.ticketNo === attendee.ticketNo
+      ) {
+        delete nextAssignments[fine.seatKeyToPrune];
+      }
+      const { seatKeyToPrune: _omit, ...cleanFine } = fine;
+      const nextFines = {
+        ...(prev.expiredHoldFines || {}),
+        [attendee.ticketNo]: {
+          ...cleanFine,
+          ticketNo: attendee.ticketNo,
+          status: "paid",
+          paymentMethod: paymentMethod || "qr",
+          proofPhotoUrl: proofPhotoUrl || "",
+          paidAt: new Date().toISOString(),
+          collectedBy: currentUser?.name || "Admin"
+        }
+      };
+      return {
+        ...prev,
+        assignments: nextAssignments,
+        expiredHoldFines: nextFines,
+        updatedAt: new Date().toISOString()
+      };
+    });
+    if (onCheckIn) onCheckIn(attendee.ticketNo, true);
+    setLastCheckInAttendee(attendee);
+    playAudioEffect("fanfare");
+    setPendingLateFineCheckIn(null);
   };
 
   // Confirm held seat permanently upon check-in
@@ -638,11 +691,12 @@ export default function EventCheckInHub({
       setLastCheckInAttendee(null);
       setPhotoModalTarget(null);
       setPhotoViewerTarget(null);
-      // Clear seat assignments while preserving room layout
+      // Clear seat assignments & fine ledger while preserving room layout and Owner fine QR code
       handleUpdateSeatingPlan((prev) => ({
         ...prev,
         assignments: {},
         seatChangeRequests: {},
+        expiredHoldFines: {},
         updatedAt: new Date().toISOString()
       }));
     };
@@ -1020,6 +1074,16 @@ export default function EventCheckInHub({
     playAudioEffect("beep");
     if (navigator.vibrate) {
       navigator.vibrate([100, 50, 100]);
+    }
+    const unpaidFine = getUnpaidFineForTicket(seatingPlan, scannedAttendee.ticketNo, Date.now());
+    if (unpaidFine) {
+      if (!scannedAttendee.photoUrl) {
+        // Capture check-in photo first -> immediately pops up LateHoldFineModal after photo save
+        openPhotoModal(scannedAttendee, 'checkin');
+      } else {
+        setPendingLateFineCheckIn({ attendee: scannedAttendee, fine: unpaidFine });
+      }
+      return;
     }
     handleCheckInWithSeatCheck(scannedAttendee.ticketNo, true);
     setLastCheckInAttendee(scannedAttendee);
@@ -1998,6 +2062,17 @@ export default function EventCheckInHub({
                           {(() => {
                             const sInfo = attendeeSeatMap.get(r.ticketNo);
                             const hasReq = Boolean(seatingPlan?.seatChangeRequests?.[r.ticketNo]);
+                            const unpaidFine = getUnpaidFineForTicket(seatingPlan, r.ticketNo, seatingNowMs);
+                            if (!sInfo && unpaidFine) {
+                              return (
+                                <span
+                                  title={`จองล่วงหน้า ${unpaidFine.holdDurationMinutes} นาที แต่มาไม่ทัน (ผู้จอง: ${unpaidFine.bookedByName || "-"})`}
+                                  className="inline-flex items-center px-2 py-0.5 rounded-lg bg-rose-100 text-rose-800 border border-rose-300 text-[10px] font-black"
+                                >
+                                  ⚠️ ค้างปรับ {unpaidFine.fineAmount}฿
+                                </span>
+                              );
+                            }
                             if (!sInfo) return <span className="text-slate-400 text-xs">-</span>;
                             return (
                               <button
@@ -2009,12 +2084,14 @@ export default function EventCheckInHub({
                                 title="คลิกเพื่อดูตำแหน่งโต๊ะบนผังห้อง"
                                 className={`inline-flex flex-col items-center px-2 py-0.5 rounded-lg border text-[10px] sm:text-[11px] font-black cursor-pointer transition-all hover:scale-105 ${
                                   sInfo.status === "hold"
-                                    ? "bg-amber-100 text-amber-900 border-amber-300"
+                                    ? sInfo.isVipGuest
+                                      ? "bg-violet-100 text-violet-900 border-violet-300"
+                                      : "bg-amber-100 text-amber-900 border-amber-300"
                                     : "bg-sky-100 text-sky-900 border-sky-300"
                                 }`}
                               >
                                 <span>
-                                  {sInfo.status === "hold" ? "⏳ " : "🪑 "}
+                                  {sInfo.status === "hold" ? (sInfo.isVipGuest ? "👑 " : "⏳ ") : "🪑 "}
                                   {sInfo.seatCode}
                                 </span>
                                 {sInfo.status === "hold" && (
@@ -2114,6 +2191,7 @@ export default function EventCheckInHub({
           onUpdateSeatingPlan={handleUpdateSeatingPlan}
           registrations={registrations}
           currentUser={currentUser}
+          eventConfig={eventConfig}
           onPlayEffect={playAudioEffect}
           initialSelectedTicketNo={preselectedSeatingTicketNo}
           onConsumeInitialSelectedTicket={() => setPreselectedSeatingTicketNo(null)}
@@ -5252,6 +5330,14 @@ export default function EventCheckInHub({
               <button
                 type="button"
                 onClick={() => {
+                  const unpaidFine = getUnpaidFineForTicket(seatingPlan, emergencyTarget.ticketNo, Date.now());
+                  if (unpaidFine) {
+                    // Has late fine -> take check-in photo first, then LateHoldFineModal pops up right after saving photo!
+                    playAudioEffect("beep");
+                    openPhotoModal(emergencyTarget, 'checkin');
+                    setEmergencyTarget(null);
+                    return;
+                  }
                   handleCheckInWithSeatCheck(emergencyTarget.ticketNo, true);
                   playAudioEffect("beep");
                   setLastCheckInAttendee(emergencyTarget);
@@ -5387,6 +5473,24 @@ export default function EventCheckInHub({
               ? ticketNo
               : photoModalTarget?.ticketNo;
             const currentPType = pType || photoModalType || 'checkin';
+
+            // If check-in photo AND attendee has an unpaid late-hold fine -> save photo first WITHOUT completing check-in, then immediately pop up LateHoldFineModal!
+            if (currentPType === 'checkin' && targetTicket) {
+              const unpaidFine = getUnpaidFineForTicket(seatingPlan, targetTicket, Date.now());
+              if (unpaidFine) {
+                if (onUpdateAttendeePhoto) {
+                  onUpdateAttendeePhoto(targetTicket, actualUrl, 'checkin', false);
+                }
+                const targetAtt =
+                  registrations.find((r) => r.ticketNo === targetTicket) || photoModalTarget;
+                setPhotoModalTarget(null);
+                setPendingLateFineCheckIn({
+                  attendee: { ...targetAtt, photoUrl: actualUrl },
+                  fine: unpaidFine
+                });
+                return;
+              }
+            }
             
             // Mark checkedIn: true as well when capturing photo at check-in desk
             if (currentPType === 'checkin' && onCheckIn && targetTicket) {
@@ -5777,6 +5881,19 @@ export default function EventCheckInHub({
           </div>
         );
       })()}
+
+      {/* ========================================================== */}
+      {/* LATE ARRIVAL HOLD FINE PAYMENT MODAL                       */}
+      {/* เด้งแจ้งเตือนหลังถ่ายรูปเข้างานเมื่อจองล่วงหน้า 30/60 นาทีแล้วมาไม่ทัน */}
+      {/* ========================================================== */}
+      <LateHoldFineModal
+        isOpen={Boolean(pendingLateFineCheckIn)}
+        attendee={pendingLateFineCheckIn?.attendee || null}
+        fine={pendingLateFineCheckIn?.fine || null}
+        qrCodeUrl={seatingPlan?.fineQrCodeUrl || eventConfig?.qrCodeImage || null}
+        onCompletePaymentAndCheckIn={handleCompleteLateFineAndCheckIn}
+        onCancel={() => setPendingLateFineCheckIn(null)}
+      />
 
       {/* Footer Accreditation */}
       <footer className="relative z-10 py-6 border-t border-white/5 text-center text-xs text-slate-500 space-y-1">
