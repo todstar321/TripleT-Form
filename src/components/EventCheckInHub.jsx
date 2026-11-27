@@ -84,7 +84,9 @@ import {
   buildAttendeeSeatMap,
   getTableOccupancyMap,
   getSeatingStats,
-  getSeatCode
+  getSeatCode,
+  hasAnyHolds,
+  formatCountdownMmSs
 } from "../utils/seatingPlanHelper";
 import { cleanPhoneNumber } from "../utils/phoneFormatter";
 import { bgAudio } from "../utils/backgroundAudio";
@@ -125,15 +127,17 @@ export default function EventCheckInHub({
   onResetAllRegistrations,
   onViewTicket,
   onUpdateRegistration,
-  lastCloudSync
+  lastCloudSync,
+  seatingPlan: seatingPlanProp,
+  onUpdateSeatingPlan: onUpdateSeatingPlanProp
 }) {
   // Main Tab: "checkin" | "seating" | "gifts" | "shirts" | "contest" | "lucky_draw" | "survey"
   const [activeMainTab, setActiveMainTab] = useState("checkin");
 
   // ==========================================================
-  // SEATING PLAN & TABLE BOOKING STATE (LocalStorage + Supabase Realtime)
+  // SEATING PLAN STATE (Controlled from App.jsx with safe fallback)
   // ==========================================================
-  const [seatingPlan, setSeatingPlan] = useState(() => {
+  const [fallbackSeatingPlan, setFallbackSeatingPlan] = useState(() => {
     try {
       const saved = localStorage.getItem(SEATING_STORAGE_KEY);
       if (saved) {
@@ -144,57 +148,139 @@ export default function EventCheckInHub({
     return createDefaultSeatingPlan();
   });
 
-  const isRemoteSeatingSyncRef = useRef(false);
-
-  // Hydrate seatingPlan from Supabase Cloud & subscribe to Realtime updates
-  useEffect(() => {
-    if (!isSupabaseConfigured()) return;
-    let active = true;
-
-    fetchSeatingPlanFromCloud().then((cloudPlan) => {
-      if (active && cloudPlan && Array.isArray(cloudPlan.items)) {
-        isRemoteSeatingSyncRef.current = true;
-        setSeatingPlan(cloudPlan);
-        try {
-          localStorage.setItem(SEATING_STORAGE_KEY, JSON.stringify(cloudPlan));
-        } catch (e) {}
-      }
-    }).catch(() => {});
-
-    const unsubscribe = subscribeToSeatingPlan((cloudPlan) => {
-      if (active && cloudPlan && Array.isArray(cloudPlan.items)) {
-        isRemoteSeatingSyncRef.current = true;
-        setSeatingPlan(cloudPlan);
-        try {
-          localStorage.setItem(SEATING_STORAGE_KEY, JSON.stringify(cloudPlan));
-        } catch (e) {}
-      }
-    });
-
-    return () => {
-      active = false;
-      if (typeof unsubscribe === "function") unsubscribe();
-    };
-  }, []);
-
-  // Persist local updates to localStorage & Supabase Cloud
-  const handleUpdateSeatingPlan = (updater) => {
-    setSeatingPlan((prev) => {
+  const seatingPlan = seatingPlanProp || fallbackSeatingPlan;
+  const handleUpdateSeatingPlan = onUpdateSeatingPlanProp || ((updater) => {
+    setFallbackSeatingPlan((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
       try {
         localStorage.setItem(SEATING_STORAGE_KEY, JSON.stringify(next));
       } catch (e) {}
       if (isSupabaseConfigured() && currentUser && ["owner", "manager", "admin"].includes(currentUser.role)) {
-        saveSeatingPlanToCloud(next).catch((err) => {
-          console.warn("Seating plan cloud sync warning:", err);
-        });
+        saveSeatingPlanToCloud(next).catch(() => {});
       }
       return next;
     });
+  });
+
+  // Live 1-second ticker when active temporary seat holds exist
+  const [seatingNowMs, setSeatingNowMs] = useState(() => Date.now());
+  const seatingHasHolds = useMemo(() => hasAnyHolds(seatingPlan), [seatingPlan]);
+  useEffect(() => {
+    setSeatingNowMs(Date.now());
+    if (!seatingHasHolds) return;
+    const t = setInterval(() => setSeatingNowMs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [seatingHasHolds]);
+
+  const attendeeSeatMap = useMemo(() => buildAttendeeSeatMap(seatingPlan, seatingNowMs), [seatingPlan, seatingNowMs]);
+  const seatingStats = useMemo(() => getSeatingStats(seatingPlan, registrations, seatingNowMs), [seatingPlan, registrations, seatingNowMs]);
+
+  // Check-in Held Seat Confirmation Modal State & Pre-select Ticket for Owner Seat Change
+  const [pendingCheckInSeatConfirm, setPendingCheckInSeatConfirm] = useState(null); // { attendee, seatInfo }
+  const [preselectedSeatingTicketNo, setPreselectedSeatingTicketNo] = useState(null);
+
+  // Unified Check-In Wrapper: Checks if attendee has a temporary seat hold and immediately prompts to confirm!
+  const handleCheckInWithSeatCheck = (ticketNo, status = true) => {
+    if (onCheckIn) onCheckIn(ticketNo, status);
+    if (status === true && ticketNo) {
+      const liveMap = buildAttendeeSeatMap(seatingPlan, Date.now());
+      const seatInfo = liveMap.get(ticketNo);
+      if (seatInfo && seatInfo.status === "hold") {
+        const attendee = registrations.find((r) => r.ticketNo === ticketNo);
+        if (attendee) {
+          setPendingCheckInSeatConfirm({ attendee, seatInfo });
+        }
+      }
+    }
   };
 
-  const attendeeSeatMap = useMemo(() => buildAttendeeSeatMap(seatingPlan), [seatingPlan]);
-  const seatingStats = useMemo(() => getSeatingStats(seatingPlan, registrations), [seatingPlan, registrations]);
+  // Confirm held seat permanently upon check-in
+  const handleConfirmHeldSeatOnCheckIn = () => {
+    if (!pendingCheckInSeatConfirm) return;
+    const { attendee, seatInfo } = pendingCheckInSeatConfirm;
+    handleUpdateSeatingPlan((prev) => {
+      const nextAssignments = { ...(prev.assignments || {}) };
+      if (nextAssignments[seatInfo.key] && nextAssignments[seatInfo.key].ticketNo === attendee.ticketNo) {
+        nextAssignments[seatInfo.key] = {
+          ...nextAssignments[seatInfo.key],
+          status: "confirmed",
+          holdExpiresAt: null,
+          confirmedAt: new Date().toISOString(),
+          confirmedBy: currentUser?.name || "Admin"
+        };
+      }
+      return {
+        ...prev,
+        assignments: nextAssignments,
+        updatedAt: new Date().toISOString()
+      };
+    });
+    playAudioEffect("fanfare");
+    setPendingCheckInSeatConfirm(null);
+  };
+
+  // Request seat change upon check-in (Owner switches immediately; Admin submits change request for Owner approval)
+  const handleRequestChangeHeldSeatOnCheckIn = () => {
+    if (!pendingCheckInSeatConfirm) return;
+    const { attendee, seatInfo } = pendingCheckInSeatConfirm;
+    const isOwnerUser = currentUser?.role === "owner";
+
+    if (isOwnerUser) {
+      // Owner can immediately change seat: confirm temporarily & jump to Seating tab with attendee pre-selected
+      handleUpdateSeatingPlan((prev) => {
+        const nextAssignments = { ...(prev.assignments || {}) };
+        if (nextAssignments[seatInfo.key] && nextAssignments[seatInfo.key].ticketNo === attendee.ticketNo) {
+          nextAssignments[seatInfo.key] = {
+            ...nextAssignments[seatInfo.key],
+            status: "confirmed",
+            holdExpiresAt: null
+          };
+        }
+        return {
+          ...prev,
+          assignments: nextAssignments,
+          updatedAt: new Date().toISOString()
+        };
+      });
+      setPendingCheckInSeatConfirm(null);
+      setPreselectedSeatingTicketNo(attendee.ticketNo);
+      setActiveMainTab("seating");
+    } else {
+      // Admin / Manager: Lock their held seat safely as confirmed AND create Seat Change Request for Owner approval!
+      handleUpdateSeatingPlan((prev) => {
+        const nextAssignments = { ...(prev.assignments || {}) };
+        if (nextAssignments[seatInfo.key] && nextAssignments[seatInfo.key].ticketNo === attendee.ticketNo) {
+          nextAssignments[seatInfo.key] = {
+            ...nextAssignments[seatInfo.key],
+            status: "confirmed",
+            holdExpiresAt: null
+          };
+        }
+        return {
+          ...prev,
+          assignments: nextAssignments,
+          seatChangeRequests: {
+            ...(prev.seatChangeRequests || {}),
+            [attendee.ticketNo]: {
+              ticketNo: attendee.ticketNo,
+              currentTableId: seatInfo.tableId,
+              currentTableLabel: seatInfo.tableLabel,
+              currentSeatNo: seatInfo.seatNo,
+              currentSeatCode: seatInfo.seatCode,
+              requestedBy: currentUser?.name || "Admin",
+              requestedAt: new Date().toISOString(),
+              note: "ขอเปลี่ยนที่นั่งขณะลงทะเบียนเข้างาน"
+            }
+          },
+          updatedAt: new Date().toISOString()
+        };
+      });
+      setPendingCheckInSeatConfirm(null);
+      alert(
+        `ส่งคำขอเปลี่ยนที่นั่งของคุณ ${attendee.name} ถึงเจ้าของแอปเรียบร้อยแล้วครับ\n\n(ระหว่างรอเจ้าของแอปอนุมัติ ระบบยังคงสงวนที่นั่งเดิม ${seatInfo.tableLabel} • เก้าอี้ ${seatInfo.seatCode} ไว้ให้ก่อน — เฉพาะเจ้าของแอปเท่านั้นที่สามารถอนุมัติการเปลี่ยนที่นั่งได้)`
+      );
+    }
+  };
 
   // Survey Responses State (from LocalStorage)
   const [surveyResponses, setSurveyResponses] = useState(() => {
@@ -556,6 +642,7 @@ export default function EventCheckInHub({
       handleUpdateSeatingPlan((prev) => ({
         ...prev,
         assignments: {},
+        seatChangeRequests: {},
         updatedAt: new Date().toISOString()
       }));
     };
@@ -934,7 +1021,7 @@ export default function EventCheckInHub({
     if (navigator.vibrate) {
       navigator.vibrate([100, 50, 100]);
     }
-    onCheckIn(scannedAttendee.ticketNo, true);
+    handleCheckInWithSeatCheck(scannedAttendee.ticketNo, true);
     setLastCheckInAttendee(scannedAttendee);
   };
 
@@ -1403,6 +1490,14 @@ export default function EventCheckInHub({
             >
               <Armchair className="w-4 h-4" />
               <span>เลือกโต๊ะ/ที่นั่ง ({seatingStats.bookedCount}/{seatingStats.openCapacity})</span>
+              {seatingStats.pendingChangeRequestCount > 0 && (
+                <span
+                  className="px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-black leading-none animate-pulse"
+                  title="มีคำขอเปลี่ยนที่นั่งรอเจ้าของแอปอนุมัติ"
+                >
+                  {seatingStats.pendingChangeRequestCount}
+                </span>
+              )}
             </button>
 
             {/* Tab 2: ลงทะเบียนจับของขวัญ */}
@@ -1732,6 +1827,7 @@ export default function EventCheckInHub({
                     <th className="py-2.5 px-1.5 sm:py-3 sm:px-2 w-12 sm:w-14 text-center border-r border-slate-200 text-[11px] sm:text-xs">สลิป</th>
                     <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-slate-200 text-[11px] sm:text-xs">เสื้อที่ระลึก</th>
                     <th className="py-2.5 px-3 sm:py-3 sm:px-4 border-r border-slate-200 min-w-[130px] sm:min-w-[150px] text-[11px] sm:text-xs">สถานะเข้างาน</th>
+                    <th className="py-2.5 px-2.5 sm:py-3 sm:px-3.5 border-r border-slate-200 text-center min-w-[100px] text-[11px] sm:text-xs">โต๊ะ / ที่นั่ง</th>
                     <th className="py-2.5 px-2 sm:py-3 sm:px-3.5 border-r border-slate-200 text-center text-[11px] sm:text-xs">ของขวัญ</th>
                     <th className="py-2.5 px-2 sm:py-3 sm:px-3 text-center text-[11px] sm:text-xs">จัดการ</th>
                   </tr>
@@ -1897,6 +1993,45 @@ export default function EventCheckInHub({
                           )}
                         </td>
 
+                        {/* 7.5 โต๊ะ / ที่นั่ง */}
+                        <td className="py-2 px-2 sm:py-2.5 sm:px-3 text-center border-r border-slate-100 whitespace-nowrap">
+                          {(() => {
+                            const sInfo = attendeeSeatMap.get(r.ticketNo);
+                            const hasReq = Boolean(seatingPlan?.seatChangeRequests?.[r.ticketNo]);
+                            if (!sInfo) return <span className="text-slate-400 text-xs">-</span>;
+                            return (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveMainTab("seating");
+                                }}
+                                title="คลิกเพื่อดูตำแหน่งโต๊ะบนผังห้อง"
+                                className={`inline-flex flex-col items-center px-2 py-0.5 rounded-lg border text-[10px] sm:text-[11px] font-black cursor-pointer transition-all hover:scale-105 ${
+                                  sInfo.status === "hold"
+                                    ? "bg-amber-100 text-amber-900 border-amber-300"
+                                    : "bg-sky-100 text-sky-900 border-sky-300"
+                                }`}
+                              >
+                                <span>
+                                  {sInfo.status === "hold" ? "⏳ " : "🪑 "}
+                                  {sInfo.seatCode}
+                                </span>
+                                {sInfo.status === "hold" && (
+                                  <span className="text-[9px] font-mono text-amber-700 leading-none">
+                                    {formatCountdownMmSs(sInfo.remainingMs)}
+                                  </span>
+                                )}
+                                {hasReq && (
+                                  <span className="text-[8px] text-rose-600 font-bold leading-none mt-0.5">
+                                    รอเปลี่ยน
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })()}
+                        </td>
+
                         {/* 8. สถานะของขวัญ */}
                         <td className="py-2 px-2 sm:py-2.5 sm:px-3.5 text-center border-r border-slate-100 whitespace-nowrap">
                           {r.giftNumber ? (
@@ -1980,6 +2115,8 @@ export default function EventCheckInHub({
           registrations={registrations}
           currentUser={currentUser}
           onPlayEffect={playAudioEffect}
+          initialSelectedTicketNo={preselectedSeatingTicketNo}
+          onConsumeInitialSelectedTicket={() => setPreselectedSeatingTicketNo(null)}
           onGoToTableLuckyDraw={() => {
             setDrawSubTab("table_seat");
             setCurrentWinner(null);
@@ -5115,7 +5252,7 @@ export default function EventCheckInHub({
               <button
                 type="button"
                 onClick={() => {
-                  onCheckIn(emergencyTarget.ticketNo, true);
+                  handleCheckInWithSeatCheck(emergencyTarget.ticketNo, true);
                   playAudioEffect("beep");
                   setLastCheckInAttendee(emergencyTarget);
                   openPhotoModal(emergencyTarget, 'checkin');
@@ -5253,7 +5390,7 @@ export default function EventCheckInHub({
             
             // Mark checkedIn: true as well when capturing photo at check-in desk
             if (currentPType === 'checkin' && onCheckIn && targetTicket) {
-              onCheckIn(targetTicket, true);
+              handleCheckInWithSeatCheck(targetTicket, true);
             }
             if (onUpdateAttendeePhoto && targetTicket) {
               onUpdateAttendeePhoto(targetTicket, actualUrl, currentPType, currentPType === 'checkin');
@@ -5510,7 +5647,7 @@ export default function EventCheckInHub({
         isOpen={!!activeInspectingAttendee}
         onClose={() => setInspectingAttendee(null)}
         attendee={activeInspectingAttendee}
-        onCheckIn={onCheckIn}
+        onCheckIn={handleCheckInWithSeatCheck}
         onShirtReceive={onToggleShirtReceived}
         onViewTicket={onViewTicket}
         onUpdateAttendee={(updated) => {
@@ -5548,6 +5685,98 @@ export default function EventCheckInHub({
           isPreviewMode={true}
         />
       )}
+
+      {/* ========================================================== */}
+      {/* CHECK-IN HELD SEAT CONFIRMATION MODAL                      */}
+      {/* เด้งถามทันทีเมื่อผู้ที่จองที่นั่งล่วงหน้า 15 นาที มาลงทะเบียนเข้างานจริง */}
+      {/* ========================================================== */}
+      {pendingCheckInSeatConfirm && (() => {
+        const { attendee, seatInfo } = pendingCheckInSeatConfirm;
+        const liveSeat = attendeeSeatMap.get(attendee.ticketNo) || seatInfo;
+        const isOwnerUser = currentUser?.role === "owner";
+
+        return (
+          <div className="fixed inset-0 z-[95] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="w-full max-w-md bg-white rounded-3xl border-4 border-emerald-400 shadow-2xl overflow-hidden text-slate-900">
+              {/* Top Celebration Header */}
+              <div className="px-6 py-5 bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 text-white text-center space-y-2">
+                <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 text-xs font-extrabold">
+                  <Armchair className="w-4 h-4" />
+                  <span>พบการจองเก้าอี้ล่วงหน้าไว้แล้ว!</span>
+                </div>
+
+                {attendee.photoUrl && (
+                  <img
+                    src={attendee.photoUrl}
+                    alt={attendee.name}
+                    className="w-16 h-16 rounded-full object-cover ring-4 ring-emerald-400 mx-auto shadow-lg"
+                  />
+                )}
+
+                <div>
+                  <h3 className="text-lg sm:text-xl font-black leading-tight">
+                    {attendee.name}
+                    {attendee.nickname && (
+                      <span className="text-amber-300 ml-1.5 font-bold">({attendee.nickname})</span>
+                    )}
+                  </h3>
+                  <p className="text-xs text-emerald-300 font-mono mt-0.5">
+                    ✓ ลงทะเบียนเข้างานสำเร็จ ({attendee.ticketNo})
+                  </p>
+                </div>
+              </div>
+
+              {/* Body: Huge Seat Highlight + Big Confirm CTA + Small Change Request Button */}
+              <div className="p-6 text-center space-y-4">
+                <p className="text-sm font-bold text-slate-700">
+                  ท่านประสงค์ที่จะนั่งเก้าอี้หมายเลขที่จองล่วงหน้าไว้หรือไม่?
+                </p>
+
+                <div className="py-5 px-4 rounded-2xl bg-gradient-to-br from-sky-50 via-emerald-50 to-teal-50 border-2 border-emerald-400 shadow-inner space-y-1">
+                  <div className="text-xs font-extrabold text-emerald-700 uppercase tracking-wider">
+                    ที่นั่งที่จองล่วงหน้าไว้
+                  </div>
+                  <div className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
+                    {liveSeat.tableLabel} • เก้าอี้ {liveSeat.seatCode}
+                  </div>
+                  {liveSeat.status === "hold" && liveSeat.remainingMs > 0 && (
+                    <div className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-amber-100 border border-amber-300 text-amber-800 text-[11px] font-mono font-bold mt-1">
+                      <Clock className="w-3 h-3" />
+                      <span>เวลาจองชั่วคราวคงเหลือ {formatCountdownMmSs(liveSeat.remainingMs)} น.</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Primary BIG Prominent Confirm Button */}
+                <button
+                  type="button"
+                  onClick={handleConfirmHeldSeatOnCheckIn}
+                  className="w-full py-4 px-5 rounded-2xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-base sm:text-lg shadow-xl shadow-emerald-600/30 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center space-x-2 cursor-pointer"
+                >
+                  <CheckCircle2 className="w-6 h-6 stroke-[2.5]" />
+                  <span>ยืนยันเก้าอี้ {liveSeat.seatCode} ({liveSeat.tableLabel})</span>
+                </button>
+
+                {/* Small Subtle Secondary Button: ขอเปลี่ยนที่นั่ง */}
+                <div className="pt-1 flex flex-col items-center space-y-1">
+                  <button
+                    type="button"
+                    onClick={handleRequestChangeHeldSeatOnCheckIn}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-500 hover:text-amber-700 hover:bg-amber-50 border border-slate-200 hover:border-amber-300 transition-all cursor-pointer"
+                  >
+                    {isOwnerUser ? "ขอเปลี่ยนที่นั่ง (เจ้าของแอปเปลี่ยนได้ทันที)" : "ขอเปลี่ยนที่นั่ง (ส่งให้เจ้าของแอปอนุมัติ)"}
+                  </button>
+                  {!isOwnerUser && (
+                    <span className="text-[10px] text-slate-400">
+                      หมายเหตุ: การเปลี่ยนที่นั่งต้องได้รับอนุมัติจากเจ้าของแอปเท่านั้น
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Footer Accreditation */}
       <footer className="relative z-10 py-6 border-t border-white/5 text-center text-xs text-slate-500 space-y-1">

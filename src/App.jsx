@@ -28,9 +28,19 @@ import {
   fetchEventConfigFromCloud,
   saveEventConfigToCloud,
   fetchSponsorsFromCloud,
+  fetchSeatingPlanFromCloud,
+  saveSeatingPlanToCloud,
   subscribeToRegistrations,
-  subscribeToEventConfig
+  subscribeToEventConfig,
+  subscribeToSeatingPlan
 } from './utils/supabaseClient';
+import {
+  SEATING_STORAGE_KEY,
+  createDefaultSeatingPlan,
+  buildAttendeeSeatMap,
+  hasAnyHolds,
+  pruneExpiredHolds
+} from './utils/seatingPlanHelper';
 
 const CONFIG_STORAGE_KEY = 'sme_fan_config_v3';
 const REGISTRATIONS_STORAGE_KEY = 'sme_fan_registrations_v5';
@@ -249,6 +259,81 @@ export default function App() {
     return typeof window !== 'undefined' && window.location.search.includes('view=a4_print');
   });
   const [appSponsors, setAppSponsors] = useState([]);
+
+  // 7. Shared Live Seating Plan State (Synced across Admin Check-In Hub & Member App via Supabase Realtime)
+  const [seatingPlan, setSeatingPlan] = useState(() => {
+    try {
+      const saved = localStorage.getItem(SEATING_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && Array.isArray(parsed.items)) return parsed;
+      }
+    } catch (e) {}
+    return createDefaultSeatingPlan();
+  });
+
+  // Persist local seating updates to localStorage & Supabase Cloud
+  const handleUpdateSeatingPlan = (updater) => {
+    setSeatingPlan((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      try {
+        localStorage.setItem(SEATING_STORAGE_KEY, JSON.stringify(next));
+      } catch (e) {}
+      if (isSupabaseConfigured() && currentUser && ['owner', 'manager', 'admin'].includes(currentUser.role)) {
+        saveSeatingPlanToCloud(next).catch((err) => {
+          console.warn('Seating plan cloud sync warning:', err);
+        });
+      }
+      return next;
+    });
+  };
+
+  // Hydrate & Realtime Subscribe to seating_plan for ALL users (including members viewing their seat!)
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+    let active = true;
+
+    fetchSeatingPlanFromCloud().then((cloudPlan) => {
+      if (active && cloudPlan && Array.isArray(cloudPlan.items)) {
+        setSeatingPlan(cloudPlan);
+        try {
+          localStorage.setItem(SEATING_STORAGE_KEY, JSON.stringify(cloudPlan));
+        } catch (e) {}
+      }
+    }).catch(() => {});
+
+    const unsubscribe = subscribeToSeatingPlan((cloudPlan) => {
+      if (active && cloudPlan && Array.isArray(cloudPlan.items)) {
+        setSeatingPlan(cloudPlan);
+        try {
+          localStorage.setItem(SEATING_STORAGE_KEY, JSON.stringify(cloudPlan));
+        } catch (e) {}
+      }
+    });
+
+    return () => {
+      active = false;
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, []);
+
+  // Background Auto-Pruner: Automatically releases expired temporary seat holds (e.g. > 15 mins)
+  useEffect(() => {
+    if (!hasAnyHolds(seatingPlan)) return;
+    const timer = setInterval(() => {
+      const { changed, plan } = pruneExpiredHolds(seatingPlan, Date.now());
+      if (changed) {
+        setSeatingPlan(plan);
+        try {
+          localStorage.setItem(SEATING_STORAGE_KEY, JSON.stringify(plan));
+        } catch (e) {}
+        if (isSupabaseConfigured() && currentUser && ['owner', 'manager', 'admin'].includes(currentUser.role)) {
+          saveSeatingPlanToCloud(plan).catch(() => {});
+        }
+      }
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [seatingPlan, currentUser]);
 
   useEffect(() => {
     fetchSponsorsFromCloud().then(data => {
@@ -1048,6 +1133,8 @@ export default function App() {
             onViewTicket={(ticket) => setVerifiedTicket(ticket)}
             onUpdateRegistration={handleUpdateRegistration}
             lastCloudSync={lastCloudSync}
+            seatingPlan={seatingPlan}
+            onUpdateSeatingPlan={handleUpdateSeatingPlan}
           />
         )}
 
@@ -1106,6 +1193,7 @@ export default function App() {
             onAdminClick={handleAdminClick}
             onLogout={handleLogout}
             onRecordDownload={handleRecordDownload}
+            seatingPlan={seatingPlan}
           />
         )}
 
@@ -1228,6 +1316,7 @@ export default function App() {
           ticketData={verifiedTicket}
           eventConfig={eventConfig}
           onRecordDownload={handleRecordDownload}
+          seatInfo={buildAttendeeSeatMap(seatingPlan).get(verifiedTicket.ticketNo) || null}
         />
       )}
 

@@ -14,12 +14,15 @@ import {
   Camera, 
   Download, 
   Smartphone,
-  Check
+  Check,
+  Armchair,
+  Clock
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import TicketImageViewerModal from './TicketImageViewerModal';
 import TicketScannerModal from './TicketScannerModal';
 import { generateTicketCardImage } from '../utils/ticketCardGenerator';
+import { formatCountdownMmSs } from '../utils/seatingPlanHelper';
 
 export default function TicketModal({ 
   isOpen, 
@@ -27,7 +30,8 @@ export default function TicketModal({
   ticketData, 
   eventConfig,
   autoOpenDownloadImage = false,
-  onRecordDownload
+  onRecordDownload,
+  seatInfo = null
 }) {
   const printRef = useRef(null);
 
@@ -259,6 +263,44 @@ export default function TicketModal({
                 </div>
               )}
             </div>
+
+            {/* Assigned Table & Seat Card (กันลืม - แสดงทันทีเมื่อจองโต๊ะแล้ว) */}
+            {seatInfo && (
+              <div
+                className={`p-4 rounded-2xl border-2 text-center space-y-1.5 shadow-lg ${
+                  seatInfo.status === 'hold'
+                    ? 'bg-gradient-to-r from-amber-500/20 via-orange-500/15 to-amber-500/20 border-amber-400/60 text-amber-100'
+                    : 'bg-gradient-to-r from-sky-500/20 via-emerald-500/15 to-teal-500/20 border-sky-400/60 text-sky-100'
+                }`}
+              >
+                <div className="flex items-center justify-center space-x-1.5 text-xs font-extrabold">
+                  {seatInfo.status === 'hold' ? (
+                    <>
+                      <Clock className="w-4 h-4 text-amber-400 animate-pulse" />
+                      <span className="text-amber-300">จองที่นั่งล่วงหน้าชั่วคราว (รอลงทะเบียนเข้างาน)</span>
+                    </>
+                  ) : (
+                    <>
+                      <Armchair className="w-4 h-4 text-sky-300" />
+                      <span className="text-sky-200">ตำแหน่งโต๊ะและเก้าอี้ของคุณ (กันลืม)</span>
+                    </>
+                  )}
+                </div>
+                <div className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                  {seatInfo.tableLabel} • เก้าอี้ {seatInfo.seatCode}
+                </div>
+                {seatInfo.status === 'hold' ? (
+                  <div className="text-[11px] text-amber-200 font-semibold">
+                    ⏳ กรุณามาลงทะเบียนเข้างานก่อนหมดเวลา ({formatCountdownMmSs(seatInfo.remainingMs)} นาที) มิฉะนั้นเก้าอี้จะหลุดเป็นว่างอัตโนมัติ
+                  </div>
+                ) : (
+                  <div className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-emerald-500/25 border border-emerald-400/40 text-emerald-200 text-[11px] font-bold">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>ยืนยันที่นั่งเรียบร้อยแล้ว</span>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* T-Shirt Badge (if eligible) - Centered Horizontally */}
             {ticketData.hasShirt ? (

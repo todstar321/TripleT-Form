@@ -51,7 +51,8 @@ import {
   Crown,
   Star,
   Award,
-  Unlock
+  Unlock,
+  Armchair
 } from 'lucide-react';
 import TicketModal from './TicketModal';
 import ImageCropperModal from './ImageCropperModal';
@@ -63,6 +64,7 @@ import SatisfactionSurveyModal from './SatisfactionSurveyModal';
 import { MusicFooterToggle } from './BackgroundMusicPlayer';
 import { themePresetsList } from '../data/smeFanData';
 import { uploadToCloudinary } from '../utils/cloudinary';
+import { buildAttendeeSeatMap, formatCountdownMmSs } from '../utils/seatingPlanHelper';
 import { analyzeSlipData } from '../utils/slipReader';
 import { formatPhoneNumber, cleanPhoneNumber } from '../utils/phoneFormatter';
 import { getScheduleStatus, formatThaiScheduleDateTime, formatThaiShortDateTime } from '../utils/scheduleHelper';
@@ -168,7 +170,8 @@ export default function SmeFanRegistration({
   currentUser,
   onAdminClick,
   onLogout,
-  onRecordDownload
+  onRecordDownload,
+  seatingPlan
 }) {
   // Step state: 0 = Landing, 1 = Type Select, 2 = Details, 3 = Payment & Slip, 4 = Shirt (if eligible)
   const [step, setStep] = useState(0);
@@ -185,6 +188,11 @@ export default function SmeFanRegistration({
   const scheduleStatus = useMemo(() => {
     return getScheduleStatus(eventConfig?.registrationSchedule, currentTime);
   }, [eventConfig?.registrationSchedule, currentTime]);
+
+  // Live Seat Map for Member App (updates in realtime via Supabase + ticks hold countdowns)
+  const memberSeatMap = useMemo(() => {
+    return buildAttendeeSeatMap(seatingPlan, currentTime.getTime());
+  }, [seatingPlan, currentTime]);
 
   const isAdmin = Boolean(currentUser && ['owner', 'manager', 'admin'].includes(currentUser.role));
   const canRegister = scheduleStatus.isOpen || isAdmin;
@@ -3975,6 +3983,81 @@ export default function SmeFanRegistration({
                   )}
                 </div>
               </div>
+
+              {/* 7. ตำแหน่งโต๊ะและที่นั่งของสมาชิก (กันลืม - เชื่อมโยงเรียลไทม์จากหน้าลงทะเบียน) */}
+              {(() => {
+                const mySeat = memberSeatMap.get(attendeePortalUser.ticketNo);
+                const hasPendingChange = Boolean(seatingPlan?.seatChangeRequests?.[attendeePortalUser.ticketNo]);
+                if (mySeat) {
+                  const isHold = mySeat.status === 'hold';
+                  return (
+                    <div
+                      className={`mt-3 p-3.5 rounded-2xl border-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-lg ${
+                        isHold
+                          ? 'bg-gradient-to-r from-amber-500/20 via-orange-500/15 to-amber-500/10 border-amber-400/60'
+                          : 'bg-gradient-to-r from-sky-500/20 via-emerald-500/15 to-teal-500/15 border-sky-400/60'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div
+                          className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${
+                            isHold
+                              ? 'bg-amber-500/25 text-amber-300 border border-amber-400/40'
+                              : 'bg-sky-500/25 text-sky-300 border border-sky-400/40'
+                          }`}
+                        >
+                          <Armchair className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <div className="text-[11px] font-bold flex items-center space-x-1.5 flex-wrap">
+                            <span className={isHold ? 'text-amber-300' : 'text-sky-300'}>
+                              {isHold ? '⏳ จองที่นั่งล่วงหน้าชั่วคราว' : '🪑 โต๊ะและเก้าอี้ของคุณ (กันลืม)'}
+                            </span>
+                            {hasPendingChange && (
+                              <span className="px-2 py-0.5 rounded-full bg-amber-500/25 text-amber-200 border border-amber-400/40 text-[10px]">
+                                รอเจ้าของอนุมัติเปลี่ยนที่นั่ง
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-lg sm:text-xl font-black text-white tracking-tight">
+                            {mySeat.tableLabel} • เก้าอี้ {mySeat.seatCode}
+                          </div>
+                          {isHold ? (
+                            <div className="text-[11px] text-amber-200 font-semibold">
+                              เหลือเวลา {formatCountdownMmSs(mySeat.remainingMs)} นาที — กรุณามาลงทะเบียนเข้างานหน้างานก่อนหมดเวลา
+                            </div>
+                          ) : (
+                            <div className="text-[11px] text-emerald-300 font-semibold flex items-center space-x-1">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>ยืนยันที่นั่งเรียบร้อยแล้ว • {seatingPlan?.roomTitle || 'ห้องจัดเลี้ยง'}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="shrink-0 self-start sm:self-center">
+                        <span
+                          className={`inline-block px-3 py-1.5 rounded-xl font-mono font-black text-base shadow-inner border ${
+                            isHold
+                              ? 'bg-amber-950/70 text-amber-300 border-amber-400/40'
+                              : 'bg-slate-950/80 text-sky-300 border-sky-400/40'
+                          }`}
+                        >
+                          {mySeat.seatCode}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="mt-3 p-3 rounded-xl bg-slate-950/50 border border-white/10 flex items-center justify-between text-xs text-slate-400">
+                    <div className="flex items-center space-x-2">
+                      <Armchair className="w-4 h-4 text-slate-500 shrink-0" />
+                      <span>ตำแหน่งโต๊ะ/ที่นั่ง: <strong className="text-slate-300">ยังไม่ได้เลือกโต๊ะ</strong></span>
+                    </div>
+                    <span className="text-[10px] text-slate-500">เลือกโต๊ะได้เมื่อเช็กอินหน้างาน</span>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* ACTION MENU (3 ปุ่มเมนูหลัก) */}
@@ -4199,6 +4282,7 @@ export default function SmeFanRegistration({
         eventConfig={eventConfig}
         autoOpenDownloadImage={autoOpenImageDownload}
         onRecordDownload={handleRecordDownloadWrapper}
+        seatInfo={completedTicket ? memberSeatMap.get(completedTicket.ticketNo) || null : null}
       />
 
 

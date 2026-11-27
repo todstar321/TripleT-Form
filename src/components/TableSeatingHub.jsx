@@ -49,7 +49,12 @@ import {
   CUSTOM_EMOJIS,
   CUSTOM_ITEM_PRESETS,
   DEFAULT_PALETTE_TYPES,
+  HOLD_DURATION_OPTIONS,
   getPaletteTypes,
+  getHoldDurationMinutes,
+  isAssignmentExpired,
+  hasAnyHolds,
+  formatCountdownMmSs,
   createDefaultSeatingPlan,
   createEmptySeatingPlan,
   getNextTableCode,
@@ -146,9 +151,22 @@ export default function TableSeatingHub({
   registrations = [],
   currentUser,
   onPlayEffect,
-  onGoToTableLuckyDraw
+  onGoToTableLuckyDraw,
+  initialSelectedTicketNo = null,
+  onConsumeInitialSelectedTicket
 }) {
   const isOwner = currentUser?.role === "owner";
+  const holdDurationMinutes = getHoldDurationMinutes(seatingPlan);
+
+  // Live 1-second clock ticker ONLY when active temporary holds exist
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const planHasHolds = useMemo(() => hasAnyHolds(seatingPlan), [seatingPlan]);
+  useEffect(() => {
+    setNowMs(Date.now());
+    if (!planHasHolds) return;
+    const t = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [planHasHolds]);
 
   // Owner Layout Editor mode (non-owners are ALWAYS false)
   const [isEditMode, setIsEditMode] = useState(false);
@@ -194,13 +212,22 @@ export default function TableSeatingHub({
     }
   }, [isOwner, isEditMode]);
 
+  // Pre-select an attendee when navigated here from Check-in Hold Change Flow (Owner)
+  useEffect(() => {
+    if (initialSelectedTicketNo) {
+      setIsEditMode(false);
+      setSelectedAttendeeTicketNo(initialSelectedTicketNo);
+      if (onConsumeInitialSelectedTicket) onConsumeInitialSelectedTicket();
+    }
+  }, [initialSelectedTicketNo]);
+
   const showToast = (text, tone = "emerald") => {
     setToastMsg({ text, tone, id: Date.now() });
   };
 
   useEffect(() => {
     if (!toastMsg) return;
-    const t = setTimeout(() => setToastMsg(null), 3200);
+    const t = setTimeout(() => setToastMsg(null), 4000);
     return () => clearTimeout(t);
   }, [toastMsg]);
 
@@ -211,11 +238,24 @@ export default function TableSeatingHub({
     return m;
   }, [registrations]);
 
-  // Attendee -> Seat lookup map
-  const attendeeSeatMap = useMemo(() => buildAttendeeSeatMap(seatingPlan), [seatingPlan]);
+  // Attendee -> Seat lookup map (live expiration aware!)
+  const attendeeSeatMap = useMemo(() => buildAttendeeSeatMap(seatingPlan, nowMs), [seatingPlan, nowMs]);
 
-  // Overall seating statistics
-  const stats = useMemo(() => getSeatingStats(seatingPlan, registrations), [seatingPlan, registrations]);
+  // Overall seating statistics (live expiration aware!)
+  const stats = useMemo(() => getSeatingStats(seatingPlan, registrations, nowMs), [seatingPlan, registrations, nowMs]);
+
+  // Pending Seat Change Requests (only Owner can approve/reject!)
+  const pendingChangeRequestsList = useMemo(() => {
+    const reqs = seatingPlan?.seatChangeRequests || {};
+    return Object.values(reqs)
+      .filter((req) => req && req.ticketNo && regMap.has(req.ticketNo))
+      .map((req) => ({
+        ...req,
+        attendee: regMap.get(req.ticketNo),
+        liveSeat: attendeeSeatMap.get(req.ticketNo) || null
+      }))
+      .sort((a, b) => new Date(a.requestedAt || 0).getTime() - new Date(b.requestedAt || 0).getTime());
+  }, [seatingPlan?.seatChangeRequests, regMap, attendeeSeatMap]);
 
   // Selected attendee object
   const selectedAttendee = useMemo(() => {
@@ -601,6 +641,7 @@ export default function TableSeatingHub({
     const def = createDefaultSeatingPlan();
     commitPlan({
       ...def,
+      holdDurationMinutes: getHoldDurationMinutes(seatingPlan),
       paletteTypes: getPaletteTypes(seatingPlan)
     });
     setSelectedItemId(null);
@@ -615,15 +656,27 @@ export default function TableSeatingHub({
         seatingPlan.gridCols,
         seatingPlan.gridRows,
         seatingPlan.roomTitle,
-        getPaletteTypes(seatingPlan)
+        getPaletteTypes(seatingPlan),
+        getHoldDurationMinutes(seatingPlan)
       )
     );
     setSelectedItemId(null);
     showToast("ล้างผังเป็นห้องว่างเปล่าเรียบร้อย พร้อมจัดวางใหม่!");
   };
 
+  // Owner-only: update temporary hold duration (minutes)
+  const handleUpdateHoldDuration = (minutes) => {
+    if (!isOwner) return;
+    const mins = Math.max(1, Math.min(180, Number(minutes) || 15));
+    commitPlan((prev) => ({
+      ...prev,
+      holdDurationMinutes: mins
+    }));
+    showToast(`ตั้งเวลาจองล่วงหน้าสำหรับผู้ที่ยังไม่เข้างานเป็น ${mins} นาทีแล้ว`);
+  };
+
   // =====================================================================
-  // SEAT BOOKING HANDLERS (Owner + Admin + Manager)
+  // SEAT BOOKING & APPROVAL HANDLERS
   // =====================================================================
 
   const handleAssignSeat = (table, seatNo, attendee) => {
@@ -633,12 +686,35 @@ export default function TableSeatingHub({
       return;
     }
 
+    // Strict Rule: Non-owners CANNOT directly change/move an attendee who already has a seat!
+    const existingAttendeeSeat = attendeeSeatMap.get(attendee.ticketNo);
+    if (existingAttendeeSeat && !isOwner) {
+      showToast(
+        `${attendee.nickname || attendee.name} มีที่นั่งอยู่แล้ว (${existingAttendeeSeat.seatCode}) — เฉพาะเจ้าของแอปเท่านั้นที่อนุมัติเปลี่ยนที่นั่งได้`,
+        "rose"
+      );
+      return;
+    }
+
     const seatKey = `${table.id}:${seatNo}`;
     const existingHolder = seatingPlan.assignments?.[seatKey];
-    if (existingHolder && existingHolder.ticketNo !== attendee.ticketNo && regMap.has(existingHolder.ticketNo)) {
+    if (
+      existingHolder &&
+      !isAssignmentExpired(existingHolder, Date.now()) &&
+      existingHolder.ticketNo !== attendee.ticketNo &&
+      regMap.has(existingHolder.ticketNo)
+    ) {
       showToast(`เก้าอี้ ${getSeatCode(table, seatNo)} มีผู้จองแล้ว`, "rose");
       return;
     }
+
+    // Rule: Checked-in => Permanent confirmed seat. Not checked-in => Temporary hold (default 15 mins)!
+    const isCheckedIn = Boolean(attendee.checkedIn);
+    const holdMins = getHoldDurationMinutes(seatingPlan);
+    const bookingStatus = isCheckedIn ? "confirmed" : "hold";
+    const holdExpiresAt = isCheckedIn
+      ? null
+      : new Date(Date.now() + holdMins * 60 * 1000).toISOString();
 
     commitPlan((prev) => {
       const nextAssignments = { ...(prev.assignments || {}) };
@@ -650,12 +726,19 @@ export default function TableSeatingHub({
       });
       nextAssignments[seatKey] = {
         ticketNo: attendee.ticketNo,
+        status: bookingStatus,
+        holdExpiresAt,
         assignedAt: new Date().toISOString(),
         assignedBy: currentUser?.name || "Admin"
       };
+      // Clear any pending seat change request for this attendee (Owner approved & moved)
+      const nextRequests = { ...(prev.seatChangeRequests || {}) };
+      delete nextRequests[attendee.ticketNo];
+
       return {
         ...prev,
-        assignments: nextAssignments
+        assignments: nextAssignments,
+        seatChangeRequests: nextRequests
       };
     });
 
@@ -669,7 +752,9 @@ export default function TableSeatingHub({
       setKioskSuccessBanner({
         attendee,
         tableLabel: table.label,
-        seatCode
+        seatCode,
+        isHold: !isCheckedIn,
+        holdMins
       });
       setActiveTableModalId(null);
       setPickingSeatNoForInlineAssign(null);
@@ -677,30 +762,97 @@ export default function TableSeatingHub({
         setKioskSuccessBanner(null);
         setSelectedAttendeeTicketNo(null);
         setIsKioskMode(false);
-      }, 2600);
+      }, 2800);
     } else {
-      showToast(`จอง ${table.label} • เก้าอี้ ${seatCode} ให้คุณ ${attendee.nickname || attendee.name} สำเร็จ!`);
+      if (isCheckedIn) {
+        showToast(`✅ ยืนยันที่นั่ง ${table.label} • เก้าอี้ ${seatCode} ให้คุณ ${attendee.nickname || attendee.name} สำเร็จ!`);
+      } else {
+        showToast(
+          `⏳ จองล่วงหน้า ${table.label} • ${seatCode} ให้คุณ ${attendee.nickname || attendee.name} (ต้องมาเช็กอินภายใน ${holdMins} นาที มิฉะนั้นจะหลุดอัตโนมัติ)`,
+          "amber"
+        );
+      }
       setPickingSeatNoForInlineAssign(null);
       setInlineAssignSearch("");
-      // Clear active selected attendee after booking so staff can pick the next guest smoothly
       if (selectedAttendeeTicketNo === attendee.ticketNo) {
         setSelectedAttendeeTicketNo(null);
       }
     }
   };
 
+  // Owner-only: remove / cancel a seat directly
   const handleUnassignSeat = (tableId, seatNo, attendeeName = "") => {
+    if (!isOwner) {
+      showToast("เฉพาะเจ้าของแอปเท่านั้นที่สามารถยกเลิกหรือเปลี่ยนที่นั่งได้", "rose");
+      return;
+    }
     const seatKey = `${tableId}:${seatNo}`;
+    const targetTicket = seatingPlan.assignments?.[seatKey]?.ticketNo;
     commitPlan((prev) => {
       const nextAssignments = { ...(prev.assignments || {}) };
       delete nextAssignments[seatKey];
+      const nextRequests = { ...(prev.seatChangeRequests || {}) };
+      if (targetTicket) delete nextRequests[targetTicket];
       return {
         ...prev,
-        assignments: nextAssignments
+        assignments: nextAssignments,
+        seatChangeRequests: nextRequests
       };
     });
     onPlayEffect?.("tick");
     showToast(`ยกเลิกที่นั่ง${attendeeName ? ` ของ ${attendeeName}` : ""} เรียบร้อย`, "amber");
+  };
+
+  // Admin / Manager: Submit Seat Change Request for Owner Approval
+  const handleRequestSeatChange = (attendee, seatInfo, note = "") => {
+    if (!attendee || !seatInfo) return;
+    commitPlan((prev) => ({
+      ...prev,
+      seatChangeRequests: {
+        ...(prev.seatChangeRequests || {}),
+        [attendee.ticketNo]: {
+          ticketNo: attendee.ticketNo,
+          currentTableId: seatInfo.tableId,
+          currentTableLabel: seatInfo.tableLabel,
+          currentSeatNo: seatInfo.seatNo,
+          currentSeatCode: seatInfo.seatCode,
+          requestedBy: currentUser?.name || "Admin",
+          requestedAt: new Date().toISOString(),
+          note: note || "แอดมินส่งคำขอเปลี่ยนที่นั่ง"
+        }
+      }
+    }));
+    onPlayEffect?.("tick");
+    showToast(
+      `ส่งคำขอเปลี่ยนที่นั่งของ "${attendee.nickname || attendee.name}" ถึงเจ้าของแอปแล้ว (รอเจ้าของอนุมัติ)`,
+      "indigo"
+    );
+  };
+
+  // Owner: Approve Seat Change Request -> select attendee to pick new seat
+  const handleApproveSeatChange = (req) => {
+    if (!isOwner || !req) return;
+    setIsEditMode(false);
+    setSelectedAttendeeTicketNo(req.ticketNo);
+    setActiveTableModalId(null);
+    showToast(
+      `อนุมัติเปลี่ยนที่นั่งให้ "${req.attendee?.nickname || req.attendee?.name}" — กรุณาคลิกเลือกโต๊ะและเก้าอี้ใหม่บนผังได้เลย!`,
+      "emerald"
+    );
+  };
+
+  // Owner: Reject / Dismiss Seat Change Request
+  const handleRejectSeatChange = (ticketNo, attendeeName = "") => {
+    if (!isOwner || !ticketNo) return;
+    commitPlan((prev) => {
+      const nextRequests = { ...(prev.seatChangeRequests || {}) };
+      delete nextRequests[ticketNo];
+      return {
+        ...prev,
+        seatChangeRequests: nextRequests
+      };
+    });
+    showToast(`ปฏิเสธคำขอเปลี่ยนที่นั่ง${attendeeName ? ` ของ ${attendeeName}` : ""} (คงที่นั่งเดิมไว้)`, "amber");
   };
 
   // Click handler on grid cell
@@ -1273,9 +1425,10 @@ export default function TableSeatingHub({
 
                   // 5. DINING TABLE (with real attendee photos & seat occupancy!)
                   const cap = Number(item.capacity) || 8;
-                  const occMap = getTableOccupancyMap(seatingPlan, item.id, regMap);
+                  const occMap = getTableOccupancyMap(seatingPlan, item.id, regMap, nowMs);
                   const occList = Array.from(occMap.values()).sort((a, b) => a.seatNo - b.seatNo);
                   const occCount = occList.length;
+                  const holdCountOnTable = occList.filter((o) => o.status === "hold").length;
                   const isClosed = item.isOpen === false;
                   const isFull = occCount >= cap;
                   const isInviting = !isEditMode && selectedAttendee && !isClosed && !isFull;
@@ -1303,7 +1456,10 @@ export default function TableSeatingHub({
                     : "bg-emerald-500 text-white";
 
                   const tooltipNames = occList
-                    .map((o) => `${getSeatCode(item, o.seatNo)}: ${o.attendee?.nickname || o.attendee?.name}`)
+                    .map((o) => {
+                      const holdTag = o.status === "hold" ? ` [จองชั่วคราว ${formatCountdownMmSs(o.remainingMs)}]` : "";
+                      return `${getSeatCode(item, o.seatNo)}: ${o.attendee?.nickname || o.attendee?.name}${holdTag}`;
+                    })
                     .join(" | ");
 
                   const maxAvatarsToShow = isCompact ? 3 : Math.min(cap, 8);
@@ -1349,23 +1505,40 @@ export default function TableSeatingHub({
                               const seatNo = idx + 1;
                               const occEntry = occMap.get(seatNo);
                               if (occEntry?.attendee) {
-                                return occEntry.attendee.photoUrl ? (
-                                  <img
-                                    key={seatNo}
-                                    src={occEntry.attendee.photoUrl}
-                                    alt={occEntry.attendee.name}
-                                    title={`${getSeatCode(item, seatNo)}: ${occEntry.attendee.name}`}
-                                    className="w-5 h-5 sm:w-6 sm:h-6 rounded-full object-cover ring-1 ring-white shadow-sm"
-                                  />
-                                ) : (
-                                  <div
-                                    key={seatNo}
-                                    title={`${getSeatCode(item, seatNo)}: ${occEntry.attendee.name}`}
-                                    className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full ${getAvatarColor(
-                                      occEntry.attendee.ticketNo
-                                    )} text-white text-[8px] font-black flex items-center justify-center ring-1 ring-white shadow-sm`}
-                                  >
-                                    {getInitials(occEntry.attendee.name, occEntry.attendee.nickname)}
+                                const isHoldSeat = occEntry.status === "hold";
+                                const seatTitle = `${getSeatCode(item, seatNo)}: ${occEntry.attendee.name}${
+                                  isHoldSeat ? ` (จองล่วงหน้า เหลือ ${formatCountdownMmSs(occEntry.remainingMs)})` : ""
+                                }`;
+                                return (
+                                  <div key={seatNo} className="relative" title={seatTitle}>
+                                    {occEntry.attendee.photoUrl ? (
+                                      <img
+                                        src={occEntry.attendee.photoUrl}
+                                        alt={occEntry.attendee.name}
+                                        className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full object-cover shadow-sm ${
+                                          isHoldSeat
+                                            ? "ring-2 ring-amber-400 opacity-85"
+                                            : "ring-1 ring-white"
+                                        }`}
+                                      />
+                                    ) : (
+                                      <div
+                                        className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full ${getAvatarColor(
+                                          occEntry.attendee.ticketNo
+                                        )} text-white text-[8px] font-black flex items-center justify-center shadow-sm ${
+                                          isHoldSeat
+                                            ? "ring-2 ring-amber-400 opacity-85"
+                                            : "ring-1 ring-white"
+                                        }`}
+                                      >
+                                        {getInitials(occEntry.attendee.name, occEntry.attendee.nickname)}
+                                      </div>
+                                    )}
+                                    {isHoldSeat && (
+                                      <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-amber-500 border border-white flex items-center justify-center text-[6px] text-white font-black">
+                                        ⏳
+                                      </span>
+                                    )}
                                   </div>
                                 );
                               }
@@ -1414,7 +1587,9 @@ export default function TableSeatingHub({
                       {/* Footer Status Line */}
                       {!isCompact && (
                         <div className="flex items-center justify-between text-[9px] font-bold text-slate-500">
-                          <span>{item.shape === "round" ? "โต๊ะกลม" : "โต๊ะเหลี่ยม"}</span>
+                          <span>
+                            {holdCountOnTable > 0 ? `⏳ จองชั่วคราว ${holdCountOnTable}` : item.shape === "round" ? "โต๊ะกลม" : "โต๊ะเหลี่ยม"}
+                          </span>
                           <span className={isClosed ? "text-slate-400" : isFull ? "text-rose-600" : "text-emerald-600"}>
                             {isClosed ? "ปิดรับจอง" : isFull ? "เต็มแล้ว" : `ว่าง ${cap - occCount} ที่`}
                           </span>
@@ -1448,7 +1623,7 @@ export default function TableSeatingHub({
 
     const table = activeTableModalItem;
     const cap = Number(table.capacity) || 8;
-    const occMap = getTableOccupancyMap(seatingPlan, table.id, regMap);
+    const occMap = getTableOccupancyMap(seatingPlan, table.id, regMap, nowMs);
     const positions = getSeatPositions(cap, table.shape || "round");
 
     // Previous / Next open table navigation
@@ -1542,21 +1717,41 @@ export default function TableSeatingHub({
 
           {/* Selected Guest Banner inside Modal */}
           {selectedAttendee && (
-            <div className="px-5 py-3 bg-emerald-50 border-b border-emerald-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
+            <div
+              className={`px-5 py-3 border-b flex flex-wrap items-center justify-between gap-2 shrink-0 ${
+                selectedAttendee.checkedIn
+                  ? "bg-emerald-50 border-emerald-200"
+                  : "bg-amber-50 border-amber-200"
+              }`}
+            >
               <div className="flex items-center space-x-3">
                 {selectedAttendee.photoUrl ? (
                   <img
                     src={selectedAttendee.photoUrl}
                     alt={selectedAttendee.name}
-                    className="w-10 h-10 rounded-full object-cover ring-2 ring-emerald-500"
+                    className={`w-10 h-10 rounded-full object-cover ring-2 ${
+                      selectedAttendee.checkedIn ? "ring-emerald-500" : "ring-amber-500"
+                    }`}
                   />
                 ) : (
-                  <div className={`w-10 h-10 rounded-full ${getAvatarColor(selectedAttendee.ticketNo)} text-white font-black text-xs flex items-center justify-center ring-2 ring-emerald-400`}>
+                  <div
+                    className={`w-10 h-10 rounded-full ${getAvatarColor(selectedAttendee.ticketNo)} text-white font-black text-xs flex items-center justify-center ring-2 ${
+                      selectedAttendee.checkedIn ? "ring-emerald-400" : "ring-amber-400"
+                    }`}
+                  >
                     {getInitials(selectedAttendee.name, selectedAttendee.nickname)}
                   </div>
                 )}
                 <div>
-                  <span className="text-[11px] font-bold text-emerald-700">คลิกที่เก้าอี้สีเขียวที่ว่างอยู่เพื่อยืนยันที่นั่งให้:</span>
+                  <span
+                    className={`text-[11px] font-bold ${
+                      selectedAttendee.checkedIn ? "text-emerald-700" : "text-amber-800"
+                    }`}
+                  >
+                    {selectedAttendee.checkedIn
+                      ? "✅ เข้างานแล้ว — คลิกเก้าอี้ว่างเพื่อยืนยันที่นั่งถาวรให้:"
+                      : `⏳ ยังไม่เข้างาน — จองล่วงหน้าให้เพื่อนได้ ${holdDurationMinutes} นาที (หากไม่มาเช็กอินจะหลุดอัตโนมัติ):`}
+                  </span>
                   <div className="text-sm font-black text-slate-900">
                     {selectedAttendee.name} {selectedAttendee.nickname ? `(${selectedAttendee.nickname})` : ""}{" "}
                     <span className="font-mono text-xs text-slate-500">• {selectedAttendee.ticketNo}</span>
@@ -1565,7 +1760,7 @@ export default function TableSeatingHub({
               </div>
               {attendeeSeatMap.get(selectedAttendee.ticketNo) && (
                 <span className="text-xs px-2.5 py-1 rounded-xl bg-amber-100 text-amber-800 font-bold border border-amber-300">
-                  ที่นั่งปัจจุบัน: {attendeeSeatMap.get(selectedAttendee.ticketNo).tableLabel} • {attendeeSeatMap.get(selectedAttendee.ticketNo).seatCode} (เลือกใหม่เพื่อย้าย)
+                  ที่นั่งปัจจุบัน: {attendeeSeatMap.get(selectedAttendee.ticketNo).tableLabel} • {attendeeSeatMap.get(selectedAttendee.ticketNo).seatCode} (Owner กำลังย้ายที่นั่ง)
                 </span>
               )}
             </div>
@@ -1668,8 +1863,13 @@ export default function TableSeatingHub({
                             <span className="absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full bg-slate-900 text-amber-300 text-[9px] font-black leading-none shadow">
                               {seatCode}
                             </span>
+                            {occ.status === "hold" && (
+                              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded-full bg-amber-500 text-slate-950 text-[8px] font-mono font-black leading-none shadow whitespace-nowrap">
+                                ⏳{formatCountdownMmSs(occ.remainingMs)}
+                              </span>
+                            )}
                           </div>
-                          <span className="mt-0.5 px-1.5 py-0.5 rounded-md bg-white/95 border border-slate-200 text-[9px] font-extrabold text-slate-800 max-w-[74px] truncate shadow-sm">
+                          <span className="mt-1 px-1.5 py-0.5 rounded-md bg-white/95 border border-slate-200 text-[9px] font-extrabold text-slate-800 max-w-[74px] truncate shadow-sm">
                             {occ.attendee.nickname || occ.attendee.name.split(" ")[0]}
                           </span>
                         </div>
@@ -1755,11 +1955,20 @@ export default function TableSeatingHub({
                                 <div className="text-xs font-black text-slate-900 truncate">
                                   {occ.attendee.name}
                                 </div>
-                                <div className="text-[10px] text-slate-500 flex items-center space-x-1.5 truncate">
+                                <div className="text-[10px] text-slate-500 flex items-center flex-wrap gap-1">
                                   {occ.attendee.nickname && (
                                     <span className="font-bold text-indigo-600">({occ.attendee.nickname})</span>
                                   )}
                                   <span className="font-mono">{occ.attendee.ticketNo}</span>
+                                  {occ.status === "hold" ? (
+                                    <span className="px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-300 font-mono font-black text-[9px]">
+                                      ⏳ เหลือ {formatCountdownMmSs(occ.remainingMs)}
+                                    </span>
+                                  ) : (
+                                    <span className="px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-700 font-bold text-[9px]">
+                                      ✓ ยืนยันแล้ว
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -1772,9 +1981,13 @@ export default function TableSeatingHub({
                             <button
                               type="button"
                               onClick={() => handleAssignSeat(table, seatNo, selectedAttendee)}
-                              className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold shadow-sm shrink-0 cursor-pointer transition-all active:scale-95"
+                              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold shadow-sm shrink-0 cursor-pointer transition-all active:scale-95 ${
+                                selectedAttendee.checkedIn
+                                  ? "bg-emerald-600 hover:bg-emerald-500 text-white"
+                                  : "bg-amber-500 hover:bg-amber-400 text-slate-950"
+                              }`}
                             >
-                              เลือก {seatCode}
+                              {selectedAttendee.checkedIn ? `เลือก ${seatCode}` : `จองชั่วคราว ${seatCode}`}
                             </button>
                           ) : (
                             <button
@@ -1794,31 +2007,59 @@ export default function TableSeatingHub({
                           )
                         ) : (
                           !isKioskMode && (
-                            <div className="flex items-center space-x-1 shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSelectedAttendeeTicketNo(occ.attendee.ticketNo);
-                                  showToast(`เลือก "${occ.attendee.nickname || occ.attendee.name}" เพื่อย้ายไปเก้าอี้หรือโต๊ะอื่น`, "indigo");
-                                }}
-                                title="ย้ายเก้าอี้ / ย้ายโต๊ะ"
-                                className="p-1.5 rounded-lg bg-slate-100 hover:bg-indigo-100 text-slate-600 hover:text-indigo-700 cursor-pointer"
-                              >
-                                <Move className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (window.confirm(`ต้องการยกเลิกที่นั่ง ${seatCode} ของ ${occ.attendee.name} ใช่หรือไม่?`)) {
-                                    handleUnassignSeat(table.id, seatNo, occ.attendee.nickname || occ.attendee.name);
-                                  }
-                                }}
-                                title="ยกเลิกการจองเก้าอี้นี้"
-                                className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-600 cursor-pointer"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
+                            isOwner ? (
+                              <div className="flex items-center space-x-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedAttendeeTicketNo(occ.attendee.ticketNo);
+                                    showToast(`เลือก "${occ.attendee.nickname || occ.attendee.name}" เพื่อย้ายไปเก้าอี้หรือโต๊ะอื่น (สิทธิ์เจ้าของแอป)`, "indigo");
+                                  }}
+                                  title="ย้ายเก้าอี้ / ย้ายโต๊ะ (เฉพาะเจ้าของแอป)"
+                                  className="p-1.5 rounded-lg bg-slate-100 hover:bg-indigo-100 text-slate-600 hover:text-indigo-700 cursor-pointer"
+                                >
+                                  <Move className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (window.confirm(`ต้องการยกเลิกที่นั่ง ${seatCode} ของ ${occ.attendee.name} ใช่หรือไม่?`)) {
+                                      handleUnassignSeat(table.id, seatNo, occ.attendee.nickname || occ.attendee.name);
+                                    }
+                                  }}
+                                  title="ยกเลิกการจองเก้าอี้นี้ (เฉพาะเจ้าของแอป)"
+                                  className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-600 cursor-pointer"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="shrink-0">
+                                {seatingPlan?.seatChangeRequests?.[occ.attendee.ticketNo] ? (
+                                  <span className="px-2 py-1 rounded-lg bg-amber-100 text-amber-800 border border-amber-300 text-[9px] font-extrabold">
+                                    ⏳ รอเจ้าของอนุมัติ
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (window.confirm(`ส่งคำขอเปลี่ยนที่นั่งของ "${occ.attendee.name}" (${seatCode}) ให้เจ้าของแอปอนุมัติใช่หรือไม่?`)) {
+                                        handleRequestSeatChange(occ.attendee, {
+                                          tableId: table.id,
+                                          tableLabel: table.label,
+                                          seatNo,
+                                          seatCode
+                                        });
+                                      }
+                                    }}
+                                    className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-amber-100 border border-slate-200 text-slate-600 hover:text-amber-800 text-[10px] font-bold cursor-pointer"
+                                    title="เฉพาะเจ้าของแอปเท่านั้นที่อนุมัติเปลี่ยนที่นั่งได้"
+                                  >
+                                    ขอเปลี่ยนที่
+                                  </button>
+                                )}
+                              </div>
+                            )
                           )
                         )}
                       </div>
@@ -1942,7 +2183,12 @@ export default function TableSeatingHub({
               <span className="px-2.5 py-1 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-800">
                 จองแล้ว: <strong className="font-mono">{stats.bookedCount}/{stats.openCapacity}</strong> ที่นั่ง
               </span>
-              <span className="px-2.5 py-1 rounded-xl bg-amber-50 border border-amber-200 text-xs font-bold text-amber-800">
+              {stats.holdCount > 0 && (
+                <span className="px-2.5 py-1 rounded-xl bg-amber-100 border border-amber-300 text-xs font-extrabold text-amber-900">
+                  ⏳ จองชั่วคราว: <strong className="font-mono">{stats.holdCount}</strong>
+                </span>
+              )}
+              <span className="px-2.5 py-1 rounded-xl bg-sky-50 border border-sky-200 text-xs font-bold text-sky-800">
                 ว่าง: <strong className="font-mono">{stats.availableSeats}</strong> ที่นั่ง
               </span>
             </div>
@@ -2024,6 +2270,125 @@ export default function TableSeatingHub({
             )}
           </div>
         </div>
+
+        {/* =============================================================== */}
+        {/* HOLD POLICY BAR (Owner adjusts hold minutes; Admin views rule)  */}
+        {/* =============================================================== */}
+        <div className="pt-2.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex items-center space-x-2 text-slate-600 flex-wrap gap-y-1">
+            <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold text-[11px]">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              <span>เข้างานแล้ว: จองถาวร</span>
+            </span>
+            <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 font-bold text-[11px]">
+              <Clock className="w-3.5 h-3.5 text-amber-600" />
+              <span>ยังไม่เข้างาน (จองเผื่อเพื่อน): เก็บที่นั่งชั่วคราว {holdDurationMinutes} นาที</span>
+            </span>
+            <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 font-bold text-[11px]">
+              <Lock className="w-3 h-3 text-slate-500" />
+              <span>เปลี่ยนที่นั่ง: เฉพาะเจ้าของแอปอนุมัติ</span>
+            </span>
+          </div>
+
+          {isOwner && (
+            <div className="flex items-center space-x-1.5 bg-amber-50/80 border border-amber-200 rounded-xl px-2.5 py-1">
+              <span className="text-[11px] font-extrabold text-amber-900">เวลาจองล่วงหน้า (Owner):</span>
+              {HOLD_DURATION_OPTIONS.map((mins) => (
+                <button
+                  key={mins}
+                  type="button"
+                  onClick={() => handleUpdateHoldDuration(mins)}
+                  className={`px-2 py-0.5 rounded-lg text-[11px] font-mono font-bold transition-all cursor-pointer ${
+                    holdDurationMinutes === mins
+                      ? "bg-amber-500 text-slate-950 shadow-sm"
+                      : "bg-white text-amber-900 border border-amber-200 hover:bg-amber-100"
+                  }`}
+                >
+                  {mins}น.
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* =============================================================== */}
+        {/* PENDING SEAT CHANGE REQUESTS BANNER (Owner Approve / Reject)    */}
+        {/* =============================================================== */}
+        {pendingChangeRequestsList.length > 0 && (
+          <div className="p-3 rounded-2xl bg-gradient-to-r from-indigo-50 via-violet-50 to-amber-50 border-2 border-indigo-300 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2 text-xs sm:text-sm font-black text-indigo-950">
+                <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-ping" />
+                <span>
+                  🔔 คำขอเปลี่ยนที่นั่งรออนุมัติ ({pendingChangeRequestsList.length} รายการ)
+                </span>
+              </div>
+              {!isOwner && (
+                <span className="text-[11px] font-bold text-indigo-700">
+                  รอเจ้าของแอปพิจารณาอนุมัติ
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {pendingChangeRequestsList.map((req) => (
+                <div
+                  key={req.ticketNo}
+                  className="p-2.5 rounded-xl bg-white border border-indigo-200 flex flex-wrap items-center justify-between gap-2 shadow-xs"
+                >
+                  <div className="flex items-center space-x-2.5 min-w-0">
+                    {req.attendee?.photoUrl ? (
+                      <img
+                        src={req.attendee.photoUrl}
+                        alt={req.attendee.name}
+                        className="w-9 h-9 rounded-full object-cover ring-2 ring-indigo-300 shrink-0"
+                      />
+                    ) : (
+                      <div className={`w-9 h-9 rounded-full ${getAvatarColor(req.ticketNo)} text-white text-[10px] font-black flex items-center justify-center shrink-0`}>
+                        {getInitials(req.attendee?.name, req.attendee?.nickname)}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <div className="text-xs font-black text-slate-900 truncate">
+                        {req.attendee?.name} {req.attendee?.nickname ? `(${req.attendee.nickname})` : ""}
+                      </div>
+                      <div className="text-[10px] text-slate-500">
+                        ที่นั่งเดิม:{" "}
+                        <strong className="text-indigo-700">
+                          {req.liveSeat ? `${req.liveSeat.tableLabel} • ${req.liveSeat.seatCode}` : `${req.currentTableLabel} • ${req.currentSeatCode}`}
+                        </strong>{" "}
+                        • ผู้ส่งคำขอ: {req.requestedBy}
+                      </div>
+                    </div>
+                  </div>
+
+                  {isOwner ? (
+                    <div className="flex items-center space-x-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleApproveSeatChange(req)}
+                        className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-extrabold cursor-pointer shadow-xs"
+                      >
+                        ✓ อนุมัติ & ย้ายที่นั่ง
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRejectSeatChange(req.ticketNo, req.attendee?.nickname || req.attendee?.name)}
+                        className="px-2 py-1.5 rounded-lg bg-slate-100 hover:bg-rose-100 text-slate-600 hover:text-rose-700 text-[11px] font-bold cursor-pointer"
+                      >
+                        ปฏิเสธ
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-800 text-[10px] font-extrabold">
+                      ⏳ รอเจ้าของอนุมัติ
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* =============================================================== */}
         {/* OWNER-ONLY LAYOUT EDITOR PALETTE (Hidden for Admin & Manager)    */}
@@ -2835,8 +3200,8 @@ export default function TableSeatingHub({
                                     <span>{att.checkedInAt || "เข้างานแล้ว"}</span>
                                   </span>
                                 ) : (
-                                  <span className="px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 font-semibold">
-                                    ยังไม่เข้างาน
+                                  <span className="px-1.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 font-bold">
+                                    ⏳ ยังไม่เข้างาน (จองได้ {holdDurationMinutes}น.)
                                   </span>
                                 )}
                               </div>
@@ -2853,29 +3218,64 @@ export default function TableSeatingHub({
                               }}
                               className={`px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold shrink-0 transition-all cursor-pointer ${
                                 isSelected
-                                  ? "bg-emerald-600 text-white shadow-sm"
-                                  : "bg-slate-100 hover:bg-emerald-600 hover:text-white text-slate-700"
+                                  ? att.checkedIn
+                                    ? "bg-emerald-600 text-white shadow-sm"
+                                    : "bg-amber-500 text-slate-950 shadow-sm"
+                                  : att.checkedIn
+                                  ? "bg-slate-100 hover:bg-emerald-600 hover:text-white text-slate-700"
+                                  : "bg-amber-50 hover:bg-amber-500 hover:text-slate-950 text-amber-800 border border-amber-200"
                               }`}
                             >
-                              {isSelected ? "กำลังเลือก..." : "เลือกโต๊ะ"}
+                              {isSelected ? "กำลังเลือก..." : att.checkedIn ? "เลือกโต๊ะ" : "จองชั่วคราว"}
                             </button>
                           ) : (
                             seatInfo && (
                               <div className="flex flex-col items-end gap-1 shrink-0">
-                                <span className="px-2 py-1 rounded-lg bg-amber-100 border border-amber-300 text-amber-900 font-black text-[11px]">
+                                <span
+                                  className={`px-2 py-1 rounded-lg border font-black text-[11px] ${
+                                    seatInfo.status === "hold"
+                                      ? "bg-amber-100 border-amber-400 text-amber-900"
+                                      : "bg-sky-100 border-sky-300 text-sky-900"
+                                  }`}
+                                >
+                                  {seatInfo.status === "hold" ? "⏳ " : "🪑 "}
                                   {seatInfo.tableLabel} • {seatInfo.seatCode}
                                 </span>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedAttendeeTicketNo(att.ticketNo);
-                                    showToast(`เลือก "${att.nickname || att.name}" เพื่อย้ายโต๊ะ — คลิกโต๊ะใหม่บนผังได้เลย`, "indigo");
-                                  }}
-                                  className="text-[10px] font-bold text-indigo-600 hover:underline cursor-pointer"
-                                >
-                                  ย้ายที่นั่ง
-                                </button>
+                                {seatInfo.status === "hold" && (
+                                  <span className="text-[10px] font-mono font-extrabold text-amber-700">
+                                    เหลือ {formatCountdownMmSs(seatInfo.remainingMs)} น.
+                                  </span>
+                                )}
+                                {isOwner ? (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedAttendeeTicketNo(att.ticketNo);
+                                      showToast(`เลือก "${att.nickname || att.name}" เพื่อย้ายโต๊ะ (สิทธิ์เจ้าของแอป) — คลิกโต๊ะใหม่บนผังได้เลย`, "indigo");
+                                    }}
+                                    className="text-[10px] font-bold text-indigo-600 hover:underline cursor-pointer"
+                                  >
+                                    ย้ายที่นั่ง
+                                  </button>
+                                ) : seatingPlan?.seatChangeRequests?.[att.ticketNo] ? (
+                                  <span className="text-[9px] font-extrabold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                    ⏳ รอเจ้าของอนุมัติเปลี่ยน
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (window.confirm(`ส่งคำขอเปลี่ยนที่นั่งของ "${att.name}" (${seatInfo.seatCode}) ให้เจ้าของแอปอนุมัติใช่หรือไม่?`)) {
+                                        handleRequestSeatChange(att, seatInfo);
+                                      }
+                                    }}
+                                    className="text-[10px] font-bold text-slate-500 hover:text-amber-700 hover:underline cursor-pointer"
+                                  >
+                                    ขอเปลี่ยนที่นั่ง
+                                  </button>
+                                )}
                               </div>
                             )
                           )}
@@ -2928,13 +3328,29 @@ export default function TableSeatingHub({
           {/* Kiosk Success Celebration Overlay */}
           {kioskSuccessBanner && (
             <div className="fixed inset-0 z-[80] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
-              <div className="bg-white rounded-3xl p-8 max-w-md w-full text-center space-y-4 shadow-2xl border-4 border-emerald-400">
-                <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
-                  <CheckCircle2 className="w-10 h-10" />
+              <div
+                className={`bg-white rounded-3xl p-8 max-w-md w-full text-center space-y-4 shadow-2xl border-4 ${
+                  kioskSuccessBanner.isHold ? "border-amber-400" : "border-emerald-400"
+                }`}
+              >
+                <div
+                  className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto ${
+                    kioskSuccessBanner.isHold
+                      ? "bg-amber-100 text-amber-600"
+                      : "bg-emerald-100 text-emerald-600"
+                  }`}
+                >
+                  {kioskSuccessBanner.isHold ? <Clock className="w-10 h-10" /> : <CheckCircle2 className="w-10 h-10" />}
                 </div>
                 <div className="space-y-1">
-                  <p className="text-xs font-extrabold text-emerald-600 uppercase tracking-wider">
-                    จองที่นั่งสำเร็จเรียบร้อย!
+                  <p
+                    className={`text-xs font-extrabold uppercase tracking-wider ${
+                      kioskSuccessBanner.isHold ? "text-amber-600" : "text-emerald-600"
+                    }`}
+                  >
+                    {kioskSuccessBanner.isHold
+                      ? `จองล่วงหน้าชั่วคราว ${kioskSuccessBanner.holdMins} นาที`
+                      : "จองที่นั่งสำเร็จเรียบร้อย!"}
                   </p>
                   <h3 className="text-2xl font-black text-slate-900">
                     {kioskSuccessBanner.attendee.name}
@@ -2945,12 +3361,23 @@ export default function TableSeatingHub({
                     </p>
                   )}
                 </div>
-                <div className="py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg">
+                <div
+                  className={`py-4 px-6 rounded-2xl text-white shadow-lg ${
+                    kioskSuccessBanner.isHold
+                      ? "bg-gradient-to-r from-amber-500 to-orange-500"
+                      : "bg-gradient-to-r from-emerald-500 to-teal-600"
+                  }`}
+                >
                   <div className="text-xs opacity-90 font-bold">ตำแหน่งที่นั่งของคุณ</div>
                   <div className="text-3xl font-black mt-1">
                     {kioskSuccessBanner.tableLabel} • เก้าอี้ {kioskSuccessBanner.seatCode}
                   </div>
                 </div>
+                {kioskSuccessBanner.isHold && (
+                  <p className="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-2.5">
+                    ⏳ กรุณามาลงทะเบียนเข้างานภายใน {kioskSuccessBanner.holdMins} นาที มิฉะนั้นเก้าอี้จะหลุดเป็นว่างอัตโนมัติ
+                  </p>
+                )}
                 <p className="text-xs text-slate-400">กำลังกลับสู่หน้าลงทะเบียนอัตโนมัติ...</p>
               </div>
             </div>
@@ -3019,7 +3446,7 @@ export default function TableSeatingHub({
               ) : (
                 allTables.map((t) => {
                   const cap = Number(t.capacity) || 8;
-                  const occMap = getTableOccupancyMap(seatingPlan, t.id, regMap);
+                  const occMap = getTableOccupancyMap(seatingPlan, t.id, regMap, nowMs);
                   return (
                     <div
                       key={t.id}

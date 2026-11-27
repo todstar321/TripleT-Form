@@ -4,6 +4,8 @@
  */
 
 export const SEATING_STORAGE_KEY = "sme_fan_seating_plan_v1";
+export const DEFAULT_HOLD_DURATION_MINUTES = 15;
+export const HOLD_DURATION_OPTIONS = [5, 10, 15, 20, 30, 45, 60];
 
 export const CUSTOM_COLOR_THEMES = {
   violet: {
@@ -361,8 +363,10 @@ export function createDefaultSeatingPlan() {
         h: 2
       }
     ],
+    holdDurationMinutes: DEFAULT_HOLD_DURATION_MINUTES,
     paletteTypes: DEFAULT_PALETTE_TYPES,
-    assignments: {}
+    assignments: {},
+    seatChangeRequests: {}
   };
 }
 
@@ -370,16 +374,106 @@ export function createEmptySeatingPlan(
   gridCols = 10,
   gridRows = 10,
   roomTitle = "ห้องจัดเลี้ยง โรงแรมบุรีศรีภู",
-  paletteTypes = DEFAULT_PALETTE_TYPES
+  paletteTypes = DEFAULT_PALETTE_TYPES,
+  holdDurationMinutes = DEFAULT_HOLD_DURATION_MINUTES
 ) {
   return {
     gridCols,
     gridRows,
     roomTitle,
+    holdDurationMinutes: Number(holdDurationMinutes) || DEFAULT_HOLD_DURATION_MINUTES,
     updatedAt: new Date().toISOString(),
     paletteTypes: Array.isArray(paletteTypes) && paletteTypes.length > 0 ? paletteTypes : DEFAULT_PALETTE_TYPES,
     items: [],
-    assignments: {}
+    assignments: {},
+    seatChangeRequests: {}
+  };
+}
+
+/**
+ * Returns hold duration setting in minutes (default 15)
+ */
+export function getHoldDurationMinutes(seatingPlan) {
+  const val = Number(seatingPlan?.holdDurationMinutes);
+  return !isNaN(val) && val >= 1 ? val : DEFAULT_HOLD_DURATION_MINUTES;
+}
+
+/**
+ * Check if a seat assignment is a temporary hold whose timer has expired
+ */
+export function isAssignmentExpired(assignment, nowMs = Date.now()) {
+  if (!assignment || assignment.status !== "hold") return false;
+  if (!assignment.holdExpiresAt) return false;
+  const expMs = new Date(assignment.holdExpiresAt).getTime();
+  if (isNaN(expMs)) return false;
+  return expMs <= nowMs;
+}
+
+/**
+ * Remaining milliseconds for a temporary hold (0 if expired or not a hold)
+ */
+export function getHoldRemainingMs(assignment, nowMs = Date.now()) {
+  if (!assignment || assignment.status !== "hold" || !assignment.holdExpiresAt) return 0;
+  const expMs = new Date(assignment.holdExpiresAt).getTime();
+  if (isNaN(expMs)) return 0;
+  return Math.max(0, expMs - nowMs);
+}
+
+/**
+ * Format remaining ms into MM:SS countdown string (e.g. "14:52")
+ */
+export function formatCountdownMmSs(ms) {
+  const totalSec = Math.max(0, Math.ceil(ms / 1000));
+  const mins = Math.floor(totalSec / 60);
+  const secs = totalSec % 60;
+  return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+
+/**
+ * Check if seatingPlan currently contains any temporary hold assignments
+ */
+export function hasAnyHolds(seatingPlan) {
+  if (!seatingPlan?.assignments) return false;
+  return Object.values(seatingPlan.assignments).some((a) => a && a.status === "hold");
+}
+
+/**
+ * Remove any expired temporary hold assignments from seatingPlan (pure function)
+ */
+export function pruneExpiredHolds(seatingPlan, nowMs = Date.now()) {
+  if (!seatingPlan?.assignments) return { changed: false, plan: seatingPlan, expiredCount: 0 };
+  let expiredCount = 0;
+  const nextAssignments = {};
+  const expiredTickets = new Set();
+
+  Object.entries(seatingPlan.assignments).forEach(([key, val]) => {
+    if (isAssignmentExpired(val, nowMs)) {
+      expiredCount++;
+      if (val?.ticketNo) expiredTickets.add(val.ticketNo);
+    } else {
+      nextAssignments[key] = val;
+    }
+  });
+
+  if (expiredCount === 0) {
+    return { changed: false, plan: seatingPlan, expiredCount: 0 };
+  }
+
+  // Also clear any pending seat change request for expired tickets
+  const nextRequests = { ...(seatingPlan.seatChangeRequests || {}) };
+  expiredTickets.forEach((tNo) => {
+    delete nextRequests[tNo];
+  });
+
+  return {
+    changed: true,
+    expiredCount,
+    plan: {
+      ...seatingPlan,
+      assignments: nextAssignments,
+      seatChangeRequests: nextRequests,
+      updatedAt: new Date().toISOString()
+    }
   };
 }
 
@@ -426,9 +520,10 @@ export function canPlaceItem(items, gridCols, gridRows, x, y, w, h, ignoreId = n
 }
 
 /**
- * Returns a Map<ticketNo, { tableId, tableLabel, tableCode, seatNo, seatCode, assignedAt, assignedBy }>
+ * Returns a Map<ticketNo, { key, tableId, tableLabel, tableCode, seatNo, seatCode, status, holdExpiresAt, remainingMs, assignedAt, assignedBy }>
+ * Automatically ignores expired temporary holds!
  */
-export function buildAttendeeSeatMap(seatingPlan) {
+export function buildAttendeeSeatMap(seatingPlan, nowMs = Date.now()) {
   const map = new Map();
   if (!seatingPlan || !seatingPlan.assignments) return map;
   const tableById = new Map();
@@ -438,10 +533,12 @@ export function buildAttendeeSeatMap(seatingPlan) {
 
   Object.entries(seatingPlan.assignments).forEach(([key, val]) => {
     if (!val || !val.ticketNo) return;
+    if (isAssignmentExpired(val, nowMs)) return; // Auto-drop expired temporary hold
     const [tableId, seatNoStr] = key.split(":");
     const seatNo = parseInt(seatNoStr, 10);
     const table = tableById.get(tableId);
     if (!table || isNaN(seatNo) || seatNo < 1 || seatNo > (table.capacity || 8)) return;
+    const status = val.status === "hold" ? "hold" : "confirmed";
     map.set(val.ticketNo, {
       key,
       tableId,
@@ -449,6 +546,9 @@ export function buildAttendeeSeatMap(seatingPlan) {
       tableCode: table.code || "",
       seatNo,
       seatCode: getSeatCode(table, seatNo),
+      status,
+      holdExpiresAt: status === "hold" ? val.holdExpiresAt || null : null,
+      remainingMs: status === "hold" ? getHoldRemainingMs(val, nowMs) : 0,
       assignedAt: val.assignedAt || null,
       assignedBy: val.assignedBy || ""
     });
@@ -458,22 +558,28 @@ export function buildAttendeeSeatMap(seatingPlan) {
 }
 
 /**
- * Returns all occupied seats for a given tableId as Map<seatNo, { ticketNo, attendee, assignedAt, assignedBy }>
+ * Returns all occupied seats for a given tableId as Map<seatNo, { seatNo, ticketNo, attendee, status, holdExpiresAt, remainingMs, assignedAt, assignedBy }>
+ * Automatically ignores expired temporary holds!
  */
-export function getTableOccupancyMap(seatingPlan, tableId, registrationsByTicket) {
+export function getTableOccupancyMap(seatingPlan, tableId, registrationsByTicket, nowMs = Date.now()) {
   const seatMap = new Map();
   if (!seatingPlan?.assignments) return seatMap;
   const prefix = `${tableId}:`;
   Object.entries(seatingPlan.assignments).forEach(([key, val]) => {
     if (!key.startsWith(prefix) || !val?.ticketNo) return;
+    if (isAssignmentExpired(val, nowMs)) return; // Auto-drop expired temporary hold
     const seatNo = parseInt(key.slice(prefix.length), 10);
     if (isNaN(seatNo)) return;
     const attendee = registrationsByTicket ? registrationsByTicket.get(val.ticketNo) : null;
     if (registrationsByTicket && !attendee) return; // Ignore orphaned ticket if wiped
+    const status = val.status === "hold" ? "hold" : "confirmed";
     seatMap.set(seatNo, {
       seatNo,
       ticketNo: val.ticketNo,
       attendee,
+      status,
+      holdExpiresAt: status === "hold" ? val.holdExpiresAt || null : null,
+      remainingMs: status === "hold" ? getHoldRemainingMs(val, nowMs) : 0,
       assignedAt: val.assignedAt,
       assignedBy: val.assignedBy
     });
@@ -484,21 +590,31 @@ export function getTableOccupancyMap(seatingPlan, tableId, registrationsByTicket
 /**
  * Compute overall seating summary stats
  */
-export function getSeatingStats(seatingPlan, registrations = []) {
+export function getSeatingStats(seatingPlan, registrations = [], nowMs = Date.now()) {
   const regMap = new Map(registrations.map((r) => [r.ticketNo, r]));
   const tables = (seatingPlan?.items || []).filter((it) => it.type === "table");
   const openTables = tables.filter((t) => t.isOpen !== false);
   let totalCapacity = 0;
   let openCapacity = 0;
   let bookedCount = 0;
+  let confirmedCount = 0;
+  let holdCount = 0;
 
   tables.forEach((t) => {
     const cap = Number(t.capacity) || 8;
     totalCapacity += cap;
     if (t.isOpen !== false) openCapacity += cap;
-    const occ = getTableOccupancyMap(seatingPlan, t.id, regMap);
-    bookedCount += occ.size;
+    const occ = getTableOccupancyMap(seatingPlan, t.id, regMap, nowMs);
+    occ.forEach((entry) => {
+      bookedCount++;
+      if (entry.status === "hold") holdCount++;
+      else confirmedCount++;
+    });
   });
+
+  const pendingChangeRequestCount = Object.keys(seatingPlan?.seatChangeRequests || {}).filter(
+    (tNo) => regMap.has(tNo)
+  ).length;
 
   return {
     totalTables: tables.length,
@@ -507,7 +623,10 @@ export function getSeatingStats(seatingPlan, registrations = []) {
     totalCapacity,
     openCapacity,
     bookedCount,
-    availableSeats: Math.max(0, openCapacity - bookedCount)
+    confirmedCount,
+    holdCount,
+    availableSeats: Math.max(0, openCapacity - bookedCount),
+    pendingChangeRequestCount
   };
 }
 
