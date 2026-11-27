@@ -45,6 +45,11 @@ import {
 import confetti from "canvas-confetti";
 import {
   ITEM_TYPES,
+  CUSTOM_COLOR_THEMES,
+  CUSTOM_EMOJIS,
+  CUSTOM_ITEM_PRESETS,
+  DEFAULT_PALETTE_TYPES,
+  getPaletteTypes,
   createDefaultSeatingPlan,
   createEmptySeatingPlan,
   getNextTableCode,
@@ -147,13 +152,24 @@ export default function TableSeatingHub({
 
   // Owner Layout Editor mode (non-owners are ALWAYS false)
   const [isEditMode, setIsEditMode] = useState(false);
-  const [activeTool, setActiveTool] = useState("select"); // "select" | "table" | "stage" | "buffet" | "gift" | "entrance"
+  const [activeTool, setActiveTool] = useState("select"); // "select" | paletteType.id
   const [newTableSeats, setNewTableSeats] = useState(8);
   const [newTableShape, setNewTableShape] = useState("round");
   const [selectedItemId, setSelectedItemId] = useState(null);
   const [draggingItemId, setDraggingItemId] = useState(null);
   const [hoverCell, setHoverCell] = useState(null); // { x, y }
   const [tapMoveItemId, setTapMoveItemId] = useState(null); // Touch-friendly move mode
+  const [gridZoom, setGridZoom] = useState(1); // 0.8 .. 1.3 for exact 1:1 square cells
+
+  // Custom Palette Type Creator Modal State (Owner)
+  const [isAddTypeModalOpen, setIsAddTypeModalOpen] = useState(false);
+  const [newTypeLabel, setNewTypeLabel] = useState("");
+  const [newTypeEmoji, setNewTypeEmoji] = useState("🛍️");
+  const [newTypeColor, setNewTypeColor] = useState("violet");
+  const [newTypeIsBookable, setNewTypeIsBookable] = useState(false);
+  const [newTypeW, setNewTypeW] = useState(2);
+  const [newTypeH, setNewTypeH] = useState(1);
+  const [newTypeCapacity, setNewTypeCapacity] = useState(8);
 
   // Booking & Attendee Queue states
   const [rightTab, setRightTab] = useState("unassigned"); // "unassigned" | "assigned"
@@ -255,6 +271,18 @@ export default function TableSeatingHub({
     });
   }, [rightTab, unassignedList, assignedList, queueFilterMode, queueSearch]);
 
+  // Dynamic Palette Types (Built-in + Owner Custom Types)
+  const paletteTypes = useMemo(() => getPaletteTypes(seatingPlan), [seatingPlan]);
+  const activePaletteType = useMemo(() => {
+    if (activeTool === "select") return null;
+    return paletteTypes.find((p) => p.id === activeTool) || null;
+  }, [activeTool, paletteTypes]);
+
+  const hasMissingDefaultPalette = useMemo(() => {
+    const ids = new Set(paletteTypes.map((p) => p.id));
+    return DEFAULT_PALETTE_TYPES.some((d) => !ids.has(d.id));
+  }, [paletteTypes]);
+
   // Tables list sorted by code/label
   const allTables = useMemo(() => {
     return (seatingPlan.items || [])
@@ -302,11 +330,13 @@ export default function TableSeatingHub({
     commitPlan((prev) => ({ ...prev, gridCols: cols, gridRows: rows }));
   };
 
-  const handlePlaceNewItem = (cellX, cellY, toolType) => {
-    if (!isOwner || !ITEM_TYPES[toolType]) return;
-    const def = ITEM_TYPES[toolType];
-    let w = def.defaultW;
-    let h = def.defaultH;
+  const handlePlaceNewItem = (cellX, cellY, toolId) => {
+    if (!isOwner) return;
+    const paletteDef = paletteTypes.find((p) => p.id === toolId);
+    if (!paletteDef) return;
+
+    let w = Number(paletteDef.defaultW) || 2;
+    let h = Number(paletteDef.defaultH) || 1;
 
     // Auto-adapt to 1x1 if default size doesn't fit at clicked cell
     if (!canPlaceItem(seatingPlan.items, seatingPlan.gridCols, seatingPlan.gridRows, cellX, cellY, w, h)) {
@@ -319,25 +349,32 @@ export default function TableSeatingHub({
       }
     }
 
-    const id = `${toolType}_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`;
+    const isBookable = Boolean(paletteDef.isBookable || paletteDef.baseType === "table");
+    const resolvedType = isBookable ? "table" : (paletteDef.baseType || "custom");
+    const id = `${resolvedType}_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`;
+
     let newItem = {
       id,
-      type: toolType,
-      label: def.label,
+      type: resolvedType,
+      paletteId: paletteDef.id,
+      label: paletteDef.label,
+      emoji: paletteDef.emoji || "🛍️",
+      colorTheme: paletteDef.colorTheme || "violet",
       x: cellX,
       y: cellY,
       w,
       h
     };
 
-    if (toolType === "table") {
+    if (isBookable) {
       const code = getNextTableCode(seatingPlan.items);
+      const isStandardTable = paletteDef.id === "table";
       newItem = {
         ...newItem,
         code,
-        label: `โต๊ะ ${code}`,
-        capacity: newTableSeats,
-        shape: newTableShape,
+        label: isStandardTable ? `โต๊ะ ${code}` : `${paletteDef.label} ${code}`,
+        capacity: isStandardTable ? newTableSeats : (Number(paletteDef.defaultCapacity) || newTableSeats),
+        shape: isStandardTable ? newTableShape : (paletteDef.defaultShape || newTableShape),
         isOpen: true
       };
     }
@@ -349,6 +386,70 @@ export default function TableSeatingHub({
     setSelectedItemId(id);
     onPlayEffect?.("tick");
     showToast(`วาง "${newItem.label}" ลงผังเรียบร้อย`);
+  };
+
+  // Add a custom palette item type (e.g. "โต๊ะโชว์สินค้า", "ซุ้มถ่ายรูป", "โต๊ะ VIP")
+  const handleAddPaletteType = (e) => {
+    if (e) e.preventDefault();
+    if (!isOwner) return;
+    const cleanLabel = newTypeLabel.trim();
+    if (!cleanLabel) {
+      showToast("กรุณาระบุชื่อรูปแบบโต๊ะหรือโซนที่ต้องการเพิ่ม", "amber");
+      return;
+    }
+
+    const newDef = {
+      id: `custom_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
+      baseType: newTypeIsBookable ? "table" : "custom",
+      label: cleanLabel,
+      emoji: newTypeEmoji || "🛍️",
+      colorTheme: newTypeColor || "violet",
+      isBookable: newTypeIsBookable,
+      defaultW: Math.max(1, Math.min(6, Number(newTypeW) || 2)),
+      defaultH: Math.max(1, Math.min(6, Number(newTypeH) || 1)),
+      ...(newTypeIsBookable ? { defaultCapacity: Math.max(2, Math.min(20, Number(newTypeCapacity) || 8)), defaultShape: "round" } : {})
+    };
+
+    commitPlan((prev) => ({
+      ...prev,
+      paletteTypes: [...getPaletteTypes(prev), newDef]
+    }));
+    setActiveTool(newDef.id);
+    setIsAddTypeModalOpen(false);
+    setNewTypeLabel("");
+    onPlayEffect?.("tick");
+    showToast(`เพิ่มรูปแบบ "${cleanLabel}" เรียบร้อย — คลิกวางลงช่องสเกลได้เลย!`);
+  };
+
+  // Remove a palette item type from the toolbar
+  const handleRemovePaletteType = (typeId, label) => {
+    if (!isOwner) return;
+    const target = paletteTypes.find((p) => p.id === typeId);
+    if (!target || target.isCore) return;
+    if (!window.confirm(`ต้องการลบรูปแบบ "${label}" ออกจากแถบเครื่องมือใช่หรือไม่? (วัตถุที่วางไว้บนผังแล้วจะยังคงอยู่)`)) {
+      return;
+    }
+    commitPlan((prev) => ({
+      ...prev,
+      paletteTypes: getPaletteTypes(prev).filter((p) => p.id !== typeId)
+    }));
+    if (activeTool === typeId) setActiveTool("select");
+    showToast(`ลบรูปแบบ "${label}" ออกจากแถบเครื่องมือแล้ว`, "amber");
+  };
+
+  // Restore any removed default palette items while keeping custom ones
+  const handleRestoreDefaultPalette = () => {
+    if (!isOwner) return;
+    commitPlan((prev) => {
+      const current = getPaletteTypes(prev);
+      const currentIds = new Set(current.map((p) => p.id));
+      const missingDefaults = DEFAULT_PALETTE_TYPES.filter((d) => !currentIds.has(d.id));
+      return {
+        ...prev,
+        paletteTypes: [...current, ...missingDefaults]
+      };
+    });
+    showToast("คืนค่ารูปแบบโต๊ะมาตรฐานเรียบร้อย");
   };
 
   const handleMoveItemTo = (itemId, targetX, targetY) => {
@@ -457,32 +558,37 @@ export default function TableSeatingHub({
     showToast(`คัดลอกเป็น "${copy.label}" เรียบร้อย`);
   };
 
-  const handleDeleteSelectedItem = () => {
-    if (!isOwner || !selectedEditorItem) return;
-    const occ = selectedEditorItem.type === "table" ? getTableOccupancyMap(seatingPlan, selectedEditorItem.id, regMap) : null;
+  const handleDeleteItemById = (targetItem) => {
+    if (!isOwner || !targetItem) return;
+    const occ = targetItem.type === "table" ? getTableOccupancyMap(seatingPlan, targetItem.id, regMap) : null;
     if (occ && occ.size > 0) {
-      if (!window.confirm(`"${selectedEditorItem.label}" มีผู้จองที่นั่งอยู่แล้ว ${occ.size} ท่าน ยืนยันลบโต๊ะนี้และยกเลิกการจองของโต๊ะนี้ใช่หรือไม่?`)) {
+      if (!window.confirm(`"${targetItem.label}" มีผู้จองที่นั่งอยู่แล้ว ${occ.size} ท่าน ยืนยันลบโต๊ะนี้และยกเลิกการจองของโต๊ะนี้ใช่หรือไม่?`)) {
         return;
       }
     }
 
     commitPlan((prev) => {
       const nextAssignments = { ...(prev.assignments || {}) };
-      if (selectedEditorItem.type === "table") {
+      if (targetItem.type === "table") {
         Object.keys(nextAssignments).forEach((k) => {
-          if (k.startsWith(`${selectedEditorItem.id}:`)) {
+          if (k.startsWith(`${targetItem.id}:`)) {
             delete nextAssignments[k];
           }
         });
       }
       return {
         ...prev,
-        items: prev.items.filter((it) => it.id !== selectedEditorItem.id),
+        items: prev.items.filter((it) => it.id !== targetItem.id),
         assignments: nextAssignments
       };
     });
-    setSelectedItemId(null);
-    showToast(`ลบ "${selectedEditorItem.label}" ออกจากผังแล้ว`, "amber");
+    if (selectedItemId === targetItem.id) setSelectedItemId(null);
+    if (tapMoveItemId === targetItem.id) setTapMoveItemId(null);
+    showToast(`ลบ "${targetItem.label}" ออกจากผังแล้ว`, "amber");
+  };
+
+  const handleDeleteSelectedItem = () => {
+    handleDeleteItemById(selectedEditorItem);
   };
 
   const handleResetToTemplate = () => {
@@ -492,7 +598,11 @@ export default function TableSeatingHub({
       ? "ต้องการสร้างผังห้องตัวอย่างใหม่ใช่หรือไม่? (การจองที่นั่งเดิมทั้งหมดจะถูกล้างด้วย)"
       : "ต้องการจัดผังห้องตัวอย่างมาตรฐาน (เวที + บุฟเฟ่ต์ + ของขวัญ + โต๊ะ A–H) ใช่หรือไม่?";
     if (!window.confirm(msg)) return;
-    commitPlan(createDefaultSeatingPlan());
+    const def = createDefaultSeatingPlan();
+    commitPlan({
+      ...def,
+      paletteTypes: getPaletteTypes(seatingPlan)
+    });
     setSelectedItemId(null);
     showToast("สร้างผังห้องตัวอย่างเรียบร้อยแล้ว!");
   };
@@ -500,7 +610,14 @@ export default function TableSeatingHub({
   const handleClearToEmptyRoom = () => {
     if (!isOwner) return;
     if (!window.confirm("ต้องการล้างวัตถุทั้งหมดให้เป็นพื้นที่ห้องว่างเปล่าใช่หรือไม่?")) return;
-    commitPlan(createEmptySeatingPlan(seatingPlan.gridCols, seatingPlan.gridRows, seatingPlan.roomTitle));
+    commitPlan(
+      createEmptySeatingPlan(
+        seatingPlan.gridCols,
+        seatingPlan.gridRows,
+        seatingPlan.roomTitle,
+        getPaletteTypes(seatingPlan)
+      )
+    );
     setSelectedItemId(null);
     showToast("ล้างผังเป็นห้องว่างเปล่าเรียบร้อย พร้อมจัดวางใหม่!");
   };
@@ -698,9 +815,28 @@ export default function TableSeatingHub({
   const renderFloorPlanCanvas = (kioskView = false) => {
     const cols = seatingPlan.gridCols || 10;
     const rows = seatingPlan.gridRows || 10;
-    const minCellPx = kioskView
-      ? cols <= 10 ? 72 : cols <= 14 ? 58 : 48
-      : cols <= 10 ? 58 : cols <= 14 ? 48 : 40;
+    const baseCellPx = kioskView
+      ? cols <= 10 ? 74 : cols <= 12 ? 64 : cols <= 16 ? 54 : 46
+      : cols <= 10 ? 64 : cols <= 12 ? 56 : cols <= 16 ? 48 : 42;
+    const cellSize = Math.round(baseCellPx * gridZoom);
+    const gridGap = 4;
+
+    const renderQuickDeleteBtn = (item) => {
+      if (!isEditMode || !isOwner || selectedItemId !== item.id) return null;
+      return (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleDeleteItemById(item);
+          }}
+          title={`ลบ "${item.label}" ออกจากผัง`}
+          className="absolute -top-1.5 -right-1.5 z-30 w-5 h-5 rounded-full bg-rose-600 hover:bg-rose-500 text-white shadow-md border border-white flex items-center justify-center cursor-pointer transition-transform hover:scale-110"
+        >
+          <X className="w-3 h-3 stroke-[3]" />
+        </button>
+      );
+    };
 
     return (
       <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col">
@@ -715,17 +851,38 @@ export default function TableSeatingHub({
                 {seatingPlan.roomTitle || "ผังห้องจัดเลี้ยง"}
               </h3>
               <p className="text-[11px] text-slate-300">
-                สเกลห้อง {cols} × {rows} ช่อง •{" "}
+                สเกลสี่เหลี่ยมจัตุรัส {cols} × {rows} ช่อง •{" "}
                 {isEditMode
                   ? activeTool === "select"
-                    ? "โหมดจัดผัง: ลากวางเพื่อย้าย หรือคลิกวัตถุเพื่อแก้ไขขนาด/จำนวนคน"
-                    : `คลิกลงช่องว่างเพื่อวาง "${ITEM_TYPES[activeTool]?.label}"`
+                    ? "โหมดจัดผัง: ลากวางเพื่อย้าย หรือคลิกวัตถุเพื่อแก้ไข/กด × เพื่อลบ"
+                    : `คลิกลงช่องว่างเพื่อวาง "${activePaletteType?.label || ""}"`
                   : "คลิกที่โต๊ะเพื่อดูรูปผู้จองและเลือกเก้าอี้รายตัว (เช่น A1, A2, A3...)"}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-1.5 flex-wrap">
+            {/* Square Grid Zoom Controls */}
+            <div className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-white/10 border border-white/15 text-[10px] font-bold text-slate-200 mr-1">
+              <button
+                type="button"
+                onClick={() => setGridZoom((z) => Math.max(0.75, Number((z - 0.1).toFixed(2))))}
+                className="p-0.5 hover:text-amber-300 cursor-pointer"
+                title="ย่อสเกลช่องตาราง"
+              >
+                <Minus className="w-3 h-3" />
+              </button>
+              <span className="font-mono min-w-[34px] text-center">{Math.round(gridZoom * 100)}%</span>
+              <button
+                type="button"
+                onClick={() => setGridZoom((z) => Math.min(1.3, Number((z + 0.1).toFixed(2))))}
+                className="p-0.5 hover:text-amber-300 cursor-pointer"
+                title="ขยายสเกลช่องตาราง"
+              >
+                <Plus className="w-3 h-3" />
+              </button>
+            </div>
+
             {/* Compact Legend */}
             <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-[10px] font-bold text-emerald-200">
               <span className="w-2 h-2 rounded-full bg-emerald-400" />
@@ -827,18 +984,15 @@ export default function TableSeatingHub({
             </span>
           </div>
 
-          <div
-            className="mx-auto"
-            style={{
-              minWidth: `${cols * minCellPx + 28}px`,
-              maxWidth: kioskView ? "100%" : `${Math.max(cols * 76 + 28, 680)}px`
-            }}
-          >
-            {/* Column Number Ruler (1..cols) */}
-            <div className="flex items-center mb-1 pl-7">
+          <div className="mx-auto w-fit">
+            {/* Column Number Ruler (1..cols) aligned 1:1 with square cells */}
+            <div className="flex items-center mb-1 pl-9">
               <div
-                className="flex-1 grid gap-1"
-                style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+                className="grid"
+                style={{
+                  gridTemplateColumns: `repeat(${cols}, ${cellSize}px)`,
+                  gap: `${gridGap}px`
+                }}
               >
                 {Array.from({ length: cols }, (_, cIdx) => (
                   <div
@@ -852,10 +1006,13 @@ export default function TableSeatingHub({
             </div>
 
             <div className="flex items-stretch">
-              {/* Row Number Ruler (1..rows) */}
+              {/* Row Number Ruler (1..rows) aligned 1:1 with square cells */}
               <div
-                className="w-7 pr-1.5 grid gap-1 shrink-0"
-                style={{ gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` }}
+                className="w-7 pr-1.5 grid shrink-0 py-1.5"
+                style={{
+                  gridTemplateRows: `repeat(${rows}, ${cellSize}px)`,
+                  gap: `${gridGap}px`
+                }}
               >
                 {Array.from({ length: rows }, (_, rIdx) => (
                   <div
@@ -867,14 +1024,14 @@ export default function TableSeatingHub({
                 ))}
               </div>
 
-              {/* Main Rectangular Room Grid */}
+              {/* Main Rectangular Room Grid (Exact 1:1 Square Cells!) */}
               <div
-                className="relative flex-1 bg-white rounded-2xl border-2 border-slate-300 shadow-inner p-1.5"
+                className="relative bg-white rounded-2xl border-2 border-slate-300 shadow-inner p-1.5"
                 style={{
                   display: "grid",
-                  gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
-                  gridTemplateRows: `repeat(${rows}, minmax(${minCellPx}px, 1fr))`,
-                  gap: "4px"
+                  gridTemplateColumns: `repeat(${cols}, ${cellSize}px)`,
+                  gridTemplateRows: `repeat(${rows}, ${cellSize}px)`,
+                  gap: `${gridGap}px`
                 }}
               >
                 {/* Background Scale Cells */}
@@ -967,7 +1124,7 @@ export default function TableSeatingHub({
                         style={commonStyle}
                         {...dragProps}
                         onClick={(e) => handleItemClick(item, e)}
-                        className={`rounded-xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border-2 text-white shadow-md flex flex-col items-center justify-center p-1.5 text-center transition-all select-none ${
+                        className={`relative min-w-0 min-h-0 rounded-xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border-2 text-white shadow-md flex flex-col items-center justify-center p-1.5 text-center transition-all select-none ${
                           isSelectedEditor
                             ? "border-amber-400 ring-4 ring-amber-400/30 cursor-grab"
                             : isEditMode
@@ -975,7 +1132,8 @@ export default function TableSeatingHub({
                             : "border-indigo-500/40"
                         }`}
                       >
-                        <div className="flex items-center space-x-1.5">
+                        {renderQuickDeleteBtn(item)}
+                        <div className="flex items-center space-x-1.5 max-w-full overflow-hidden">
                           <Mic2 className="w-4 h-4 text-amber-400 shrink-0" />
                           <span className="font-black text-xs sm:text-sm tracking-wide truncate">
                             {item.label}
@@ -999,7 +1157,7 @@ export default function TableSeatingHub({
                         style={commonStyle}
                         {...dragProps}
                         onClick={(e) => handleItemClick(item, e)}
-                        className={`rounded-xl bg-gradient-to-br from-orange-50 via-amber-50 to-orange-100 border-2 text-orange-900 shadow-sm flex flex-col items-center justify-center p-1.5 text-center transition-all select-none overflow-hidden ${
+                        className={`relative min-w-0 min-h-0 rounded-xl bg-gradient-to-br from-orange-50 via-amber-50 to-orange-100 border-2 text-orange-900 shadow-sm flex flex-col items-center justify-center p-1.5 text-center transition-all select-none ${
                           isSelectedEditor
                             ? "border-orange-500 ring-4 ring-orange-400/30 cursor-grab"
                             : isEditMode
@@ -1008,10 +1166,11 @@ export default function TableSeatingHub({
                         }`}
                         title={item.label}
                       >
+                        {renderQuickDeleteBtn(item)}
                         <UtensilsCrossed className="w-4 h-4 text-orange-600 shrink-0 mb-0.5" />
                         <span
-                          className={`font-extrabold text-orange-900 leading-tight ${
-                            isVertical ? "text-[10px] break-words" : "text-[11px] truncate max-w-full"
+                          className={`font-extrabold text-orange-900 leading-tight max-w-full overflow-hidden ${
+                            isVertical ? "text-[10px] break-words" : "text-[11px] truncate"
                           }`}
                         >
                           {item.label}
@@ -1028,7 +1187,7 @@ export default function TableSeatingHub({
                         style={commonStyle}
                         {...dragProps}
                         onClick={(e) => handleItemClick(item, e)}
-                        className={`rounded-xl bg-gradient-to-br from-pink-50 via-rose-50 to-amber-50 border-2 text-rose-900 shadow-sm flex flex-col items-center justify-center p-1.5 text-center transition-all select-none ${
+                        className={`relative min-w-0 min-h-0 rounded-xl bg-gradient-to-br from-pink-50 via-rose-50 to-amber-50 border-2 text-rose-900 shadow-sm flex flex-col items-center justify-center p-1.5 text-center transition-all select-none ${
                           isSelectedEditor
                             ? "border-rose-500 ring-4 ring-rose-400/30 cursor-grab"
                             : isEditMode
@@ -1037,7 +1196,8 @@ export default function TableSeatingHub({
                         }`}
                         title={item.label}
                       >
-                        <div className="flex items-center space-x-1">
+                        {renderQuickDeleteBtn(item)}
+                        <div className="flex items-center space-x-1 max-w-full overflow-hidden">
                           <Gift className="w-4 h-4 text-rose-500 shrink-0" />
                           <span className="font-extrabold text-[11px] truncate">{item.label}</span>
                         </div>
@@ -1053,7 +1213,7 @@ export default function TableSeatingHub({
                         style={commonStyle}
                         {...dragProps}
                         onClick={(e) => handleItemClick(item, e)}
-                        className={`rounded-xl bg-gradient-to-br from-slate-100 to-teal-50 border-2 text-slate-700 shadow-sm flex flex-col items-center justify-center p-1.5 text-center transition-all select-none ${
+                        className={`relative min-w-0 min-h-0 rounded-xl bg-gradient-to-br from-slate-100 to-teal-50 border-2 text-slate-700 shadow-sm flex flex-col items-center justify-center p-1.5 text-center transition-all select-none ${
                           isSelectedEditor
                             ? "border-teal-500 ring-4 ring-teal-400/30 cursor-grab"
                             : isEditMode
@@ -1062,9 +1222,50 @@ export default function TableSeatingHub({
                         }`}
                         title={item.label}
                       >
-                        <div className="flex items-center space-x-1">
+                        {renderQuickDeleteBtn(item)}
+                        <div className="flex items-center space-x-1 max-w-full overflow-hidden">
                           <DoorOpen className="w-3.5 h-3.5 text-teal-600 shrink-0" />
                           <span className="font-bold text-[10px] sm:text-[11px] truncate">{item.label}</span>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // 4.5 CUSTOM NON-BOOKABLE ITEM (e.g. โต๊ะโชว์สินค้า, บูธสปอนเซอร์, ซุ้มถ่ายรูป)
+                  if (item.type !== "table") {
+                    const theme = CUSTOM_COLOR_THEMES[item.colorTheme] || CUSTOM_COLOR_THEMES.violet;
+                    const isVertical = item.h > item.w && item.w === 1;
+                    return (
+                      <div
+                        key={item.id}
+                        style={commonStyle}
+                        {...dragProps}
+                        onClick={(e) => handleItemClick(item, e)}
+                        className={`relative min-w-0 min-h-0 rounded-xl ${theme.tileBg} border-2 ${theme.text} shadow-sm flex flex-col items-center justify-center p-1.5 text-center transition-all select-none ${
+                          isSelectedEditor
+                            ? `${theme.tileSelected} cursor-grab`
+                            : isEditMode
+                            ? `${theme.tileBorder} ${theme.tileHover} cursor-grab`
+                            : theme.tileBorder
+                        }`}
+                        title={item.label}
+                      >
+                        {renderQuickDeleteBtn(item)}
+                        <div
+                          className={`flex items-center justify-center max-w-full overflow-hidden ${
+                            isVertical || isCompact ? "flex-col space-y-0.5" : "space-x-1"
+                          }`}
+                        >
+                          <span className="text-sm sm:text-base leading-none shrink-0">
+                            {item.emoji || "🛍️"}
+                          </span>
+                          <span
+                            className={`font-extrabold leading-tight max-w-full overflow-hidden ${
+                              isVertical ? "text-[10px] break-words" : "text-[10px] sm:text-[11px] truncate"
+                            }`}
+                          >
+                            {item.label}
+                          </span>
                         </div>
                       </div>
                     );
@@ -1118,17 +1319,19 @@ export default function TableSeatingHub({
                           ? `${item.label} (ปิดใช้งาน)`
                           : `${item.label} (${occCount}/${cap} ท่าน)${tooltipNames ? ` — ${tooltipNames}` : " — ว่างทั้งหมด"}`
                       }
-                      className={`rounded-2xl border-2 p-1.5 sm:p-2 flex flex-col justify-between transition-all select-none relative overflow-hidden ${borderTone} ${
+                      className={`min-w-0 min-h-0 rounded-2xl border-2 p-1.5 flex flex-col justify-between transition-all select-none relative ${borderTone} ${
                         isEditMode ? "cursor-grab" : isClosed ? "cursor-not-allowed" : "cursor-pointer"
                       }`}
                     >
+                      {renderQuickDeleteBtn(item)}
                       {/* Table Header: Label + Occupancy Pill */}
                       <div className="flex items-center justify-between gap-1 w-full">
-                        <span className="font-black text-slate-900 text-xs sm:text-sm truncate leading-none">
+                        <span className="font-black text-slate-900 text-[11px] sm:text-xs truncate leading-none">
+                          {item.emoji && item.paletteId && item.paletteId !== "table" ? `${item.emoji} ` : ""}
                           {item.label}
                         </span>
                         <span
-                          className={`text-[9px] sm:text-[10px] font-black px-1.5 py-0.5 rounded-full shrink-0 leading-none ${badgeTone}`}
+                          className={`text-[9px] font-black px-1.5 py-0.5 rounded-full shrink-0 leading-none ${badgeTone}`}
                         >
                           {isClosed ? "ปิด" : `${occCount}/${cap}`}
                         </span>
@@ -1136,9 +1339,9 @@ export default function TableSeatingHub({
 
                       {/* Center Visual: Seated Photos / Empty Seat Dots */}
                       {!isCompact ? (
-                        <div className="flex-1 flex flex-col items-center justify-center my-1">
+                        <div className="flex-1 min-h-0 flex flex-col items-center justify-center my-0.5 overflow-hidden">
                           <div
-                            className={`w-full flex flex-wrap items-center justify-center gap-1 p-1.5 ${
+                            className={`w-full flex flex-wrap items-center justify-center gap-0.5 p-1 ${
                               item.shape === "round" ? "rounded-2xl" : "rounded-lg"
                             } bg-white/80 border border-slate-200/80 shadow-inner`}
                           >
@@ -1152,15 +1355,15 @@ export default function TableSeatingHub({
                                     src={occEntry.attendee.photoUrl}
                                     alt={occEntry.attendee.name}
                                     title={`${getSeatCode(item, seatNo)}: ${occEntry.attendee.name}`}
-                                    className="w-6 h-6 sm:w-7 sm:h-7 rounded-full object-cover ring-2 ring-white shadow-sm"
+                                    className="w-5 h-5 sm:w-6 sm:h-6 rounded-full object-cover ring-1 ring-white shadow-sm"
                                   />
                                 ) : (
                                   <div
                                     key={seatNo}
                                     title={`${getSeatCode(item, seatNo)}: ${occEntry.attendee.name}`}
-                                    className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full ${getAvatarColor(
+                                    className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full ${getAvatarColor(
                                       occEntry.attendee.ticketNo
-                                    )} text-white text-[9px] font-black flex items-center justify-center ring-2 ring-white shadow-sm`}
+                                    )} text-white text-[8px] font-black flex items-center justify-center ring-1 ring-white shadow-sm`}
                                   >
                                     {getInitials(occEntry.attendee.name, occEntry.attendee.nickname)}
                                   </div>
@@ -1170,14 +1373,14 @@ export default function TableSeatingHub({
                                 <div
                                   key={seatNo}
                                   title={`${getSeatCode(item, seatNo)}: ว่าง`}
-                                  className="w-6 h-6 sm:w-7 sm:h-7 rounded-full border border-dashed border-slate-300 bg-slate-50 text-[8px] font-mono font-bold text-slate-400 flex items-center justify-center"
+                                  className="w-5 h-5 sm:w-6 sm:h-6 rounded-full border border-dashed border-slate-300 bg-slate-50 text-[7px] font-mono font-bold text-slate-400 flex items-center justify-center"
                                 >
                                   {getSeatCode(item, seatNo)}
                                 </div>
                               );
                             })}
                             {cap > maxAvatarsToShow && (
-                              <span className="text-[9px] font-bold text-slate-500 px-1">
+                              <span className="text-[8px] font-bold text-slate-500 px-0.5">
                                 +{cap - maxAvatarsToShow}
                               </span>
                             )}
@@ -1921,41 +2124,102 @@ export default function TableSeatingHub({
               </div>
             </div>
 
-            {/* Row 2: Tool Palette for Placing Items */}
+            {/* Row 2: Dynamic Tool Palette for Placing Items (+ Add / Remove Types) */}
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-extrabold text-slate-600">เลือกเครื่องมือแล้วคลิกวางบนตาราง:</span>
 
-              {[
-                { id: "select", label: "เลือก / ลากย้าย", icon: Move, activeCls: "bg-slate-900 text-white" },
-                { id: "table", label: `วางโต๊ะนั่งแขก (${newTableSeats} คน)`, icon: Armchair, activeCls: "bg-emerald-600 text-white" },
-                { id: "stage", label: "วางเวที", icon: Mic2, activeCls: "bg-indigo-600 text-white" },
-                { id: "buffet", label: "วางโซนบุฟเฟ่ต์", icon: UtensilsCrossed, activeCls: "bg-orange-500 text-white" },
-                { id: "gift", label: "วางโต๊ะของขวัญ", icon: Gift, activeCls: "bg-rose-500 text-white" },
-                { id: "entrance", label: "วางทางเข้า/ลงทะเบียน", icon: DoorOpen, activeCls: "bg-teal-600 text-white" }
-              ].map((t) => {
-                const Icon = t.icon;
-                const isActive = activeTool === t.id;
+              {/* Select / Drag-Move Tool */}
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTool("select");
+                  setTapMoveItemId(null);
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 border transition-all cursor-pointer ${
+                  activeTool === "select"
+                    ? "bg-slate-900 text-white border-transparent shadow-sm scale-[1.02]"
+                    : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                <Move className="w-3.5 h-3.5" />
+                <span>เลือก / ลากย้าย</span>
+              </button>
+
+              {/* Dynamic Placeable Palette Chips */}
+              {paletteTypes.map((pt) => {
+                const isActive = activeTool === pt.id;
+                const theme = CUSTOM_COLOR_THEMES[pt.colorTheme] || CUSTOM_COLOR_THEMES.violet;
+                const displayLabel =
+                  pt.id === "table"
+                    ? `${pt.label} (${newTableSeats} คน)`
+                    : pt.isBookable
+                    ? `${pt.label} (${pt.defaultCapacity || newTableSeats} คน)`
+                    : pt.label;
+
                 return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => {
-                      setActiveTool(t.id);
-                      setTapMoveItemId(null);
-                    }}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 border transition-all cursor-pointer ${
+                  <div
+                    key={pt.id}
+                    className={`inline-flex items-center rounded-xl border transition-all overflow-hidden ${
                       isActive
-                        ? `${t.activeCls} border-transparent shadow-sm scale-[1.02]`
+                        ? `${theme.btnActive} border-transparent shadow-sm scale-[1.02]`
                         : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
                     }`}
                   >
-                    <Icon className="w-3.5 h-3.5" />
-                    <span>{t.label}</span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTool(pt.id);
+                        setTapMoveItemId(null);
+                      }}
+                      className="px-2.5 py-1.5 text-xs font-bold flex items-center space-x-1.5 cursor-pointer"
+                    >
+                      <span className="text-sm leading-none">{pt.emoji || "🪑"}</span>
+                      <span>วาง{displayLabel}</span>
+                    </button>
+                    {!pt.isCore && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemovePaletteType(pt.id, pt.label);
+                        }}
+                        title={`ลบรูปแบบ "${pt.label}" ออกจากแถบเครื่องมือ`}
+                        className={`pr-2 pl-1 py-1.5 text-xs cursor-pointer transition-colors ${
+                          isActive
+                            ? "text-white/75 hover:text-white"
+                            : "text-slate-400 hover:text-rose-600"
+                        }`}
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
                 );
               })}
 
-              {/* Quick default seats chooser when placing tables */}
+              {/* Add Custom Table/Item Type Button */}
+              <button
+                type="button"
+                onClick={() => setIsAddTypeModalOpen(true)}
+                className="px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center space-x-1 border-2 border-dashed border-violet-300 bg-violet-50/70 hover:bg-violet-100 text-violet-700 transition-all cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>เพิ่มรูปแบบใหม่</span>
+              </button>
+
+              {hasMissingDefaultPalette && (
+                <button
+                  type="button"
+                  onClick={handleRestoreDefaultPalette}
+                  className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold flex items-center space-x-1 border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600 cursor-pointer"
+                  title="คืนค่ารูปแบบมาตรฐานที่เคยลบออก"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>คืนค่าเริ่มต้น</span>
+                </button>
+              )}
+
+              {/* Quick default seats chooser when placing standard tables */}
               {activeTool === "table" && (
                 <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-xl bg-emerald-50 border border-emerald-200 text-xs">
                   <span className="font-bold text-emerald-800">ที่นั่งเริ่มต้น:</span>
@@ -2024,6 +2288,49 @@ export default function TableSeatingHub({
                       className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500"
                     />
                   </div>
+
+                  {/* Custom Item Appearance (Emoji & Color) */}
+                  {selectedEditorItem.type === "custom" && (
+                    <div className="space-y-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 mb-1">สัญลักษณ์</label>
+                        <div className="flex flex-wrap gap-1">
+                          {CUSTOM_EMOJIS.map((em) => (
+                            <button
+                              key={em}
+                              type="button"
+                              onClick={() => handleUpdateSelectedItem({ emoji: em })}
+                              className={`w-7 h-7 rounded-lg text-sm flex items-center justify-center cursor-pointer border ${
+                                (selectedEditorItem.emoji || "🛍️") === em
+                                  ? "bg-violet-100 border-violet-500 scale-110"
+                                  : "bg-white border-slate-200 hover:bg-slate-100"
+                              }`}
+                            >
+                              {em}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 mb-1">โทนสี</label>
+                        <div className="flex flex-wrap gap-1.5">
+                          {Object.values(CUSTOM_COLOR_THEMES).map((th) => (
+                            <button
+                              key={th.id}
+                              type="button"
+                              onClick={() => handleUpdateSelectedItem({ colorTheme: th.id })}
+                              title={th.name}
+                              className={`w-6 h-6 rounded-full ${th.swatch} cursor-pointer transition-transform ${
+                                (selectedEditorItem.colorTheme || "violet") === th.id
+                                  ? "ring-2 ring-offset-2 ring-slate-900 scale-110"
+                                  : "opacity-80 hover:opacity-100"
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Table-specific Settings */}
                   {selectedEditorItem.type === "table" && (
@@ -2774,6 +3081,235 @@ export default function TableSeatingHub({
                 })
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================= */}
+      {/* OWNER: ADD NEW CUSTOM TABLE / ZONE TYPE MODAL                     */}
+      {/* ================================================================= */}
+      {isOwner && isAddTypeModalOpen && (
+        <div
+          className="fixed inset-0 z-[75] bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
+          onClick={() => setIsAddTypeModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-lg overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-4 bg-gradient-to-r from-violet-900 via-indigo-900 to-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center text-lg">
+                  {newTypeEmoji}
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-black">เพิ่มรูปแบบโต๊ะ / โซนใหม่</h3>
+                  <p className="text-[11px] text-violet-200">
+                    เช่น โต๊ะโชว์สินค้า, บูธสปอนเซอร์, ซุ้มถ่ายรูป หรือโต๊ะ VIP
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddTypeModalOpen(false)}
+                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddPaletteType} className="p-5 space-y-4">
+              {/* Quick Presets */}
+              <div>
+                <div className="text-[11px] font-extrabold text-slate-500 mb-1.5">
+                  เลือกจากตัวอย่างยอดนิยม (กดเติมอัตโนมัติ):
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {CUSTOM_ITEM_PRESETS.map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => {
+                        setNewTypeLabel(preset.label);
+                        setNewTypeEmoji(preset.emoji);
+                        setNewTypeColor(preset.colorTheme);
+                        setNewTypeIsBookable(Boolean(preset.isBookable));
+                        setNewTypeW(preset.defaultW);
+                        setNewTypeH(preset.defaultH);
+                        if (preset.defaultCapacity) setNewTypeCapacity(preset.defaultCapacity);
+                      }}
+                      className="px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-violet-100 border border-slate-200 hover:border-violet-300 text-xs font-bold text-slate-700 hover:text-violet-900 flex items-center space-x-1 cursor-pointer transition-colors"
+                    >
+                      <span>{preset.emoji}</span>
+                      <span>{preset.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Name Input */}
+              <div>
+                <label className="block text-xs font-extrabold text-slate-700 mb-1">
+                  ชื่อรูปแบบที่ต้องการเพิ่ม *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newTypeLabel}
+                  onChange={(e) => setNewTypeLabel(e.target.value)}
+                  placeholder="เช่น โต๊ะโชว์สินค้า, โต๊ะลงทะเบียน VIP, ซุ้มถ่ายรูป..."
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-violet-500"
+                />
+              </div>
+
+              {/* Type Mode: Display/Zone vs Bookable Seating Table */}
+              <div>
+                <label className="block text-xs font-extrabold text-slate-700 mb-1.5">
+                  ลักษณะการใช้งาน
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewTypeIsBookable(false);
+                      setNewTypeW(2);
+                      setNewTypeH(1);
+                    }}
+                    className={`p-2.5 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                      !newTypeIsBookable
+                        ? "border-violet-500 bg-violet-50 text-violet-950"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className="text-xs font-black">🛍️ โต๊ะวางของ / โซนตกแต่ง</div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">
+                      วางบอกตำแหน่ง เช่น โต๊ะโชว์สินค้า บูธ ซุ้มถ่ายรูป
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewTypeIsBookable(true);
+                      setNewTypeW(2);
+                      setNewTypeH(2);
+                    }}
+                    className={`p-2.5 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                      newTypeIsBookable
+                        ? "border-emerald-500 bg-emerald-50 text-emerald-950"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className="text-xs font-black">🪑 โต๊ะนั่งแขก (จองเก้าอี้ได้)</div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">
+                      กดเข้าไปเลือกเก้าอี้รายตัวได้ เช่น โต๊ะ VIP
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Emoji & Color Pickers */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">สัญลักษณ์</label>
+                  <div className="flex flex-wrap gap-1 p-2 rounded-xl bg-slate-50 border border-slate-200">
+                    {CUSTOM_EMOJIS.map((em) => (
+                      <button
+                        key={em}
+                        type="button"
+                        onClick={() => setNewTypeEmoji(em)}
+                        className={`w-7 h-7 rounded-lg text-sm flex items-center justify-center cursor-pointer border ${
+                          newTypeEmoji === em
+                            ? "bg-violet-100 border-violet-500 scale-110"
+                            : "bg-white border-slate-200 hover:bg-slate-100"
+                        }`}
+                      >
+                        {em}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-2.5">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">โทนสีบนผัง</label>
+                    <div className="flex flex-wrap gap-1.5 p-2 rounded-xl bg-slate-50 border border-slate-200">
+                      {Object.values(CUSTOM_COLOR_THEMES).map((th) => (
+                        <button
+                          key={th.id}
+                          type="button"
+                          onClick={() => setNewTypeColor(th.id)}
+                          title={th.name}
+                          className={`w-6 h-6 rounded-full ${th.swatch} cursor-pointer transition-transform ${
+                            newTypeColor === th.id
+                              ? "ring-2 ring-offset-2 ring-slate-900 scale-110"
+                              : "opacity-80 hover:opacity-100"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Size W x H & Optional Seats */}
+                  <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                    <span className="font-bold text-slate-600">ขนาดเริ่มต้น:</span>
+                    <div className="flex items-center space-x-1">
+                      <select
+                        value={newTypeW}
+                        onChange={(e) => setNewTypeW(Number(e.target.value))}
+                        className="px-1.5 py-1 rounded-lg bg-white border border-slate-200 font-mono font-bold text-xs"
+                      >
+                        {[1, 2, 3, 4, 5, 6].map((n) => (
+                          <option key={n} value={n}>กว้าง {n}</option>
+                        ))}
+                      </select>
+                      <span className="text-slate-400">×</span>
+                      <select
+                        value={newTypeH}
+                        onChange={(e) => setNewTypeH(Number(e.target.value))}
+                        className="px-1.5 py-1 rounded-lg bg-white border border-slate-200 font-mono font-bold text-xs"
+                      >
+                        {[1, 2, 3, 4, 5, 6].map((n) => (
+                          <option key={n} value={n}>ลึก {n}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {newTypeIsBookable && (
+                    <div className="flex items-center justify-between p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-xs">
+                      <span className="font-bold text-emerald-800">จำนวนที่นั่งเริ่มต้น:</span>
+                      <select
+                        value={newTypeCapacity}
+                        onChange={(e) => setNewTypeCapacity(Number(e.target.value))}
+                        className="px-2 py-1 rounded-lg bg-white border border-emerald-200 font-mono font-bold text-xs"
+                      >
+                        {[4, 6, 8, 10, 12, 16].map((n) => (
+                          <option key={n} value={n}>{n} คน</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Submit Actions */}
+              <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsAddTypeModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-extrabold shadow-md flex items-center space-x-1.5 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>เพิ่มรูปแบบนี้ลงแถบเครื่องมือ</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -5,6 +5,174 @@
 
 export const SEATING_STORAGE_KEY = "sme_fan_seating_plan_v1";
 
+export const CUSTOM_COLOR_THEMES = {
+  violet: {
+    id: "violet",
+    name: "ม่วง",
+    swatch: "bg-violet-500",
+    tileBg: "bg-gradient-to-br from-violet-50 via-purple-50 to-violet-100",
+    tileBorder: "border-violet-300/90",
+    tileHover: "hover:border-violet-500",
+    tileSelected: "border-violet-500 ring-4 ring-violet-400/30",
+    text: "text-violet-900",
+    btnActive: "bg-violet-600 text-white"
+  },
+  sky: {
+    id: "sky",
+    name: "ฟ้า",
+    swatch: "bg-sky-500",
+    tileBg: "bg-gradient-to-br from-sky-50 via-cyan-50 to-sky-100",
+    tileBorder: "border-sky-300/90",
+    tileHover: "hover:border-sky-500",
+    tileSelected: "border-sky-500 ring-4 ring-sky-400/30",
+    text: "text-sky-900",
+    btnActive: "bg-sky-600 text-white"
+  },
+  emerald: {
+    id: "emerald",
+    name: "เขียว",
+    swatch: "bg-emerald-500",
+    tileBg: "bg-gradient-to-br from-emerald-50 via-teal-50 to-emerald-100",
+    tileBorder: "border-emerald-300/90",
+    tileHover: "hover:border-emerald-500",
+    tileSelected: "border-emerald-500 ring-4 ring-emerald-400/30",
+    text: "text-emerald-900",
+    btnActive: "bg-emerald-600 text-white"
+  },
+  orange: {
+    id: "orange",
+    name: "ส้ม",
+    swatch: "bg-orange-500",
+    tileBg: "bg-gradient-to-br from-orange-50 via-amber-50 to-orange-100",
+    tileBorder: "border-orange-300/90",
+    tileHover: "hover:border-orange-500",
+    tileSelected: "border-orange-500 ring-4 ring-orange-400/30",
+    text: "text-orange-900",
+    btnActive: "bg-orange-500 text-white"
+  },
+  rose: {
+    id: "rose",
+    name: "ชมพู-แดง",
+    swatch: "bg-rose-500",
+    tileBg: "bg-gradient-to-br from-pink-50 via-rose-50 to-amber-50",
+    tileBorder: "border-rose-300/90",
+    tileHover: "hover:border-rose-500",
+    tileSelected: "border-rose-500 ring-4 ring-rose-400/30",
+    text: "text-rose-900",
+    btnActive: "bg-rose-500 text-white"
+  },
+  amber: {
+    id: "amber",
+    name: "ทอง-เหลือง",
+    swatch: "bg-amber-500",
+    tileBg: "bg-gradient-to-br from-amber-50 via-yellow-50 to-amber-100",
+    tileBorder: "border-amber-300/90",
+    tileHover: "hover:border-amber-500",
+    tileSelected: "border-amber-500 ring-4 ring-amber-400/30",
+    text: "text-amber-900",
+    btnActive: "bg-amber-500 text-slate-950"
+  },
+  teal: {
+    id: "teal",
+    name: "เขียวมิ้นต์",
+    swatch: "bg-teal-500",
+    tileBg: "bg-gradient-to-br from-slate-100 to-teal-50",
+    tileBorder: "border-teal-300/90",
+    tileHover: "hover:border-teal-500",
+    tileSelected: "border-teal-500 ring-4 ring-teal-400/30",
+    text: "text-teal-900",
+    btnActive: "bg-teal-600 text-white"
+  },
+  indigo: {
+    id: "indigo",
+    name: "น้ำเงินเข้ม",
+    swatch: "bg-indigo-700",
+    tileBg: "bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900",
+    tileBorder: "border-indigo-500/50",
+    tileHover: "hover:border-amber-300",
+    tileSelected: "border-amber-400 ring-4 ring-amber-400/30",
+    text: "text-white",
+    btnActive: "bg-indigo-600 text-white"
+  }
+};
+
+export const CUSTOM_EMOJIS = [
+  "🛍️", "🪑", "🎤", "🍛", "🎁", "🚪", "📸", "🍹",
+  "⭐", "🎵", "🏆", "📺", "💐", "🪴", "☕", "📋"
+];
+
+export const CUSTOM_ITEM_PRESETS = [
+  { label: "โต๊ะโชว์สินค้า", emoji: "🛍️", colorTheme: "violet", isBookable: false, defaultW: 2, defaultH: 1 },
+  { label: "บูธสปอนเซอร์", emoji: "⭐", colorTheme: "amber", isBookable: false, defaultW: 2, defaultH: 1 },
+  { label: "ซุ้มถ่ายรูป", emoji: "📸", colorTheme: "sky", isBookable: false, defaultW: 2, defaultH: 1 },
+  { label: "บาร์เครื่องดื่ม", emoji: "🍹", colorTheme: "teal", isBookable: false, defaultW: 2, defaultH: 1 },
+  { label: "จุดดนตรี / ดีเจ", emoji: "🎵", colorTheme: "indigo", isBookable: false, defaultW: 2, defaultH: 1 },
+  { label: "โต๊ะ VIP", emoji: "🏆", colorTheme: "amber", isBookable: true, defaultW: 2, defaultH: 2, defaultCapacity: 8, defaultShape: "round" }
+];
+
+export const DEFAULT_PALETTE_TYPES = [
+  {
+    id: "table",
+    baseType: "table",
+    label: "โต๊ะนั่งแขก",
+    emoji: "🪑",
+    colorTheme: "emerald",
+    isBookable: true,
+    defaultW: 2,
+    defaultH: 2,
+    defaultCapacity: 8,
+    defaultShape: "round",
+    isCore: true
+  },
+  {
+    id: "stage",
+    baseType: "stage",
+    label: "เวที (Stage)",
+    emoji: "🎤",
+    colorTheme: "indigo",
+    isBookable: false,
+    defaultW: 2,
+    defaultH: 1
+  },
+  {
+    id: "buffet",
+    baseType: "buffet",
+    label: "โซนบุฟเฟ่ต์",
+    emoji: "🍛",
+    colorTheme: "orange",
+    isBookable: false,
+    defaultW: 1,
+    defaultH: 2
+  },
+  {
+    id: "gift",
+    baseType: "gift",
+    label: "โต๊ะของขวัญ",
+    emoji: "🎁",
+    colorTheme: "rose",
+    isBookable: false,
+    defaultW: 2,
+    defaultH: 1
+  },
+  {
+    id: "entrance",
+    baseType: "entrance",
+    label: "ทางเข้า/ลงทะเบียน",
+    emoji: "🚪",
+    colorTheme: "teal",
+    isBookable: false,
+    defaultW: 2,
+    defaultH: 1
+  }
+];
+
+export function getPaletteTypes(seatingPlan) {
+  if (seatingPlan && Array.isArray(seatingPlan.paletteTypes) && seatingPlan.paletteTypes.length > 0) {
+    return seatingPlan.paletteTypes;
+  }
+  return DEFAULT_PALETTE_TYPES;
+}
+
 export const ITEM_TYPES = {
   table: {
     type: "table",
@@ -193,16 +361,23 @@ export function createDefaultSeatingPlan() {
         h: 2
       }
     ],
+    paletteTypes: DEFAULT_PALETTE_TYPES,
     assignments: {}
   };
 }
 
-export function createEmptySeatingPlan(gridCols = 10, gridRows = 10, roomTitle = "ห้องจัดเลี้ยง โรงแรมบุรีศรีภู") {
+export function createEmptySeatingPlan(
+  gridCols = 10,
+  gridRows = 10,
+  roomTitle = "ห้องจัดเลี้ยง โรงแรมบุรีศรีภู",
+  paletteTypes = DEFAULT_PALETTE_TYPES
+) {
   return {
     gridCols,
     gridRows,
     roomTitle,
     updatedAt: new Date().toISOString(),
+    paletteTypes: Array.isArray(paletteTypes) && paletteTypes.length > 0 ? paletteTypes : DEFAULT_PALETTE_TYPES,
     items: [],
     assignments: {}
   };
