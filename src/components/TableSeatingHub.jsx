@@ -63,7 +63,8 @@ import {
   buildAttendeeSeatMap,
   getTableOccupancyMap,
   getSeatingStats,
-  getInitials
+  getInitials,
+  getAvatarTextSizeClass
 } from "../utils/seatingPlanHelper";
 
 // Helper to compute chronological sort timestamp (checked-in time first, then registration time)
@@ -1082,7 +1083,12 @@ export default function TableSeatingHub({
                   className="w-10 h-10 rounded-full object-cover ring-2 ring-emerald-500 shadow-sm shrink-0"
                 />
               ) : (
-                <div className={`w-10 h-10 rounded-full ${getAvatarColor(selectedAttendee.ticketNo)} text-white font-black text-xs flex items-center justify-center ring-2 ring-emerald-400 shadow-sm shrink-0`}>
+                <div
+                  className={`w-10 h-10 rounded-full ${getAvatarColor(selectedAttendee.ticketNo)} text-white font-black flex items-center justify-center text-center px-0.5 break-words ring-2 ring-emerald-400 shadow-sm shrink-0 ${getAvatarTextSizeClass(
+                    getInitials(selectedAttendee.name, selectedAttendee.nickname),
+                    "md"
+                  )}`}
+                >
                   {getInitials(selectedAttendee.name, selectedAttendee.nickname)}
                 </div>
               )}
@@ -1522,32 +1528,35 @@ export default function TableSeatingHub({
                               const occEntry = occMap.get(seatNo);
                               if (occEntry?.attendee) {
                                 const isHoldSeat = occEntry.status === "hold";
+                                const showCheckInPhoto = Boolean(
+                                  occEntry.attendee.checkedIn && !isHoldSeat && occEntry.attendee.photoUrl
+                                );
+                                const nickLabel = getInitials(occEntry.attendee.name, occEntry.attendee.nickname);
                                 const seatTitle = `${getSeatCode(item, seatNo)}: ${occEntry.attendee.name}${
-                                  isHoldSeat ? ` (จองล่วงหน้า เหลือ ${formatCountdownMmSs(occEntry.remainingMs)})` : ""
-                                }`;
+                                  occEntry.attendee.nickname ? ` (${occEntry.attendee.nickname})` : ""
+                                }${isHoldSeat ? ` (จองล่วงหน้า เหลือ ${formatCountdownMmSs(occEntry.remainingMs)})` : ""}`;
                                 return (
                                   <div key={seatNo} className="relative" title={seatTitle}>
-                                    {occEntry.attendee.photoUrl ? (
+                                    {showCheckInPhoto ? (
                                       <img
                                         src={occEntry.attendee.photoUrl}
                                         alt={occEntry.attendee.name}
-                                        className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full object-cover shadow-sm ${
-                                          isHoldSeat
-                                            ? "ring-2 ring-amber-400 opacity-85"
-                                            : "ring-1 ring-white"
-                                        }`}
+                                        className="w-6 h-6 sm:w-7 sm:h-7 rounded-full object-cover shadow-sm ring-2 ring-emerald-400"
                                       />
                                     ) : (
                                       <div
-                                        className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full ${getAvatarColor(
+                                        className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full ${getAvatarColor(
                                           occEntry.attendee.ticketNo
-                                        )} text-white text-[8px] font-black flex items-center justify-center shadow-sm ${
+                                        )} text-white font-black flex items-center justify-center text-center px-0.5 break-words shadow-sm ${getAvatarTextSizeClass(
+                                          nickLabel,
+                                          "xs"
+                                        )} ${
                                           isHoldSeat
-                                            ? "ring-2 ring-amber-400 opacity-85"
+                                            ? "ring-2 ring-amber-400 opacity-95"
                                             : "ring-1 ring-white"
                                         }`}
                                       >
-                                        {getInitials(occEntry.attendee.name, occEntry.attendee.nickname)}
+                                        {nickLabel}
                                       </div>
                                     )}
                                     {isHoldSeat && (
@@ -1562,7 +1571,7 @@ export default function TableSeatingHub({
                                 <div
                                   key={seatNo}
                                   title={`${getSeatCode(item, seatNo)}: ว่าง`}
-                                  className="w-5 h-5 sm:w-6 sm:h-6 rounded-full border border-dashed border-slate-300 bg-slate-50 text-[7px] font-mono font-bold text-slate-400 flex items-center justify-center"
+                                  className="w-6 h-6 sm:w-7 sm:h-7 rounded-full border border-dashed border-slate-300 bg-slate-50 text-[7px] font-mono font-bold text-slate-400 flex items-center justify-center"
                                 >
                                   {getSeatCode(item, seatNo)}
                                 </div>
@@ -1577,23 +1586,28 @@ export default function TableSeatingHub({
                         </div>
                       ) : (
                         <div className="flex items-center justify-center -space-x-1.5 my-0.5">
-                          {occList.slice(0, 3).map((o) =>
-                            o.attendee?.photoUrl ? (
+                          {occList.slice(0, 3).map((o) => {
+                            const showPhoto = Boolean(o.attendee?.checkedIn && o.status !== "hold" && o.attendee?.photoUrl);
+                            const nickLabel = getInitials(o.attendee?.name, o.attendee?.nickname);
+                            return showPhoto ? (
                               <img
                                 key={o.seatNo}
                                 src={o.attendee.photoUrl}
                                 alt={o.attendee.name}
-                                className="w-5 h-5 rounded-full object-cover ring-1 ring-white"
+                                className="w-5 h-5 rounded-full object-cover ring-1 ring-emerald-400"
                               />
                             ) : (
                               <div
                                 key={o.seatNo}
-                                className={`w-5 h-5 rounded-full ${getAvatarColor(o.ticketNo)} text-white text-[8px] font-bold flex items-center justify-center ring-1 ring-white`}
+                                className={`w-5 h-5 rounded-full ${getAvatarColor(o.ticketNo)} text-white font-bold flex items-center justify-center text-center px-0.5 ring-1 ring-white ${getAvatarTextSizeClass(
+                                  nickLabel,
+                                  "xs"
+                                )}`}
                               >
-                                {getInitials(o.attendee?.name, o.attendee?.nickname)}
+                                {nickLabel}
                               </div>
-                            )
-                          )}
+                            );
+                          })}
                           {occCount === 0 && (
                             <span className="text-[9px] text-emerald-600 font-bold">ว่าง</span>
                           )}
@@ -1751,9 +1765,9 @@ export default function TableSeatingHub({
                   />
                 ) : (
                   <div
-                    className={`w-10 h-10 rounded-full ${getAvatarColor(selectedAttendee.ticketNo)} text-white font-black text-xs flex items-center justify-center ring-2 ${
+                    className={`w-10 h-10 rounded-full ${getAvatarColor(selectedAttendee.ticketNo)} text-white font-black flex items-center justify-center text-center px-0.5 break-words ring-2 ${
                       selectedAttendee.checkedIn ? "ring-emerald-400" : "ring-amber-400"
-                    }`}
+                    } ${getAvatarTextSizeClass(getInitials(selectedAttendee.name, selectedAttendee.nickname), "md")}`}
                   >
                     {getInitials(selectedAttendee.name, selectedAttendee.nickname)}
                   </div>
@@ -1858,38 +1872,46 @@ export default function TableSeatingHub({
                           <span className="text-xs font-black leading-none">{seatCode}</span>
                           <span className="text-[9px] font-bold mt-0.5 opacity-90">ว่าง</span>
                         </div>
-                      ) : (
-                        <div className="flex flex-col items-center">
-                          <div className="relative">
-                            {occ.attendee.photoUrl ? (
-                              <img
-                                src={occ.attendee.photoUrl}
-                                alt={occ.attendee.name}
-                                className="w-12 h-12 sm:w-14 sm:h-14 rounded-full object-cover ring-2 ring-amber-400 shadow-md bg-white"
-                              />
-                            ) : (
-                              <div
-                                className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full ${getAvatarColor(
-                                  occ.attendee.ticketNo
-                                )} text-white font-black text-xs flex items-center justify-center ring-2 ring-amber-400 shadow-md`}
-                              >
-                                {getInitials(occ.attendee.name, occ.attendee.nickname)}
-                              </div>
-                            )}
-                            <span className="absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full bg-slate-900 text-amber-300 text-[9px] font-black leading-none shadow">
-                              {seatCode}
-                            </span>
-                            {occ.status === "hold" && (
-                              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded-full bg-amber-500 text-slate-950 text-[8px] font-mono font-black leading-none shadow whitespace-nowrap">
-                                ⏳{formatCountdownMmSs(occ.remainingMs)}
+                      ) : (() => {
+                        const isHoldSeat = occ.status === "hold";
+                        const showCheckInPhoto = Boolean(occ.attendee.checkedIn && !isHoldSeat && occ.attendee.photoUrl);
+                        const nickLabel = getInitials(occ.attendee.name, occ.attendee.nickname);
+                        return (
+                          <div className="flex flex-col items-center">
+                            <div className="relative">
+                              {showCheckInPhoto ? (
+                                <img
+                                  src={occ.attendee.photoUrl}
+                                  alt={occ.attendee.name}
+                                  className="w-12 h-12 sm:w-14 sm:h-14 rounded-full object-cover ring-2 ring-emerald-400 shadow-md bg-white"
+                                />
+                              ) : (
+                                <div
+                                  className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full ${getAvatarColor(
+                                    occ.attendee.ticketNo
+                                  )} text-white font-black flex items-center justify-center text-center px-1 break-words shadow-md ${getAvatarTextSizeClass(
+                                    nickLabel,
+                                    "lg"
+                                  )} ${isHoldSeat ? "ring-2 ring-amber-400" : "ring-2 ring-emerald-400"}`}
+                                >
+                                  {nickLabel}
+                                </div>
+                              )}
+                              <span className="absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full bg-slate-900 text-amber-300 text-[9px] font-black leading-none shadow">
+                                {seatCode}
                               </span>
-                            )}
+                              {isHoldSeat && (
+                                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded-full bg-amber-500 text-slate-950 text-[8px] font-mono font-black leading-none shadow whitespace-nowrap">
+                                  ⏳{formatCountdownMmSs(occ.remainingMs)}
+                                </span>
+                              )}
+                            </div>
+                            <span className="mt-1 px-1.5 py-0.5 rounded-md bg-white/95 border border-slate-200 text-[9px] font-extrabold text-slate-800 max-w-[80px] truncate shadow-sm">
+                              {nickLabel}
+                            </span>
                           </div>
-                          <span className="mt-1 px-1.5 py-0.5 rounded-md bg-white/95 border border-slate-200 text-[9px] font-extrabold text-slate-800 max-w-[74px] truncate shadow-sm">
-                            {occ.attendee.nickname || occ.attendee.name.split(" ")[0]}
-                          </span>
-                        </div>
-                      )}
+                        );
+                      })()}
                     </button>
                   );
                 })}
@@ -1952,21 +1974,27 @@ export default function TableSeatingHub({
                             </div>
                           ) : (
                             <div className="flex items-center space-x-2 min-w-0">
-                              {occ.attendee.photoUrl ? (
+                              {occ.attendee.checkedIn && occ.status !== "hold" && occ.attendee.photoUrl ? (
                                 <img
                                   src={occ.attendee.photoUrl}
                                   alt={occ.attendee.name}
-                                  className="w-9 h-9 rounded-full object-cover ring-2 ring-amber-300 shrink-0"
+                                  className="w-9 h-9 rounded-full object-cover ring-2 ring-emerald-400 shrink-0"
                                 />
-                              ) : (
-                                <div
-                                  className={`w-9 h-9 rounded-full ${getAvatarColor(
-                                    occ.attendee.ticketNo
-                                  )} text-white text-[10px] font-black flex items-center justify-center shrink-0`}
-                                >
-                                  {getInitials(occ.attendee.name, occ.attendee.nickname)}
-                                </div>
-                              )}
+                              ) : (() => {
+                                const nickLabel = getInitials(occ.attendee.name, occ.attendee.nickname);
+                                return (
+                                  <div
+                                    className={`w-9 h-9 rounded-full ${getAvatarColor(
+                                      occ.attendee.ticketNo
+                                    )} text-white font-black flex items-center justify-center text-center px-0.5 break-words shrink-0 ${getAvatarTextSizeClass(
+                                      nickLabel,
+                                      "md"
+                                    )} ${occ.status === "hold" ? "ring-2 ring-amber-400" : ""}`}
+                                  >
+                                    {nickLabel}
+                                  </div>
+                                );
+                              })()}
                               <div className="min-w-0">
                                 <div className="text-xs font-black text-slate-900 truncate">
                                   {occ.attendee.name}
@@ -2115,7 +2143,12 @@ export default function TableSeatingHub({
                                         className="w-6 h-6 rounded-full object-cover shrink-0"
                                       />
                                     ) : (
-                                      <div className={`w-6 h-6 rounded-full ${getAvatarColor(cand.ticketNo)} text-white text-[9px] font-bold flex items-center justify-center shrink-0`}>
+                                      <div
+                                        className={`w-6 h-6 rounded-full ${getAvatarColor(cand.ticketNo)} text-white font-bold flex items-center justify-center text-center px-0.5 break-words shrink-0 ${getAvatarTextSizeClass(
+                                          getInitials(cand.name, cand.nickname),
+                                          "xs"
+                                        )}`}
+                                      >
                                         {getInitials(cand.name, cand.nickname)}
                                       </div>
                                     )}
@@ -2341,7 +2374,12 @@ export default function TableSeatingHub({
                         className="w-9 h-9 rounded-full object-cover ring-2 ring-indigo-300 shrink-0"
                       />
                     ) : (
-                      <div className={`w-9 h-9 rounded-full ${getAvatarColor(req.ticketNo)} text-white text-[10px] font-black flex items-center justify-center shrink-0`}>
+                      <div
+                        className={`w-9 h-9 rounded-full ${getAvatarColor(req.ticketNo)} text-white font-black flex items-center justify-center text-center px-0.5 break-words shrink-0 ${getAvatarTextSizeClass(
+                          getInitials(req.attendee?.name, req.attendee?.nickname),
+                          "md"
+                        )}`}
+                      >
                         {getInitials(req.attendee?.name, req.attendee?.nickname)}
                       </div>
                     )}
@@ -3225,7 +3263,10 @@ export default function TableSeatingHub({
                               <div
                                 className={`w-9 h-9 rounded-full ${getAvatarColor(
                                   att.ticketNo
-                                )} text-white text-[11px] font-black flex items-center justify-center shrink-0`}
+                                )} text-white font-black flex items-center justify-center text-center px-0.5 break-words shrink-0 ${getAvatarTextSizeClass(
+                                  getInitials(att.name, att.nickname),
+                                  "md"
+                                )}`}
                               >
                                 {getInitials(att.name, att.nickname)}
                               </div>
@@ -3530,7 +3571,12 @@ export default function TableSeatingHub({
                                         className="w-6 h-6 rounded-full object-cover shrink-0"
                                       />
                                     ) : (
-                                      <div className={`w-6 h-6 rounded-full ${getAvatarColor(occ.attendee.ticketNo)} text-white text-[9px] font-bold flex items-center justify-center shrink-0`}>
+                                      <div
+                                        className={`w-6 h-6 rounded-full ${getAvatarColor(occ.attendee.ticketNo)} text-white font-bold flex items-center justify-center text-center px-0.5 break-words shrink-0 ${getAvatarTextSizeClass(
+                                          getInitials(occ.attendee.name, occ.attendee.nickname),
+                                          "xs"
+                                        )}`}
+                                      >
                                         {getInitials(occ.attendee.name, occ.attendee.nickname)}
                                       </div>
                                     )}

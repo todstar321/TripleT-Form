@@ -631,12 +631,52 @@ export function getSeatingStats(seatingPlan, registrations = [], nowMs = Date.no
 }
 
 /**
- * Get initials for avatar fallback
+ * Count visible horizontal base characters (excludes zero-width Thai combining vowels & tone marks)
+ */
+export function getVisualCharLength(text = "") {
+  return String(text || "").replace(/[\u0E31\u0E34-\u0E3A\u0E47-\u0E4E]/g, "").length;
+}
+
+/**
+ * Get full display nickname for avatar circle (NEVER slices Thai nicknames like โต๊ด -> โต)
  */
 export function getInitials(name = "", nickname = "") {
-  const src = (nickname || name || "?").trim();
-  if (!src) return "?";
-  // Thai or Latin first 2 visible chars (skip common Thai prefixes if using full name)
-  const cleaned = src.replace(/^(คุณ|นาย|นางสาว|นาง|ดร\.|ผอ\.|พ\.ต\.อ\.|ว่าที่\s*ร\.ต\.)\s*/i, "").trim() || src;
-  return cleaned.slice(0, 2);
+  const nick = String(nickname || "").trim();
+  if (nick) return nick;
+  const full = String(name || "").trim();
+  if (!full) return "?";
+  const cleaned =
+    full
+      .replace(/^(คุณ|นาย|นางสาว|นาง|ดร\.|ว่าที่\s*ร\.ต\.|พ\.ต\.อ\.|ร\.ต\.อ\.)\s*/i, "")
+      .trim() || full;
+  return cleaned.split(/\s+/)[0] || cleaned;
+}
+
+/**
+ * Adaptive Tailwind font-size classes so full Thai nicknames (e.g. โต๊ด, โตสซี่) fit cleanly inside circles
+ * sizeVariant: "xs" (floor plan mini 24-28px) | "md" (list/slot 36px) | "lg" (table diagram 48-56px)
+ */
+export function getAvatarTextSizeClass(text = "", sizeVariant = "md") {
+  const len = getVisualCharLength(text);
+
+  if (sizeVariant === "xs") {
+    if (len <= 2) return "text-[9px] leading-none";
+    if (len <= 3) return "text-[8px] leading-none";
+    if (len <= 4) return "text-[7px] leading-none";
+    if (len <= 6) return "text-[6px] leading-[1.05]";
+    return "text-[5.5px] leading-[1.05]";
+  }
+
+  if (sizeVariant === "lg") {
+    if (len <= 3) return "text-xs leading-tight";
+    if (len <= 5) return "text-[11px] leading-tight";
+    if (len <= 7) return "text-[9.5px] leading-tight";
+    return "text-[8.5px] leading-tight";
+  }
+
+  // "md" (36px - 40px)
+  if (len <= 3) return "text-[11px] leading-tight";
+  if (len <= 5) return "text-[9.5px] leading-tight";
+  if (len <= 7) return "text-[8px] leading-tight";
+  return "text-[7px] leading-tight";
 }
