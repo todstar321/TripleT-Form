@@ -1696,39 +1696,16 @@ export default function EventCheckInHub({
           {/* Top Action & Filter Toolbar (Clean White Card) */}
           <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-sm space-y-3.5">
             
-            {/* Row 1: Camera Scanner CTA + Search Bar */}
-            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-              {/* Primary Action Button: Large 2-Line Camera Scanner CTA */}
+            {/* Row 1: Full-Width Camera Scanner CTA */}
+            <div>
               <button
                 type="button"
                 onClick={() => setIsScannerOpen(true)}
-                className="flex flex-col items-center justify-center gap-2 px-10 py-6 rounded-2xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black shadow-lg shadow-emerald-600/25 active:scale-95 transition-all cursor-pointer shrink-0 min-w-[260px]"
+                className="w-full flex flex-col items-center justify-center gap-2 px-6 py-6 rounded-2xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black shadow-lg shadow-emerald-600/25 active:scale-[0.99] transition-all cursor-pointer"
               >
                 <Camera className="w-10 h-10 sm:w-11 sm:h-11 text-white stroke-[2.2]" />
                 <span className="text-lg sm:text-xl tracking-wide leading-tight">สแกนบัตรเข้างาน</span>
               </button>
-
-              {/* Search Box */}
-              <div className="relative flex-1 md:max-w-md">
-                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                <input
-                  type="text"
-                  placeholder="ค้นหาชื่อ, ชื่อเล่น, เลขที่บัตร, เบอร์โทร..."
-                  value={searchCheckIn}
-                  onChange={(e) => setSearchCheckIn(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-9 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-emerald-500 transition-colors shadow-inner"
-                />
-                {searchCheckIn && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchCheckIn("")}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors cursor-pointer"
-                    title="ล้างข้อความค้นหา"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
             </div>
 
             {/* Row 2: Interactive Filter Button Bars (แถบปุ่มเลือกสถานะและสังกัด - บรรทัดเดียวไม่ตัดบรรทัด) */}
@@ -1902,14 +1879,37 @@ export default function EventCheckInHub({
           {/* Google Sheets Style Table (Clean White Card) */}
           <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
             
-            {/* Sheet Sub-header Bar (Always Single Line) */}
-            <div className="bg-slate-50/90 px-3 sm:px-4 py-2 border-b border-slate-200 flex items-center justify-between gap-2 text-[11px] sm:text-xs text-slate-500 font-mono overflow-x-auto no-scrollbar scrollbar-none whitespace-nowrap">
-              <div className="flex items-center space-x-1.5 shrink-0">
+            {/* Sheet Sub-header Bar with Inline Search Box in the middle space */}
+            <div className="bg-slate-50/90 px-3 sm:px-4 py-2 border-b border-slate-200 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 text-[11px] sm:text-xs text-slate-500">
+              <div className="flex items-center space-x-1.5 shrink-0 font-mono whitespace-nowrap">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
                 <span className="font-bold text-slate-700">Google Sheets View:</span>
-                <span className="text-slate-600 hidden sm:inline">ตารางรายชื่อผู้ลงทะเบียน (1 ถึง {totalCount})</span>
+                <span className="text-slate-600 hidden md:inline">ตารางรายชื่อผู้ลงทะเบียน (1 ถึง {totalCount})</span>
               </div>
-              <div className="text-[10px] sm:text-xs text-slate-600 font-semibold shrink-0">
+
+              {/* Compact Search Input positioned right before แสดง X/Y รายการ */}
+              <div className="relative flex-1 min-w-[160px] sm:max-w-xs sm:ml-auto order-3 sm:order-2 w-full sm:w-auto">
+                <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="ค้นหาชื่อ, ชื่อเล่น, เลขที่บัตร, เบอร์โทร..."
+                  value={searchCheckIn}
+                  onChange={(e) => setSearchCheckIn(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-lg pl-8 pr-7 py-1 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition-colors"
+                />
+                {searchCheckIn && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchCheckIn("")}
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                    title="ล้างข้อความค้นหา"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <div className="text-[10px] sm:text-xs text-slate-600 font-semibold font-mono shrink-0 whitespace-nowrap order-2 sm:order-3">
                 แสดง {filteredCheckInList.length}/{totalCount} รายการ
               </div>
             </div>
