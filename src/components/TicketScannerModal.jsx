@@ -14,7 +14,6 @@ export default function TicketScannerModal({
   const [scanResult, setScanResult] = useState(null);
   const [cameraError, setCameraError] = useState(null);
   const [isScanning, setIsScanning] = useState(false);
-  const [simulatedInput, setSimulatedInput] = useState('');
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -170,7 +169,7 @@ export default function TicketScannerModal({
       }
     } catch (err) {
       console.warn('Camera access error:', err);
-      setCameraError('ไม่สามารถเปิดกล้องได้ (เบราว์เซอร์ไม่อนุญาต หรือไม่มีกล้อง) ท่านสามารถใช้ช่องจำลองการสแกนด้านล่างได้ครับ');
+      setCameraError('ไม่สามารถเปิดกล้องได้ กรุณาอนุญาตสิทธิ์การใช้งานกล้องในเบราว์เซอร์แล้วลองใหม่อีกครั้งครับ');
       setIsScanning(false);
     }
   };
@@ -232,22 +231,6 @@ export default function TicketScannerModal({
   }, [isOpen]);
 
   if (!isOpen) return null;
-
-  // Handle simulation test
-  const handleSimulate = async (sampleText) => {
-    playBeep();
-    const raw = sampleText || simulatedInput;
-    const matched = await matchAttendee(raw);
-    const alreadyCheckedIn = Boolean(matched?.checkedIn);
-    setScanResult({
-      raw: raw,
-      attendee: matched,
-      alreadyCheckedIn
-    });
-    if (onCheckIn && matched && !alreadyCheckedIn) {
-      onCheckIn(matched);
-    }
-  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
@@ -482,27 +465,6 @@ export default function TicketScannerModal({
                   <span>เช็คอินเข้างานสำเร็จ (ถ่ายรูปเข้างาน)</span>
                 </button>
               )}
-            </div>
-          </div>
-        )}
-
-        {/* Quick Simulation Buttons for Instant Testing */}
-        {!scanResult && (
-          <div className="pt-2 border-t border-white/10 space-y-2">
-            <div className="text-[11px] text-slate-400 flex items-center justify-between">
-              <span>🎯 ทดสอบจำลองการสแกนทันที:</span>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {registrations.slice(0, 3).map((r) => (
-                <button
-                  key={r.ticketNo}
-                  type="button"
-                  onClick={() => handleSimulate(`${r.name} (${r.nickname || 'สมาชิก'}) [${r.ticketNo}]`)}
-                  className="px-2.5 py-1 rounded-lg text-[11px] bg-slate-800 hover:bg-slate-700 text-amber-300 font-mono transition-all border border-white/5 truncate max-w-[200px]"
-                >
-                  {r.ticketNo}: {r.name}
-                </button>
-              ))}
             </div>
           </div>
         )}
