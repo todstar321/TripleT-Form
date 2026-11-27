@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
   Armchair,
   UtensilsCrossed,
@@ -206,7 +206,66 @@ export default function TableSeatingHub({
   const [draggingItemId, setDraggingItemId] = useState(null);
   const [hoverCell, setHoverCell] = useState(null); // { x, y }
   const [tapMoveItemId, setTapMoveItemId] = useState(null); // Touch-friendly move mode
-  const [gridZoom, setGridZoom] = useState(1); // 0.8 .. 1.3 for exact 1:1 square cells
+  const [gridZoom, setGridZoom] = useState(1); // 1 = auto-fit to screen width (0.75..1.6 multiplier)
+
+  // Responsive Blueprint Auto-Fit Observers (Phone, iPad, Desktop & Kiosk Fullscreen)
+  const normalCanvasWrapRef = useRef(null);
+  const kioskCanvasWrapRef = useRef(null);
+  const [normalWrapWidth, setNormalWrapWidth] = useState(0);
+  const [kioskWrapSize, setKioskWrapSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const measureNormal = () => {
+      if (normalCanvasWrapRef.current) {
+        const w = normalCanvasWrapRef.current.clientWidth;
+        if (w > 0) setNormalWrapWidth(w);
+      }
+    };
+    measureNormal();
+    let ro = null;
+    if (typeof ResizeObserver !== "undefined" && normalCanvasWrapRef.current) {
+      ro = new ResizeObserver((entries) => {
+        const w = entries[0]?.contentRect?.width;
+        if (w > 0) setNormalWrapWidth(w);
+      });
+      ro.observe(normalCanvasWrapRef.current);
+    }
+    window.addEventListener("resize", measureNormal);
+    return () => {
+      if (ro) ro.disconnect();
+      window.removeEventListener("resize", measureNormal);
+    };
+  }, [isEditMode, isKioskMode]);
+
+  useEffect(() => {
+    if (!isKioskMode) return;
+    const measureKiosk = () => {
+      if (kioskCanvasWrapRef.current) {
+        const rect = kioskCanvasWrapRef.current.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          setKioskWrapSize({ width: rect.width, height: rect.height });
+        }
+      }
+    };
+    measureKiosk();
+    const t = setTimeout(measureKiosk, 60);
+    let ro = null;
+    if (typeof ResizeObserver !== "undefined" && kioskCanvasWrapRef.current) {
+      ro = new ResizeObserver((entries) => {
+        const rect = entries[0]?.contentRect;
+        if (rect && rect.width > 0 && rect.height > 0) {
+          setKioskWrapSize({ width: rect.width, height: rect.height });
+        }
+      });
+      ro.observe(kioskCanvasWrapRef.current);
+    }
+    window.addEventListener("resize", measureKiosk);
+    return () => {
+      clearTimeout(t);
+      if (ro) ro.disconnect();
+      window.removeEventListener("resize", measureKiosk);
+    };
+  }, [isKioskMode]);
 
   // Custom Palette Type Creator Modal State (Owner)
   const [isAddTypeModalOpen, setIsAddTypeModalOpen] = useState(false);
@@ -1352,11 +1411,29 @@ export default function TableSeatingHub({
   const renderFloorPlanCanvas = (kioskView = false) => {
     const cols = seatingPlan.gridCols || 10;
     const rows = seatingPlan.gridRows || 10;
-    const baseCellPx = kioskView
-      ? cols <= 10 ? 74 : cols <= 12 ? 64 : cols <= 16 ? 54 : 46
-      : cols <= 10 ? 64 : cols <= 12 ? 56 : cols <= 16 ? 48 : 42;
-    const cellSize = Math.round(baseCellPx * gridZoom);
+    // Natural crisp cell size so circles, check-in photos, and full Thai nicknames stay sharp & legible
+    const cellSize = cols <= 10 ? 64 : cols <= 12 ? 58 : cols <= 16 ? 52 : 46;
     const gridGap = 4;
+    const rulerW = 28; // w-7
+    const gridChrome = 16; // border-2 (4px) + p-1.5 (12px)
+    const naturalWidth = rulerW + gridChrome + cols * cellSize + Math.max(0, cols - 1) * gridGap;
+    const naturalHeight = 20 + gridChrome + rows * cellSize + Math.max(0, rows - 1) * gridGap;
+
+    // Auto-fit scale so the ENTIRE room fits cleanly inside Phone, iPad, Desktop, AND Kiosk screen!
+    const fallbackWinW = typeof window !== "undefined" ? window.innerWidth : 1024;
+    const fallbackWinH = typeof window !== "undefined" ? window.innerHeight : 768;
+    let autoFitScale = 1;
+    if (kioskView) {
+      const availW = Math.max(240, (kioskWrapSize.width || fallbackWinW - 24) - 16);
+      const availH = Math.max(240, (kioskWrapSize.height || fallbackWinH - 160) - 36);
+      autoFitScale = Math.min(availW / naturalWidth, availH / naturalHeight, 1.15);
+    } else {
+      const availW = Math.max(240, (normalWrapWidth || fallbackWinW - 40) - 16);
+      autoFitScale = Math.min(1, availW / naturalWidth);
+    }
+    const effectiveScale = Math.max(0.25, Math.min(1.6, autoFitScale * gridZoom));
+    const scaledWidth = Math.ceil(naturalWidth * effectiveScale);
+    const scaledHeight = Math.ceil(naturalHeight * effectiveScale);
 
     const renderQuickDeleteBtn = (item) => {
       if (!isEditMode || !isOwner || selectedItemId !== item.id) return null;
@@ -1376,45 +1453,56 @@ export default function TableSeatingHub({
     };
 
     return (
-      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col">
+      <div
+        className={`bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col ${
+          kioskView ? "h-full" : ""
+        }`}
+      >
         {/* Room Header Bar */}
-        <div className="px-4 py-3 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-400/30 flex items-center justify-center text-amber-300">
+        <div className="px-3.5 sm:px-4 py-2.5 sm:py-3 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white flex flex-wrap items-center justify-between gap-2 shrink-0">
+          <div className="flex items-center space-x-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-400/30 flex items-center justify-center text-amber-300 shrink-0">
               <Compass className="w-4 h-4" />
             </div>
-            <div>
-              <h3 className="text-sm font-extrabold tracking-tight leading-tight">
+            <div className="min-w-0">
+              <h3 className="text-xs sm:text-sm font-extrabold tracking-tight leading-tight truncate">
                 {seatingPlan.roomTitle || "ผังห้องจัดเลี้ยง"}
               </h3>
-              <p className="text-[11px] text-slate-300">
-                สเกลสี่เหลี่ยมจัตุรัส {cols} × {rows} ช่อง •{" "}
+              <p className="text-[10px] sm:text-[11px] text-slate-300 truncate">
+                สเกล {cols} × {rows} ช่อง •{" "}
                 {isEditMode
                   ? activeTool === "select"
-                    ? "โหมดจัดผัง: ลากวางเพื่อย้าย หรือคลิกวัตถุเพื่อแก้ไข/กด × เพื่อลบ"
+                    ? "โหมดจัดผัง: ลากวางหรือคลิกแก้ไข"
                     : `คลิกลงช่องว่างเพื่อวาง "${activePaletteType?.label || ""}"`
-                  : "คลิกที่โต๊ะเพื่อดูรูปผู้จองและเลือกเก้าอี้รายตัว (เช่น A1, A2, A3...)"}
+                  : "แตะที่โต๊ะเพื่อดูรูปและเลือกเก้าอี้"}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-1.5 flex-wrap">
-            {/* Square Grid Zoom Controls */}
+            {/* Square Grid Zoom Controls (100% = Auto-Fit Screen) */}
             <div className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-white/10 border border-white/15 text-[10px] font-bold text-slate-200 mr-1">
               <button
                 type="button"
                 onClick={() => setGridZoom((z) => Math.max(0.75, Number((z - 0.1).toFixed(2))))}
                 className="p-0.5 hover:text-amber-300 cursor-pointer"
-                title="ย่อสเกลช่องตาราง"
+                title="ย่อสเกลผังห้อง"
               >
                 <Minus className="w-3 h-3" />
               </button>
-              <span className="font-mono min-w-[34px] text-center">{Math.round(gridZoom * 100)}%</span>
               <button
                 type="button"
-                onClick={() => setGridZoom((z) => Math.min(1.3, Number((z + 0.1).toFixed(2))))}
+                onClick={() => setGridZoom(1)}
+                title="รีเซ็ตให้พอดีหน้าจอ (100%)"
+                className="font-mono min-w-[34px] text-center hover:text-amber-300 cursor-pointer"
+              >
+                {Math.round(gridZoom * 100)}%
+              </button>
+              <button
+                type="button"
+                onClick={() => setGridZoom((z) => Math.min(1.6, Number((z + 0.1).toFixed(2))))}
                 className="p-0.5 hover:text-amber-300 cursor-pointer"
-                title="ขยายสเกลช่องตาราง"
+                title="ขยายสเกลผังห้อง"
               >
                 <Plus className="w-3 h-3" />
               </button>
@@ -1475,17 +1563,37 @@ export default function TableSeatingHub({
           </div>
         )}
 
-        {/* Room Blueprint Grid Container */}
-        <div className="p-3 sm:p-4 bg-slate-50/80 overflow-x-auto">
+        {/* Room Blueprint Grid Container (Auto-Fit to Phone, iPad, Desktop & Kiosk Screen!) */}
+        <div
+          ref={kioskView ? kioskCanvasWrapRef : normalCanvasWrapRef}
+          className={`p-2 sm:p-4 bg-slate-50/80 overflow-auto ${
+            kioskView ? "flex-1 min-h-0 flex flex-col items-center justify-center" : ""
+          }`}
+        >
           {/* Front of Room Direction Indicator */}
-          <div className="mb-2 flex items-center justify-center">
+          <div className="mb-1.5 sm:mb-2 flex items-center justify-center shrink-0">
             <span className="px-3 py-0.5 rounded-full bg-slate-200/80 text-slate-600 text-[10px] font-extrabold tracking-widest uppercase">
               ▲ ด้านหน้าห้อง / หน้าเวที (FRONT) ▲
             </span>
           </div>
 
-          <div className="mx-auto w-fit">
-            {/* Column Number Ruler (1..cols) aligned 1:1 with square cells */}
+          <div
+            className="mx-auto relative shrink-0"
+            style={{
+              width: `${scaledWidth}px`,
+              height: `${scaledHeight}px`
+            }}
+          >
+            <div
+              className="w-fit"
+              style={{
+                width: `${naturalWidth}px`,
+                height: `${naturalHeight}px`,
+                transform: `scale(${effectiveScale})`,
+                transformOrigin: "top left"
+              }}
+            >
+              {/* Column Number Ruler (1..cols) aligned 1:1 with square cells */}
             <div className="flex items-center mb-1 pl-9">
               <div
                 className="grid"
@@ -1956,6 +2064,7 @@ export default function TableSeatingHub({
                 })}
               </div>
             </div>
+          </div>
           </div>
 
           {/* Empty Room Callout */}
@@ -2560,45 +2669,46 @@ export default function TableSeatingHub({
       {/* ================================================================= */}
       {/* TOP TOOLBAR: Stats + Owner/Admin Role Mode Switch + Quick Actions */}
       {/* ================================================================= */}
-      <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-sm space-y-3">
+      <div className="bg-white rounded-2xl p-3.5 sm:p-4 border border-slate-200/90 shadow-sm space-y-3">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          {/* Left: Title & Summary Stats */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center space-x-2 mr-2">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-sm">
+          {/* Left: Title & 3 Equal-Column Summary Stats */}
+          <div className="flex flex-col lg:flex-row lg:items-center gap-2.5 w-full lg:w-auto">
+            <div className="flex items-center space-x-2.5 lg:mr-1">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-sm shrink-0">
                 <Armchair className="w-5 h-5" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <h2 className="text-sm sm:text-base font-black text-slate-900 leading-tight">
                   ระบบผังห้อง & จองโต๊ะ/ที่นั่ง
                 </h2>
-                <p className="text-[11px] text-slate-500">
+                <p className="text-[11px] text-slate-500 truncate">
                   เลือกโต๊ะและเก้าอี้รายตัว (เช่น A1–A8) ซิงค์เรียลไทม์ทุกเครื่อง
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="px-2.5 py-1 rounded-xl bg-slate-100 border border-slate-200 text-xs font-bold text-slate-700">
+            {/* 3 Equal Columns on Phone/iPad, Compact Pills on Desktop */}
+            <div className="grid grid-cols-3 lg:flex items-center gap-1.5 w-full lg:w-auto">
+              <span className="px-2 sm:px-2.5 py-1.5 lg:py-1 rounded-xl bg-slate-100 border border-slate-200 text-[11px] sm:text-xs font-bold text-slate-700 text-center whitespace-nowrap">
                 โต๊ะเปิด: <strong className="text-slate-950 font-mono">{stats.openTables}/{stats.totalTables}</strong>
               </span>
-              <span className="px-2.5 py-1 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-800">
-                จองแล้ว: <strong className="font-mono">{stats.bookedCount}/{stats.openCapacity}</strong> ที่นั่ง
+              <span className="px-2 sm:px-2.5 py-1.5 lg:py-1 rounded-xl bg-emerald-50 border border-emerald-200 text-[11px] sm:text-xs font-bold text-emerald-800 text-center whitespace-nowrap">
+                จองแล้ว: <strong className="font-mono">{stats.bookedCount}/{stats.openCapacity}</strong>
               </span>
-              {stats.holdCount > 0 && (
-                <span className="px-2.5 py-1 rounded-xl bg-amber-100 border border-amber-300 text-xs font-extrabold text-amber-900">
-                  ⏳ จองชั่วคราว: <strong className="font-mono">{stats.holdCount}</strong>
-                </span>
-              )}
-              <span className="px-2.5 py-1 rounded-xl bg-sky-50 border border-sky-200 text-xs font-bold text-sky-800">
+              <span className="px-2 sm:px-2.5 py-1.5 lg:py-1 rounded-xl bg-sky-50 border border-sky-200 text-[11px] sm:text-xs font-bold text-sky-800 text-center whitespace-nowrap">
                 ว่าง: <strong className="font-mono">{stats.availableSeats}</strong> ที่นั่ง
               </span>
+              {stats.holdCount > 0 && (
+                <span className="col-span-3 lg:col-span-1 px-2.5 py-1 rounded-xl bg-amber-100 border border-amber-300 text-xs font-extrabold text-amber-900 text-center whitespace-nowrap">
+                  ⏳ จองชั่วคราว: <strong className="font-mono">{stats.holdCount}</strong> ที่นั่ง
+                </span>
+              )}
             </div>
           </div>
 
-          {/* Right: Mode Controls & Action Buttons (จอให้แขกเลือกเอง pinned at Top-Right!) */}
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200">
+          {/* Right: Full-Width 2-Column Mode Switch + Action Buttons (จอให้แขกเลือกเอง pinned Top-Right!) */}
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-end gap-2 w-full lg:w-auto">
+            <div className="grid grid-cols-2 lg:inline-grid w-full lg:w-auto rounded-xl bg-slate-100 p-1 border border-slate-200 gap-1">
               <button
                 type="button"
                 onClick={() => {
@@ -2609,63 +2719,67 @@ export default function TableSeatingHub({
                   setTapMoveItemId(null);
                   setQueueFilterMode("checked_in");
                 }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center space-x-1.5 transition-all cursor-pointer ${
+                className={`px-3 py-2 lg:py-1.5 rounded-lg text-xs font-extrabold flex items-center justify-center space-x-1.5 transition-all cursor-pointer whitespace-nowrap ${
                   !isEditMode
                     ? "bg-emerald-600 text-white shadow-sm"
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                <Armchair className="w-3.5 h-3.5" />
+                <Armchair className="w-3.5 h-3.5 shrink-0" />
                 <span>โหมดจองโต๊ะ</span>
               </button>
               <button
                 type="button"
                 onClick={handleRequestEnterOwnerEditMode}
-                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center space-x-1.5 transition-all cursor-pointer ${
+                className={`px-3 py-2 lg:py-1.5 rounded-lg text-xs font-extrabold flex items-center justify-center space-x-1.5 transition-all cursor-pointer whitespace-nowrap ${
                   isEditMode
                     ? "bg-amber-500 text-slate-950 shadow-sm"
                     : "text-slate-600 hover:text-slate-900"
                 }`}
                 title="ต้องใส่รหัสผ่านเจ้าของแอปเพื่อเข้าจัดผังห้องและตั้งค่าเวลา/ค่าปรับ"
               >
-                {isEditMode ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+                {isEditMode ? <Unlock className="w-3.5 h-3.5 shrink-0" /> : <Lock className="w-3.5 h-3.5 shrink-0" />}
                 <span>จัดผังห้อง (Owner)</span>
               </button>
             </div>
 
-            {allFineRecords.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setIsFineLedgerOpen(true)}
-                className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-extrabold flex items-center space-x-1.5 transition-all cursor-pointer"
-              >
-                <Banknote className="w-3.5 h-3.5" />
-                <span>ประวัติค่าปรับ ({allFineRecords.length})</span>
-              </button>
-            )}
+            <div className="grid grid-cols-2 lg:flex items-center gap-2 w-full lg:w-auto">
+              {allFineRecords.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setIsFineLedgerOpen(true)}
+                  className="col-span-2 lg:col-span-1 px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-extrabold flex items-center justify-center space-x-1.5 transition-all cursor-pointer whitespace-nowrap"
+                >
+                  <Banknote className="w-3.5 h-3.5 shrink-0" />
+                  <span>ประวัติค่าปรับ ({allFineRecords.length})</span>
+                </button>
+              )}
 
-            {onGoToTableLuckyDraw && (
-              <button
-                type="button"
-                onClick={onGoToTableLuckyDraw}
-                className="px-3 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 text-xs font-extrabold flex items-center space-x-1.5 shadow-sm transition-all cursor-pointer"
-              >
-                <Dices className="w-3.5 h-3.5" />
-                <span>สุ่มรางวัลโต๊ะ/เก้าอี้</span>
-              </button>
-            )}
+              {onGoToTableLuckyDraw && (
+                <button
+                  type="button"
+                  onClick={onGoToTableLuckyDraw}
+                  className="px-3 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 text-xs font-extrabold flex items-center justify-center space-x-1.5 shadow-sm transition-all cursor-pointer whitespace-nowrap"
+                >
+                  <Dices className="w-3.5 h-3.5 shrink-0" />
+                  <span>สุ่มรางวัลโต๊ะ/เก้าอี้</span>
+                </button>
+              )}
 
-            {!isEditMode && (
-              <button
-                type="button"
-                onClick={() => setIsKioskMode(true)}
-                className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center space-x-1.5 shadow-sm transition-all cursor-pointer ml-auto lg:ml-0"
-                title="ขยายผังห้องเต็มจอสำหรับหันหน้าจอให้ผู้เข้าร่วมงานเลือกโต๊ะเอง"
-              >
-                <Maximize2 className="w-3.5 h-3.5" />
-                <span>จอให้แขกเลือกเอง</span>
-              </button>
-            )}
+              {!isEditMode && (
+                <button
+                  type="button"
+                  onClick={() => setIsKioskMode(true)}
+                  className={`${
+                    !onGoToTableLuckyDraw ? "col-span-2 lg:col-span-1" : ""
+                  } px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center justify-center space-x-1.5 shadow-sm transition-all cursor-pointer whitespace-nowrap`}
+                  title="ขยายผังห้องเต็มจอสำหรับหันหน้าจอให้ผู้เข้าร่วมงานเลือกโต๊ะเอง"
+                >
+                  <Maximize2 className="w-3.5 h-3.5 shrink-0" />
+                  <span>จอให้แขกเลือกเอง</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -3810,21 +3924,21 @@ export default function TableSeatingHub({
       {/* ================================================================= */}
       {isKioskMode && (
         <div className="fixed inset-0 z-[60] bg-slate-100 flex flex-col overflow-hidden">
-          {/* Kiosk Top Bar */}
-          <div className="bg-slate-950 text-white px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3 shadow-lg shrink-0">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center text-emerald-300">
-                <Armchair className="w-5 h-5" />
+          {/* Kiosk Top Bar (Compact so Floor Plan gets max space on Phone & iPad) */}
+          <div className="bg-slate-950 text-white px-3 sm:px-5 py-2.5 flex items-center justify-between gap-2 shadow-lg shrink-0">
+            <div className="flex items-center space-x-2.5 min-w-0">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center text-emerald-300 shrink-0">
+                <Armchair className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
-              <div>
-                <h2 className="text-base sm:text-lg font-black">
+              <div className="min-w-0">
+                <h2 className="text-xs sm:text-base font-black truncate leading-tight">
                   {selectedAttendee
                     ? `ยินดีต้อนรับคุณ ${selectedAttendee.name}${selectedAttendee.nickname ? ` (${selectedAttendee.nickname})` : ""}`
                     : "แผนผังโต๊ะที่นั่งภายในงาน (เลือกโต๊ะที่ต้องการ)"}
                 </h2>
-                <p className="text-xs text-slate-300">
+                <p className="text-[10px] sm:text-xs text-slate-300 truncate">
                   {selectedAttendee
-                    ? "กรุณาแตะเลือกโต๊ะและหมายเลขเก้าอี้ที่ต้องการบนแผนผังด้านล่างได้เลยครับ"
+                    ? "แตะเลือกโต๊ะและหมายเลขเก้าอี้ที่ต้องการได้เลยครับ"
                     : "แตะที่โต๊ะใดก็ได้เพื่อดูรายชื่อเพื่อนร่วมโต๊ะและเลือกเก้าอี้ว่าง"}
                 </p>
               </div>
@@ -3832,11 +3946,14 @@ export default function TableSeatingHub({
 
             <button
               type="button"
-              onClick={() => setIsKioskMode(false)}
-              className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-xs sm:text-sm font-bold flex items-center space-x-1.5 cursor-pointer"
+              onClick={() => {
+                setGridZoom(1);
+                setIsKioskMode(false);
+              }}
+              className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-[11px] sm:text-sm font-bold flex items-center space-x-1.5 cursor-pointer shrink-0 whitespace-nowrap"
             >
-              <Minimize2 className="w-4 h-4" />
-              <span>กลับสู่หน้าแอดมิน</span>
+              <Minimize2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span>กลับหน้าแอดมิน</span>
             </button>
           </div>
 
@@ -3898,9 +4015,9 @@ export default function TableSeatingHub({
             </div>
           )}
 
-          {/* Kiosk Full-Width Floor Plan */}
-          <div className="flex-1 overflow-y-auto p-3 sm:p-6">
-            <div className="max-w-7xl mx-auto">
+          {/* Kiosk Full-Screen Auto-Fit Floor Plan (Fits Phone & iPad Screen!) */}
+          <div className="flex-1 min-h-0 p-2 sm:p-4 flex flex-col overflow-hidden">
+            <div className="w-full max-w-7xl mx-auto flex-1 min-h-0 flex flex-col">
               {renderFloorPlanCanvas(true)}
             </div>
           </div>
