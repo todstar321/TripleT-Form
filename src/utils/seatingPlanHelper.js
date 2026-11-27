@@ -5,7 +5,7 @@
 
 export const SEATING_STORAGE_KEY = "sme_fan_seating_plan_v1";
 export const DEFAULT_HOLD_DURATION_MINUTES = 15;
-export const HOLD_DURATION_OPTIONS = [5, 10, 15, 20, 30, 45, 60];
+export const HOLD_DURATION_OPTIONS = [15, 30, 60, 120];
 
 export const CUSTOM_COLOR_THEMES = {
   violet: {
