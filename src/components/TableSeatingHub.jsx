@@ -175,8 +175,14 @@ export default function TableSeatingHub({
   initialSelectedTicketNo = null,
   onConsumeInitialSelectedTicket
 }) {
-  const isOwner = currentUser?.role === "owner";
-  const canManageHoldTiers = ["owner", "manager", "admin"].includes(currentUser?.role);
+  // Owner Layout Editor PIN-Lock (Requires Owner Password 0937925665 to enter จัดผังห้อง & ตั้งค่าเวลา/ค่าปรับ)
+  const [isOwnerEditUnlocked, setIsOwnerEditUnlocked] = useState(false);
+  const [isOwnerPinModalOpen, setIsOwnerPinModalOpen] = useState(false);
+  const [ownerPinInput, setOwnerPinInput] = useState("");
+  const [ownerPinError, setOwnerPinError] = useState("");
+
+  const isOwner = currentUser?.role === "owner" || isOwnerEditUnlocked;
+  const canManageHoldTiers = isOwnerEditUnlocked;
   const holdDurationMinutes = getHoldDurationMinutes(seatingPlan);
   const configuredHoldTiers = useMemo(() => getHoldTierOptions(seatingPlan), [seatingPlan]);
   const allFineRecords = useMemo(() => getAllFineRecords(seatingPlan), [seatingPlan]);
@@ -250,12 +256,38 @@ export default function TableSeatingHub({
   const [isFineLedgerOpen, setIsFineLedgerOpen] = useState(false);
   const [viewingProofUrl, setViewingProofUrl] = useState(null);
 
-  // Force exit edit mode if user loses owner privilege
+  // Force exit edit mode if Owner PIN is not unlocked
   useEffect(() => {
-    if (!isOwner && isEditMode) {
+    if (!isOwnerEditUnlocked && isEditMode) {
       setIsEditMode(false);
     }
-  }, [isOwner, isEditMode]);
+  }, [isOwnerEditUnlocked, isEditMode]);
+
+  const handleRequestEnterOwnerEditMode = () => {
+    if (isOwnerEditUnlocked) {
+      setIsEditMode(true);
+      setSelectedAttendeeTicketNo(null);
+      return;
+    }
+    setOwnerPinInput("");
+    setOwnerPinError("");
+    setIsOwnerPinModalOpen(true);
+  };
+
+  const handleSubmitOwnerPinUnlock = (e) => {
+    if (e) e.preventDefault();
+    if (!isValidOwnerPin(ownerPinInput, eventConfig)) {
+      setOwnerPinError("รหัสผ่านเจ้าของแอปไม่ถูกต้อง (เฉพาะเจ้าของแอปเท่านั้นที่เข้าแก้ไขผังห้องและค่าปรับได้)");
+      return;
+    }
+    setOwnerPinError("");
+    setOwnerPinInput("");
+    setIsOwnerPinModalOpen(false);
+    setIsOwnerEditUnlocked(true);
+    setIsEditMode(true);
+    setSelectedAttendeeTicketNo(null);
+    showToast("ปลดล็อกโหมดจัดผังห้อง & ตั้งค่าค่าปรับ (Owner) สำเร็จ");
+  };
 
   // Pre-select an attendee when navigated here from Check-in Hold Change Flow (Owner)
   useEffect(() => {
@@ -2564,82 +2596,42 @@ export default function TableSeatingHub({
             </div>
           </div>
 
-          {/* Right: Mode Controls & Action Buttons */}
-          <div className="flex flex-wrap items-center gap-2">
-            {isOwner ? (
-              <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsEditMode(false);
-                    setSelectedItemId(null);
-                    setTapMoveItemId(null);
-                    setQueueFilterMode("checked_in");
-                  }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center space-x-1.5 transition-all cursor-pointer ${
-                    !isEditMode
-                      ? "bg-emerald-600 text-white shadow-sm"
-                      : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  <Armchair className="w-3.5 h-3.5" />
-                  <span>โหมดจองโต๊ะ</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsEditMode(true);
-                    setSelectedAttendeeTicketNo(null);
-                  }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center space-x-1.5 transition-all cursor-pointer ${
-                    isEditMode
-                      ? "bg-amber-500 text-slate-950 shadow-sm"
-                      : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>จัดผังห้อง (Owner)</span>
-                </button>
-              </div>
-            ) : (
-              <div className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs font-bold text-slate-600">
-                <Lock className="w-3.5 h-3.5 text-amber-600" />
-                <span>ผังห้องถูกล็อกโดยเจ้าของแอป (เลือกจองที่นั่งได้)</span>
-              </div>
-            )}
-
-            {!isEditMode && (
+          {/* Right: Mode Controls & Action Buttons (จอให้แขกเลือกเอง pinned at Top-Right!) */}
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200">
               <button
                 type="button"
-                onClick={() => setIsKioskMode(true)}
-                className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center space-x-1.5 shadow-sm transition-all cursor-pointer"
-                title="ขยายผังห้องเต็มจอสำหรับหันหน้าจอให้ผู้เข้าร่วมงานเลือกโต๊ะเอง"
+                onClick={() => {
+                  setIsEditMode(false);
+                  setIsOwnerEditUnlocked(false);
+                  setIsHoldTierSettingsOpen(false);
+                  setSelectedItemId(null);
+                  setTapMoveItemId(null);
+                  setQueueFilterMode("checked_in");
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center space-x-1.5 transition-all cursor-pointer ${
+                  !isEditMode
+                    ? "bg-emerald-600 text-white shadow-sm"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
               >
-                <Maximize2 className="w-3.5 h-3.5" />
-                <span>จอให้แขกเลือกเอง</span>
+                <Armchair className="w-3.5 h-3.5" />
+                <span>โหมดจองโต๊ะ</span>
               </button>
-            )}
-
-            <button
-              type="button"
-              onClick={() => setIsSummaryModalOpen(true)}
-              className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-xs font-bold flex items-center space-x-1.5 transition-all cursor-pointer"
-            >
-              <ListChecks className="w-3.5 h-3.5 text-slate-600" />
-              <span>สรุปรายชื่อตามโต๊ะ</span>
-            </button>
-
-            {canManageHoldTiers && (
               <button
                 type="button"
-                onClick={() => setIsHoldTierSettingsOpen(true)}
-                className="px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-xs font-extrabold flex items-center space-x-1.5 transition-all cursor-pointer"
-                title="เพิ่ม/ลดช่วงเวลาจองล่วงหน้าและปรับเปลี่ยนค่าปรับได้ตามสถานการณ์งาน"
+                onClick={handleRequestEnterOwnerEditMode}
+                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center space-x-1.5 transition-all cursor-pointer ${
+                  isEditMode
+                    ? "bg-amber-500 text-slate-950 shadow-sm"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+                title="ต้องใส่รหัสผ่านเจ้าของแอปเพื่อเข้าจัดผังห้องและตั้งค่าเวลา/ค่าปรับ"
               >
-                <Sliders className="w-3.5 h-3.5 text-amber-600" />
-                <span>ตั้งค่าเวลา/ค่าปรับ ({configuredHoldTiers.length})</span>
+                {isEditMode ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+                <span>จัดผังห้อง (Owner)</span>
               </button>
-            )}
+            </div>
 
             {allFineRecords.length > 0 && (
               <button
@@ -2662,26 +2654,18 @@ export default function TableSeatingHub({
                 <span>สุ่มรางวัลโต๊ะ/เก้าอี้</span>
               </button>
             )}
-          </div>
-        </div>
 
-        {/* =============================================================== */}
-        {/* HOLD POLICY BAR (Clean Summary Only — Settings inside Owner Editor) */}
-        {/* =============================================================== */}
-        <div className="pt-2.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
-          <div className="flex items-center space-x-2 text-slate-600 flex-wrap gap-y-1">
-            <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold text-[11px]">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-              <span>เข้างานแล้ว: จองถาวร</span>
-            </span>
-            <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 font-bold text-[11px]">
-              <Clock className="w-3.5 h-3.5 text-amber-600" />
-              <span>ยังไม่เข้างาน (จองล่วงหน้า): สิทธิ์ฟรี 1 ครั้ง/ท่าน • มาสายสะสมยอดปรับตามเวลา</span>
-            </span>
-            <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 font-bold text-[11px]">
-              <Lock className="w-3 h-3 text-slate-500" />
-              <span>เปลี่ยนที่นั่ง: เฉพาะเจ้าของแอปอนุมัติ</span>
-            </span>
+            {!isEditMode && (
+              <button
+                type="button"
+                onClick={() => setIsKioskMode(true)}
+                className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center space-x-1.5 shadow-sm transition-all cursor-pointer ml-auto lg:ml-0"
+                title="ขยายผังห้องเต็มจอสำหรับหันหน้าจอให้ผู้เข้าร่วมงานเลือกโต๊ะเอง"
+              >
+                <Maximize2 className="w-3.5 h-3.5" />
+                <span>จอให้แขกเลือกเอง</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -2950,10 +2934,10 @@ export default function TableSeatingHub({
                 <button
                   type="button"
                   onClick={() => setIsHoldTierSettingsOpen(true)}
-                  className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-extrabold flex items-center space-x-1 shrink-0 cursor-pointer shadow-xs"
+                  className="px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-extrabold flex items-center space-x-1 shrink-0 cursor-pointer shadow-xs"
                 >
-                  <Sliders className="w-3 h-3" />
-                  <span>เพิ่ม/ลด/แก้ค่าปรับ</span>
+                  <Sliders className="w-3.5 h-3.5" />
+                  <span>ตั้งค่าเวลา/ค่าปรับ ({configuredHoldTiers.length})</span>
                 </button>
               </div>
             </div>
@@ -3801,6 +3785,24 @@ export default function TableSeatingHub({
             </div>
           )}
         </div>
+      </div>
+
+      {/* ================================================================= */}
+      {/* BOTTOM FOOTER ACTION BAR: สรุปรายชื่อตามโต๊ะ (Moved to bottom)    */}
+      {/* ================================================================= */}
+      <div className="bg-white rounded-2xl p-3.5 border border-slate-200/90 shadow-sm flex flex-wrap items-center justify-between gap-2">
+        <div className="text-xs text-slate-500 font-semibold">
+          รายงานสรุปรายชื่อผู้เข้าร่วมงานแยกตามโต๊ะและเก้าอี้ (จองแล้ว{" "}
+          <strong className="font-mono text-slate-800">{stats.bookedCount}/{stats.openCapacity}</strong> ที่นั่ง)
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsSummaryModalOpen(true)}
+          className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-800 text-xs font-extrabold flex items-center space-x-1.5 transition-all cursor-pointer"
+        >
+          <ListChecks className="w-4 h-4 text-slate-600" />
+          <span>สรุปรายชื่อตามโต๊ะ</span>
+        </button>
       </div>
 
       {/* ================================================================= */}
@@ -5161,6 +5163,85 @@ export default function TableSeatingHub({
                 เสร็จสิ้น
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================= */}
+      {/* OWNER PASSWORD MODAL (Unlock จัดผังห้อง & ตั้งค่าเวลา/ค่าปรับ)    */}
+      {/* ================================================================= */}
+      {isOwnerPinModalOpen && (
+        <div
+          className="fixed inset-0 z-[90] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setIsOwnerPinModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-3xl border-2 border-amber-300 shadow-2xl w-full max-w-sm overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-4 bg-gradient-to-r from-slate-900 via-amber-950 to-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-300">
+                  <KeyRound className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black">ยืนยันรหัสผ่านเจ้าของแอป</h3>
+                  <p className="text-[11px] text-amber-200">
+                    สำหรับเข้าจัดผังห้องและตั้งค่าเวลา/ค่าปรับ
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsOwnerPinModalOpen(false)}
+                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitOwnerPinUnlock} className="p-5 space-y-4">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-extrabold text-slate-700">
+                  รหัสผ่านเจ้าของแอป (เฉพาะ Owner เท่านั้น) *
+                </label>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  required
+                  value={ownerPinInput}
+                  onChange={(e) => {
+                    setOwnerPinInput(e.target.value);
+                    setOwnerPinError("");
+                  }}
+                  placeholder="กรอกรหัสผ่านเจ้าของแอป..."
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-sm font-mono font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500"
+                />
+                {ownerPinError && (
+                  <div className="text-[11px] font-bold text-rose-600 flex items-center space-x-1 pt-0.5">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{ownerPinError}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end space-x-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsOwnerPinModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center space-x-1.5 shadow-sm cursor-pointer"
+                >
+                  <Unlock className="w-3.5 h-3.5" />
+                  <span>ปลดล็อกเข้าจัดผังห้อง</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
