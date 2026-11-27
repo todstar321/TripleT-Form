@@ -3,11 +3,26 @@
 @tailwind utilities;
 
 @layer base {
+  html,
+  body {
+    touch-action: manipulation;
+    -webkit-text-size-adjust: 100%;
+    overscroll-behavior-x: none;
+  }
   body {
     font-family: 'Prompt', 'Plus Jakarta Sans', sans-serif;
   }
   img {
     display: inline-block;
+  }
+}
+
+/* Prevent iOS / iPadOS Safari auto-zoom when tapping inputs, search boxes, or dropdowns */
+@media (pointer: coarse), (max-width: 1024px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
   }
 }
 
