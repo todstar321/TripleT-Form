@@ -12,6 +12,7 @@ import {
   Loader2
 } from "lucide-react";
 import { uploadToCloudinary } from "../utils/cloudinary";
+import { formatThaiDateClock } from "../utils/seatingPlanHelper";
 
 // Helper to compress captured image to lightweight JPEG before upload
 function compressImageDataUrl(fileOrDataUrl, maxSize = 900, quality = 0.82) {
@@ -156,9 +157,13 @@ export default function LateHoldFineModal({
 
   if (!isOpen || !attendee || !fine) return null;
 
-  const bookerDisplay = fine.bookedByName
-    ? `${fine.bookedByName}${fine.bookedByNickname ? ` (${fine.bookedByNickname})` : ""}`
-    : "ผู้จองล่วงหน้า";
+  const fineItems =
+    Array.isArray(fine.items) && fine.items.length > 0 ? fine.items : [fine];
+  const totalFineAmount = Number(
+    fine.totalFineAmount ?? fine.fineAmount ?? fineItems.reduce((s, it) => s + Number(it.fineAmount || 0), 0)
+  );
+  const isMultiple = fineItems.length > 1;
+  const formulaExpression = fineItems.map((it) => Number(it.fineAmount || 0).toLocaleString()).join(" + ");
 
   return (
     <div className="fixed inset-0 z-[100] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
@@ -175,7 +180,9 @@ export default function LateHoldFineModal({
                   แจ้งเตือนการจองที่นั่งล่วงหน้าเกินกำหนดเวลา
                 </div>
                 <h3 className="text-base sm:text-lg font-black leading-tight">
-                  ท่านได้จองล่วงหน้า {fine.holdDurationMinutes} นาที
+                  {isMultiple
+                    ? `ท่านมาไม่ทันเวลาจองล่วงหน้าสะสม ${fineItems.length} ครั้ง`
+                    : `ท่านได้จองล่วงหน้า ${fineItems[0].holdDurationMinutes} นาที`}
                 </h3>
               </div>
             </div>
@@ -196,36 +203,89 @@ export default function LateHoldFineModal({
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           {/* Fine Message Highlight Box */}
-          <div className="p-4 rounded-2xl bg-rose-50 border-2 border-rose-300 text-center space-y-2">
-            <div className="text-sm sm:text-base font-black text-rose-900 leading-snug">
-              ท่านไม่สามารถมาตามเวลาได้ — ปรับ{" "}
-              <span className="text-2xl sm:text-3xl text-rose-600 font-mono">
-                {Number(fine.fineAmount).toLocaleString()}
-              </span>{" "}
-              บาท
+          <div className="p-4 rounded-2xl bg-rose-50 border-2 border-rose-300 space-y-3">
+            <div className="text-center space-y-1">
+              <div className="text-sm sm:text-base font-black text-rose-900 leading-snug">
+                {isMultiple ? "ท่านไม่สามารถมาตามเวลาที่จองได้ — ยอดปรับรวม" : "ท่านไม่สามารถมาตามเวลาได้ — ปรับ"}{" "}
+                <span className="text-2xl sm:text-3xl text-rose-600 font-mono">
+                  {totalFineAmount.toLocaleString()}
+                </span>{" "}
+                บาท
+              </div>
+
+              {isMultiple && (
+                <div className="inline-flex items-center px-3 py-1 rounded-full bg-rose-600 text-white text-xs sm:text-sm font-mono font-black shadow-xs">
+                  {formulaExpression} = {totalFineAmount.toLocaleString()} บาท
+                </div>
+              )}
             </div>
 
-            <div className="pt-2 border-t border-rose-200/80 grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs text-left">
-              <div className="bg-white rounded-xl p-2 border border-rose-100">
+            {/* Guest Info */}
+            <div className="bg-white rounded-xl p-2.5 border border-rose-100 flex items-center justify-between text-xs">
+              <div>
                 <span className="text-[10px] font-bold text-slate-400 block">ผู้เข้าร่วมงาน (มาลงทะเบียน):</span>
                 <span className="font-black text-slate-900">
                   {attendee.name} {attendee.nickname ? `(${attendee.nickname})` : ""}
                 </span>
               </div>
-              <div className="bg-white rounded-xl p-2 border border-rose-100">
-                <span className="text-[10px] font-bold text-slate-400 block">ผู้จองเก้าอี้ล่วงหน้าให้:</span>
-                <span className="font-black text-indigo-700 flex items-center space-x-1">
-                  <UserCheck className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">{bookerDisplay}</span>
-                </span>
-              </div>
+              <span className="font-mono text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-lg">
+                {attendee.ticketNo}
+              </span>
             </div>
 
-            <div className="flex items-center justify-center space-x-2 text-[11px] font-bold text-rose-700">
-              <Clock className="w-3.5 h-3.5" />
-              <span>
-                เก้าอี้ที่เคยจอง: {fine.tableLabel} • {fine.seatCode} (หมดเวลาแล้ว ถูกคืนเป็นเก้าอี้ว่าง)
-              </span>
+            {/* Itemized Audit List: Exact Booking Time & Expiry Time per Late Hold */}
+            <div className="space-y-2">
+              <div className="text-[11px] font-extrabold text-rose-800 flex items-center justify-between">
+                <span>รายละเอียดเวลาจองและเวลาหมดเวลาตามระบบ ({fineItems.length} รายการ):</span>
+              </div>
+              {fineItems.map((item, idx) => {
+                const itemBooker = item.bookedByName
+                  ? `${item.bookedByName}${item.bookedByNickname ? ` (${item.bookedByNickname})` : ""}`
+                  : "ผู้จองล่วงหน้า";
+                return (
+                  <div
+                    key={item.id || `${idx}_${item.expiredAt}`}
+                    className="bg-white rounded-xl p-2.5 border border-rose-200/80 text-xs space-y-1.5 shadow-2xs"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center space-x-1.5 min-w-0">
+                        <span className="px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-800 font-mono font-black text-[10px] shrink-0">
+                          ครั้งที่ {idx + 1}
+                        </span>
+                        <span className="font-extrabold text-slate-900 truncate">
+                          {item.tableLabel} • {item.seatCode} ({item.tierLabel || `${item.holdDurationMinutes} นาที`})
+                        </span>
+                      </div>
+                      <span className="font-mono font-black text-rose-600 shrink-0">
+                        {Number(item.fineAmount || 0).toLocaleString()} บาท
+                      </span>
+                    </div>
+
+                    {/* Exact System Timestamps */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[11px] bg-slate-50 rounded-lg px-2 py-1.5 border border-slate-100">
+                      <div className="flex items-center space-x-1 text-slate-700">
+                        <Clock className="w-3 h-3 text-indigo-500 shrink-0" />
+                        <span>เวลาจอง:</span>
+                        <strong className="font-mono text-slate-900">
+                          {formatThaiDateClock(item.bookedAt)}
+                        </strong>
+                      </div>
+                      <div className="flex items-center space-x-1 text-rose-700">
+                        <Clock className="w-3 h-3 text-rose-500 shrink-0" />
+                        <span>หมดเวลา:</span>
+                        <strong className="font-mono text-rose-800">
+                          {formatThaiDateClock(item.expiredAt)}
+                        </strong>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-1 text-[11px] text-indigo-700 font-bold">
+                      <UserCheck className="w-3.5 h-3.5 shrink-0" />
+                      <span>ผู้จองเก้าอี้ให้: {itemBooker}</span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -261,7 +321,7 @@ export default function LateHoldFineModal({
           {paymentMethod === "qr_slip" && (
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-2">
               <div className="text-xs font-extrabold text-slate-700">
-                สแกน QR Code เพื่อชำระค่าปรับ {Number(fine.fineAmount).toLocaleString()} บาท
+                สแกน QR Code เพื่อชำระค่าปรับรวม {totalFineAmount.toLocaleString()} บาท
               </div>
               {qrCodeUrl ? (
                 <img

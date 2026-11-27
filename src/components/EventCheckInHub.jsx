@@ -88,7 +88,8 @@ import {
   getSeatCode,
   hasAnyHolds,
   formatCountdownMmSs,
-  getUnpaidFineForTicket
+  getUnpaidFineForTicket,
+  getTicketFineRecords
 } from "../utils/seatingPlanHelper";
 import { cleanPhoneNumber } from "../utils/phoneFormatter";
 import { bgAudio } from "../utils/backgroundAudio";
@@ -210,29 +211,60 @@ export default function EventCheckInHub({
     return true;
   };
 
-  // Complete Late Hold Fine Payment (after capturing slip/cash photo proof) -> mark fine paid & complete check-in!
+  // Complete Late Hold Fine Payment (after capturing slip/cash photo proof) -> mark ALL unpaid fines for this ticket paid & complete check-in!
   const handleCompleteLateFineAndCheckIn = ({ fine, attendee, paymentMethod, proofPhotoUrl }) => {
     if (!attendee || !fine) return;
     handleUpdateSeatingPlan((prev) => {
       const nextAssignments = { ...(prev.assignments || {}) };
-      if (
-        fine.seatKeyToPrune &&
-        nextAssignments[fine.seatKeyToPrune]?.ticketNo === attendee.ticketNo
-      ) {
-        delete nextAssignments[fine.seatKeyToPrune];
-      }
-      const { seatKeyToPrune: _omit, ...cleanFine } = fine;
+      const keysToPrune = Array.isArray(fine.seatKeysToPrune)
+        ? fine.seatKeysToPrune
+        : fine.seatKeyToPrune
+        ? [fine.seatKeyToPrune]
+        : [];
+      keysToPrune.forEach((k) => {
+        if (nextAssignments[k]?.ticketNo === attendee.ticketNo) {
+          delete nextAssignments[k];
+        }
+      });
+
+      const paidAt = new Date().toISOString();
+      const collectedBy = currentUser?.name || "Admin";
+      const existingRecords = getTicketFineRecords(prev, attendee.ticketNo);
+
+      // Merge any unpruned items from fine.items that weren't in existingRecords yet
+      const modalItems = Array.isArray(fine.items) && fine.items.length > 0 ? fine.items : [fine];
+      const merged = [...existingRecords];
+      modalItems.forEach((mItem) => {
+        const { seatKeyToPrune: _omit, ...cleanItem } = mItem;
+        const exists = merged.some(
+          (ex) =>
+            ex.id === cleanItem.id ||
+            (ex.seatCode === cleanItem.seatCode &&
+              ex.expiredAt === cleanItem.expiredAt &&
+              ex.bookedAt === cleanItem.bookedAt)
+        );
+        if (!exists) {
+          merged.push({ ...cleanItem, ticketNo: attendee.ticketNo });
+        }
+      });
+
+      const updatedRecords = merged.map((rec) =>
+        rec.status === "paid"
+          ? rec
+          : {
+              ...rec,
+              ticketNo: attendee.ticketNo,
+              status: "paid",
+              paymentMethod: paymentMethod || "qr_slip",
+              proofPhotoUrl: proofPhotoUrl || "",
+              paidAt,
+              collectedBy
+            }
+      );
+
       const nextFines = {
         ...(prev.expiredHoldFines || {}),
-        [attendee.ticketNo]: {
-          ...cleanFine,
-          ticketNo: attendee.ticketNo,
-          status: "paid",
-          paymentMethod: paymentMethod || "qr",
-          proofPhotoUrl: proofPhotoUrl || "",
-          paidAt: new Date().toISOString(),
-          collectedBy: currentUser?.name || "Admin"
-        }
+        [attendee.ticketNo]: updatedRecords
       };
       return {
         ...prev,
@@ -691,12 +723,13 @@ export default function EventCheckInHub({
       setLastCheckInAttendee(null);
       setPhotoModalTarget(null);
       setPhotoViewerTarget(null);
-      // Clear seat assignments & fine ledger while preserving room layout and Owner fine QR code
+      // Clear seat assignments, fine ledger & free-hold quota while preserving room layout, hold tiers and Owner fine QR code
       handleUpdateSeatingPlan((prev) => ({
         ...prev,
         assignments: {},
         seatChangeRequests: {},
         expiredHoldFines: {},
+        freeHoldUsedByTicket: {},
         updatedAt: new Date().toISOString()
       }));
     };
@@ -2066,10 +2099,11 @@ export default function EventCheckInHub({
                             if (!sInfo && unpaidFine) {
                               return (
                                 <span
-                                  title={`จองล่วงหน้า ${unpaidFine.holdDurationMinutes} นาที แต่มาไม่ทัน (ผู้จอง: ${unpaidFine.bookedByName || "-"})`}
+                                  title={`มาไม่ทันเวลาจองล่วงหน้า ${unpaidFine.count} ครั้ง รวมปรับ ${unpaidFine.totalFineAmount} บาท`}
                                   className="inline-flex items-center px-2 py-0.5 rounded-lg bg-rose-100 text-rose-800 border border-rose-300 text-[10px] font-black"
                                 >
-                                  ⚠️ ค้างปรับ {unpaidFine.fineAmount}฿
+                                  ⚠️ ค้างปรับ {Number(unpaidFine.totalFineAmount).toLocaleString()}฿
+                                  {unpaidFine.count > 1 ? ` (${unpaidFine.count} ครั้ง)` : ""}
                                 </span>
                               );
                             }

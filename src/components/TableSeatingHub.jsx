@@ -46,7 +46,8 @@ import {
   KeyRound,
   Crown,
   Banknote,
-  AlertTriangle
+  AlertTriangle,
+  Sliders
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { uploadToCloudinaryWithMeta, deleteCloudinaryByToken } from "../utils/cloudinary";
@@ -58,7 +59,14 @@ import {
   DEFAULT_PALETTE_TYPES,
   HOLD_DURATION_OPTIONS,
   HOLD_TIER_OPTIONS,
+  getHoldTierOptions,
   getHoldTierOption,
+  isFreeNonVipTier,
+  hasUsedFreeHold,
+  getFreeHoldUsage,
+  getAllFineRecords,
+  getUnpaidFineForTicket,
+  formatThaiDateClock,
   isValidOwnerPin,
   getPaletteTypes,
   getHoldDurationMinutes,
@@ -168,7 +176,10 @@ export default function TableSeatingHub({
   onConsumeInitialSelectedTicket
 }) {
   const isOwner = currentUser?.role === "owner";
+  const canManageHoldTiers = ["owner", "manager", "admin"].includes(currentUser?.role);
   const holdDurationMinutes = getHoldDurationMinutes(seatingPlan);
+  const configuredHoldTiers = useMemo(() => getHoldTierOptions(seatingPlan), [seatingPlan]);
+  const allFineRecords = useMemo(() => getAllFineRecords(seatingPlan), [seatingPlan]);
 
   // Live 1-second clock ticker ONLY when active temporary holds exist
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -217,15 +228,22 @@ export default function TableSeatingHub({
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState(null);
 
-  // Advance Hold Booking Modal (Step 1: Booker -> Step 2: Seat Owner -> Step 3: Tier 15/30/60/120 VIP)
+  // Advance Hold Booking Modal (Step 1: Booker -> Step 2: Seat Owner -> Step 3: Tier)
   const [advanceHoldTarget, setAdvanceHoldTarget] = useState(null); // { table, seatNo }
   const [holdBookerTicketNo, setHoldBookerTicketNo] = useState("");
   const [holdBookerSearch, setHoldBookerSearch] = useState("");
   const [holdOwnerTicketNo, setHoldOwnerTicketNo] = useState("");
   const [holdOwnerSearch, setHoldOwnerSearch] = useState("");
-  const [holdTierMinutes, setHoldTierMinutes] = useState(15);
+  const [holdTierId, setHoldTierId] = useState("");
   const [vipPinInput, setVipPinInput] = useState("");
   const [vipPinError, setVipPinError] = useState("");
+
+  // Admin / Owner Hold Tier & Fine Settings Modal
+  const [isHoldTierSettingsOpen, setIsHoldTierSettingsOpen] = useState(false);
+  const [newTierMinutes, setNewTierMinutes] = useState(45);
+  const [newTierLabel, setNewTierLabel] = useState("");
+  const [newTierFineAmount, setNewTierFineAmount] = useState(80);
+  const [newTierRequiresPin, setNewTierRequiresPin] = useState(false);
 
   // Owner Fine QR Code Upload & Fine History Ledger
   const [isUploadingFineQr, setIsUploadingFineQr] = useState(false);
@@ -682,6 +700,7 @@ export default function TableSeatingHub({
     commitPlan({
       ...def,
       holdDurationMinutes: getHoldDurationMinutes(seatingPlan),
+      holdTiers: getHoldTierOptions(seatingPlan),
       paletteTypes: getPaletteTypes(seatingPlan),
       fineQrCodeUrl: seatingPlan.fineQrCodeUrl || null,
       fineQrDeleteToken: seatingPlan.fineQrDeleteToken || null
@@ -698,13 +717,12 @@ export default function TableSeatingHub({
       seatingPlan.gridRows,
       seatingPlan.roomTitle,
       getPaletteTypes(seatingPlan),
-      getHoldDurationMinutes(seatingPlan)
+      getHoldDurationMinutes(seatingPlan),
+      seatingPlan.fineQrCodeUrl || null,
+      seatingPlan.fineQrDeleteToken || null,
+      getHoldTierOptions(seatingPlan)
     );
-    commitPlan({
-      ...emptyPlan,
-      fineQrCodeUrl: seatingPlan.fineQrCodeUrl || null,
-      fineQrDeleteToken: seatingPlan.fineQrDeleteToken || null
-    });
+    commitPlan(emptyPlan);
     setSelectedItemId(null);
     showToast("ล้างผังเป็นห้องว่างเปล่าเรียบร้อย พร้อมจัดวางใหม่!");
   };
@@ -793,18 +811,123 @@ export default function TableSeatingHub({
     showToast("ลบรูป QR Code รับค่าปรับเรียบร้อย", "amber");
   };
 
+  // Admin / Owner: Add, edit, delete, or reset Advance Hold Duration & Fine Tiers
+  const handleAddHoldTier = (e) => {
+    if (e) e.preventDefault();
+    if (!canManageHoldTiers) return;
+    const mins = Math.max(1, Math.min(720, Math.round(Number(newTierMinutes) || 0)));
+    const fine = Math.max(0, Math.round(Number(newTierFineAmount) || 0));
+    if (!mins) {
+      showToast("กรุณาระบุจำนวนนาทีอย่างน้อย 1 นาที", "amber");
+      return;
+    }
+    const label =
+      newTierLabel.trim() ||
+      (newTierRequiresPin ? `แขกผู้ใหญ่ (${mins} นาที)` : `${mins} นาที`);
+    const newTier = {
+      id: `tier_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      minutes: mins,
+      label,
+      fineAmount: newTierRequiresPin ? 0 : fine,
+      isVip: Boolean(newTierRequiresPin),
+      requiresOwnerPin: Boolean(newTierRequiresPin)
+    };
+    commitPlan((prev) => ({
+      ...prev,
+      holdTiers: [...getHoldTierOptions(prev), newTier]
+    }));
+    setNewTierMinutes(45);
+    setNewTierLabel("");
+    setNewTierFineAmount(80);
+    setNewTierRequiresPin(false);
+    showToast(`เพิ่มตัวเลือก "${label}" เรียบร้อยแล้ว`);
+  };
+
+  const handleUpdateHoldTierField = (tierId, patch) => {
+    if (!canManageHoldTiers) return;
+    commitPlan((prev) => {
+      const next = getHoldTierOptions(prev).map((t) => {
+        if (t.id !== tierId) return t;
+        const updated = { ...t, ...patch };
+        if (patch.minutes !== undefined) {
+          updated.minutes = Math.max(1, Math.min(720, Math.round(Number(patch.minutes) || 1)));
+        }
+        if (patch.fineAmount !== undefined) {
+          updated.fineAmount = Math.max(0, Math.round(Number(patch.fineAmount) || 0));
+        }
+        if (patch.requiresOwnerPin !== undefined) {
+          updated.isVip = Boolean(patch.requiresOwnerPin);
+          updated.requiresOwnerPin = Boolean(patch.requiresOwnerPin);
+          if (updated.requiresOwnerPin) updated.fineAmount = 0;
+        }
+        return updated;
+      });
+      return { ...prev, holdTiers: next };
+    });
+  };
+
+  const handleDeleteHoldTier = (tierId) => {
+    if (!canManageHoldTiers) return;
+    const current = getHoldTierOptions(seatingPlan);
+    if (current.length <= 1) {
+      showToast("ต้องมีตัวเลือกเวลาจองอย่างน้อย 1 รายการ", "amber");
+      return;
+    }
+    const target = current.find((t) => t.id === tierId);
+    if (!window.confirm(`ต้องการลบตัวเลือก "${target?.label || ""}" ออกใช่หรือไม่?`)) return;
+    commitPlan((prev) => ({
+      ...prev,
+      holdTiers: getHoldTierOptions(prev).filter((t) => t.id !== tierId)
+    }));
+    showToast(`ลบตัวเลือก "${target?.label || ""}" เรียบร้อย`, "amber");
+  };
+
+  const handleResetDefaultHoldTiers = () => {
+    if (!canManageHoldTiers) return;
+    if (!window.confirm("ต้องการรีเซ็ตตัวเลือกเวลาและค่าปรับกลับเป็นค่ามาตรฐาน (15น. ฟรี / 30น. 50฿ / 60น. 100฿ / แขกผู้ใหญ่ 120น.) ใช่หรือไม่?")) {
+      return;
+    }
+    commitPlan((prev) => ({
+      ...prev,
+      holdTiers: HOLD_TIER_OPTIONS
+    }));
+    showToast("รีเซ็ตตัวเลือกเวลาและค่าปรับเป็นค่ามาตรฐานแล้ว");
+  };
+
+  // Pick a sensible default tier ID for a given seat owner (skipping free tiers if owner already used their 1-time free quota)
+  const pickDefaultTierIdForOwner = (ownerTicketNo) => {
+    const tiers = getHoldTierOptions(seatingPlan);
+    const usedFree = ownerTicketNo ? hasUsedFreeHold(seatingPlan, ownerTicketNo) : false;
+    const eligible = usedFree ? tiers.filter((t) => !isFreeNonVipTier(t)) : tiers;
+    return (eligible[0] || tiers[0])?.id || "";
+  };
+
   // Open Advance Hold Booking Modal (Step 1: Booker -> Step 2: Seat Owner -> Step 3: Duration)
   const openAdvanceHoldModal = (table, seatNo, preselectedOwner = null) => {
+    const ownerTNo = preselectedOwner ? preselectedOwner.ticketNo : "";
     setAdvanceHoldTarget({ table, seatNo });
     setHoldBookerTicketNo("");
     setHoldBookerSearch("");
-    setHoldOwnerTicketNo(preselectedOwner ? preselectedOwner.ticketNo : "");
+    setHoldOwnerTicketNo(ownerTNo);
     setHoldOwnerSearch("");
-    setHoldTierMinutes(getHoldDurationMinutes(seatingPlan));
+    setHoldTierId(pickDefaultTierIdForOwner(ownerTNo));
     setVipPinInput("");
     setVipPinError("");
     setPickingSeatNoForInlineAssign(null);
   };
+
+  // Keep selected holdTierId valid whenever the chosen seat owner changes (e.g. auto-skip free tier if owner already used free quota)
+  useEffect(() => {
+    if (!advanceHoldTarget) return;
+    const usedFree = holdOwnerTicketNo ? hasUsedFreeHold(seatingPlan, holdOwnerTicketNo) : false;
+    const eligible = usedFree
+      ? configuredHoldTiers.filter((t) => !isFreeNonVipTier(t))
+      : configuredHoldTiers;
+    if (eligible.length > 0 && !eligible.some((t) => t.id === holdTierId)) {
+      setHoldTierId(eligible[0].id);
+      setVipPinError("");
+    }
+  }, [advanceHoldTarget, holdOwnerTicketNo, configuredHoldTiers, seatingPlan?.freeHoldUsedByTicket, holdTierId]);
 
   // =====================================================================
   // SEAT BOOKING & APPROVAL HANDLERS
@@ -846,12 +969,29 @@ export default function TableSeatingHub({
       return;
     }
 
-    const holdMins = advanceHoldMeta?.minutes || getHoldDurationMinutes(seatingPlan);
-    const tierDef = getHoldTierOption(holdMins);
+    const tierDef =
+      advanceHoldMeta?.tier ||
+      getHoldTierOption(advanceHoldMeta?.tierId || advanceHoldMeta?.minutes || getHoldDurationMinutes(seatingPlan), seatingPlan);
+    const holdMins = advanceHoldMeta?.minutes || tierDef.minutes;
+    const fineAmt = advanceHoldMeta?.fineAmount ?? tierDef.fineAmount;
+    const isVip = Boolean(advanceHoldMeta?.isVipGuest ?? tierDef.isVip);
+    const isFreeRegularHold = !isCheckedIn && fineAmt === 0 && !isVip;
+
+    // Guard: 1 free hold max per seat owner
+    if (isFreeRegularHold && hasUsedFreeHold(seatingPlan, attendee.ticketNo)) {
+      showToast(
+        `${attendee.nickname || attendee.name} ใช้สิทธิ์จองล่วงหน้าฟรีไปแล้ว 1 ครั้ง — กรุณาเลือกตัวเลือกที่มีค่าปรับ`,
+        "rose"
+      );
+      return;
+    }
+
     const bookingStatus = isCheckedIn ? "confirmed" : "hold";
+    const assignedAtIso = new Date().toISOString();
     const holdExpiresAt = isCheckedIn
       ? null
       : new Date(Date.now() + holdMins * 60 * 1000).toISOString();
+    const seatCode = getSeatCode(table, seatNo);
 
     commitPlan((prev) => {
       const nextAssignments = { ...(prev.assignments || {}) };
@@ -867,29 +1007,45 @@ export default function TableSeatingHub({
         holdExpiresAt,
         ...(bookingStatus === "hold"
           ? {
+              holdTierId: tierDef.id,
+              holdTierLabel: tierDef.label,
               holdDurationMinutes: holdMins,
-              fineAmount: advanceHoldMeta?.fineAmount ?? tierDef.fineAmount,
-              isVipGuest: Boolean(advanceHoldMeta?.isVipGuest ?? tierDef.isVip),
+              fineAmount: fineAmt,
+              isVipGuest: isVip,
               bookedByTicketNo: advanceHoldMeta?.booker?.ticketNo || "",
               bookedByName: advanceHoldMeta?.booker?.name || currentUser?.name || "",
               bookedByNickname: advanceHoldMeta?.booker?.nickname || ""
             }
           : {}),
-        assignedAt: new Date().toISOString(),
+        assignedAt: assignedAtIso,
         assignedBy: currentUser?.name || "Admin"
       };
       // Clear any pending seat change request for this attendee (Owner approved & moved)
       const nextRequests = { ...(prev.seatChangeRequests || {}) };
       delete nextRequests[attendee.ticketNo];
 
+      // Record 1-time free hold consumption for this seat owner (Booker remains unlimited!)
+      const nextFreeUsed = { ...(prev.freeHoldUsedByTicket || {}) };
+      if (isFreeRegularHold && !nextFreeUsed[attendee.ticketNo]) {
+        nextFreeUsed[attendee.ticketNo] = {
+          usedAt: assignedAtIso,
+          seatCode,
+          tableLabel: table.label,
+          holdDurationMinutes: holdMins,
+          bookedByTicketNo: advanceHoldMeta?.booker?.ticketNo || "",
+          bookedByName: advanceHoldMeta?.booker?.name || currentUser?.name || "",
+          bookedByNickname: advanceHoldMeta?.booker?.nickname || ""
+        };
+      }
+
       return {
         ...prev,
         assignments: nextAssignments,
-        seatChangeRequests: nextRequests
+        seatChangeRequests: nextRequests,
+        freeHoldUsedByTicket: nextFreeUsed
       };
     });
 
-    const seatCode = getSeatCode(table, seatNo);
     onPlayEffect?.("fanfare");
 
     if (isKioskMode) {
@@ -917,7 +1073,11 @@ export default function TableSeatingHub({
         showToast(`✅ ยืนยันที่นั่ง ${table.label} • เก้าอี้ ${seatCode} ให้คุณ ${attendee.nickname || attendee.name} สำเร็จ!`);
       } else {
         const fineNote =
-          tierDef.fineAmount > 0 ? ` (หากมาไม่ทัน ปรับ ${tierDef.fineAmount} บาท)` : tierDef.isVip ? " (แขกผู้ใหญ่)" : " (ฟรี)";
+          fineAmt > 0
+            ? ` (หากมาไม่ทัน ปรับ ${fineAmt.toLocaleString()} บาท)`
+            : isVip
+            ? " (แขกผู้ใหญ่)"
+            : " (ใช้สิทธิ์ฟรี 1 ครั้ง)";
         showToast(
           `⏳ จองล่วงหน้า ${table.label} • ${seatCode} ให้คุณ ${attendee.nickname || attendee.name} ${holdMins} นาที${fineNote}`,
           "amber"
@@ -948,7 +1108,14 @@ export default function TableSeatingHub({
       showToast("กรุณาเลือก 'เจ้าของเก้าอี้' ในขั้นตอนที่ 2 ครับ", "amber");
       return;
     }
-    const tier = getHoldTierOption(holdTierMinutes);
+    const tier = getHoldTierOption(holdTierId, seatingPlan);
+    if (isFreeNonVipTier(tier) && hasUsedFreeHold(seatingPlan, ownerGuest.ticketNo)) {
+      showToast(
+        `คุณ ${ownerGuest.nickname || ownerGuest.name} ใช้สิทธิ์จองฟรีไปแล้ว 1 ครั้ง — กรุณาเลือกตัวเลือกที่มีค่าปรับ`,
+        "rose"
+      );
+      return;
+    }
     if (tier.requiresOwnerPin) {
       if (!isValidOwnerPin(vipPinInput, eventConfig)) {
         setVipPinError("รหัสเจ้าของแอปไม่ถูกต้อง (กรุณากรอกเบอร์โทรศัพท์เจ้าของแอป 0937925665)");
@@ -958,6 +1125,8 @@ export default function TableSeatingHub({
     setVipPinError("");
     handleAssignSeat(advanceHoldTarget.table, advanceHoldTarget.seatNo, ownerGuest, {
       booker,
+      tier,
+      tierId: tier.id,
       minutes: tier.minutes,
       fineAmount: tier.fineAmount,
       isVipGuest: tier.isVip
@@ -2502,14 +2671,26 @@ export default function TableSeatingHub({
               <span>สรุปรายชื่อตามโต๊ะ</span>
             </button>
 
-            {Object.keys(seatingPlan?.expiredHoldFines || {}).length > 0 && (
+            {canManageHoldTiers && (
+              <button
+                type="button"
+                onClick={() => setIsHoldTierSettingsOpen(true)}
+                className="px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-xs font-extrabold flex items-center space-x-1.5 transition-all cursor-pointer"
+                title="เพิ่ม/ลดช่วงเวลาจองล่วงหน้าและปรับเปลี่ยนค่าปรับได้ตามสถานการณ์งาน"
+              >
+                <Sliders className="w-3.5 h-3.5 text-amber-600" />
+                <span>ตั้งค่าเวลา/ค่าปรับ ({configuredHoldTiers.length})</span>
+              </button>
+            )}
+
+            {allFineRecords.length > 0 && (
               <button
                 type="button"
                 onClick={() => setIsFineLedgerOpen(true)}
                 className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-extrabold flex items-center space-x-1.5 transition-all cursor-pointer"
               >
                 <Banknote className="w-3.5 h-3.5" />
-                <span>ประวัติค่าปรับ ({Object.keys(seatingPlan?.expiredHoldFines || {}).length})</span>
+                <span>ประวัติค่าปรับ ({allFineRecords.length})</span>
               </button>
             )}
 
@@ -2537,7 +2718,7 @@ export default function TableSeatingHub({
             </span>
             <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 font-bold text-[11px]">
               <Clock className="w-3.5 h-3.5 text-amber-600" />
-              <span>ยังไม่เข้างาน (กรณีพิเศษ): เก็บที่นั่งชั่วคราว {holdDurationMinutes} นาที</span>
+              <span>ยังไม่เข้างาน (จองล่วงหน้า): สิทธิ์ฟรี 1 ครั้ง/ท่าน • มาสายสะสมยอดปรับตามเวลา</span>
             </span>
             <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 font-bold text-[11px]">
               <Lock className="w-3 h-3 text-slate-500" />
@@ -2782,31 +2963,40 @@ export default function TableSeatingHub({
                 </div>
               </div>
 
-              {/* Right: Default Hold Duration Reference (15, 30, 60, 120) */}
+              {/* Right: Configurable Hold Duration & Fine Tiers Summary */}
               <div className="lg:col-span-6 flex flex-wrap items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-xs font-black text-slate-800 flex items-center space-x-1">
+                <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                  <span className="text-xs font-black text-slate-800 flex items-center space-x-1 shrink-0">
                     <Clock className="w-3.5 h-3.5 text-amber-600" />
-                    <span>ค่าเริ่มต้นจองล่วงหน้า:</span>
+                    <span>เวลาจอง & ค่าปรับ:</span>
                   </span>
-                  {HOLD_DURATION_OPTIONS.map((mins) => (
-                    <button
-                      key={mins}
-                      type="button"
-                      onClick={() => handleUpdateHoldDuration(mins)}
-                      className={`px-2 py-1 rounded-lg text-[11px] font-extrabold transition-all cursor-pointer border ${
-                        holdDurationMinutes === mins
-                          ? "bg-amber-500 border-amber-600 text-slate-950 shadow-sm"
-                          : "bg-white border-slate-200 text-slate-700 hover:bg-amber-50 hover:border-amber-300"
+                  {configuredHoldTiers.map((t) => (
+                    <span
+                      key={t.id}
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold border ${
+                        t.isVip
+                          ? "bg-violet-50 border-violet-200 text-violet-800"
+                          : t.fineAmount > 0
+                          ? "bg-rose-50 border-rose-200 text-rose-700"
+                          : "bg-emerald-50 border-emerald-200 text-emerald-700"
                       }`}
                     >
-                      {mins === 120 ? "แขกผู้ใหญ่" : `${mins}น.`}
-                    </button>
+                      {t.isVip
+                        ? `👑 ${t.minutes}น.`
+                        : t.fineAmount > 0
+                        ? `${t.minutes}น.=${t.fineAmount}฿`
+                        : `${t.minutes}น.=ฟรี`}
+                    </span>
                   ))}
                 </div>
-                <span className="text-[10px] text-slate-500">
-                  15น.=ฟรี • 30น.=50฿ • 60น.=100฿ • 120น.=แขกผู้ใหญ่
-                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsHoldTierSettingsOpen(true)}
+                  className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-extrabold flex items-center space-x-1 shrink-0 cursor-pointer shadow-xs"
+                >
+                  <Sliders className="w-3 h-3" />
+                  <span>เพิ่ม/ลด/แก้ค่าปรับ</span>
+                </button>
               </div>
             </div>
 
@@ -4118,7 +4308,24 @@ export default function TableSeatingHub({
         const targetSeatCode = getSeatCode(advanceHoldTarget.table, advanceHoldTarget.seatNo);
         const selectedBooker = holdBookerTicketNo ? regMap.get(holdBookerTicketNo) : null;
         const selectedOwnerGuest = holdOwnerTicketNo ? regMap.get(holdOwnerTicketNo) : null;
-        const selectedTier = getHoldTierOption(holdTierMinutes);
+
+        // Check 1-time free quota & accumulated unpaid fines for the selected seat owner (Booker is unlimited!)
+        const ownerFreeUsage = selectedOwnerGuest
+          ? getFreeHoldUsage(seatingPlan, selectedOwnerGuest.ticketNo)
+          : null;
+        const ownerUsedFree = Boolean(ownerFreeUsage);
+        const ownerUnpaidFine = selectedOwnerGuest
+          ? getUnpaidFineForTicket(seatingPlan, selectedOwnerGuest.ticketNo, nowMs)
+          : null;
+
+        const availableTiersForOwner = ownerUsedFree
+          ? configuredHoldTiers.filter((t) => !isFreeNonVipTier(t))
+          : configuredHoldTiers;
+
+        const selectedTier =
+          availableTiersForOwner.find((t) => t.id === holdTierId) ||
+          availableTiersForOwner[0] ||
+          configuredHoldTiers[0];
 
         const bookerQ = holdBookerSearch.trim().toLowerCase();
         const bookerCandidates = sortedRegistrations
@@ -4152,6 +4359,8 @@ export default function TableSeatingHub({
         const canSubmitHold =
           Boolean(selectedBooker) &&
           Boolean(selectedOwnerGuest) &&
+          Boolean(selectedTier) &&
+          availableTiersForOwner.length > 0 &&
           (!selectedTier.requiresOwnerPin || vipPinInput.trim().length > 0);
 
         return (
@@ -4414,27 +4623,41 @@ export default function TableSeatingHub({
                             ไม่มีรายชื่อที่ยังไม่เข้างานและยังว่างอยู่
                           </div>
                         ) : (
-                          ownerCandidates.map((r) => (
-                            <button
-                              key={r.ticketNo}
-                              type="button"
-                              onClick={() => setHoldOwnerTicketNo(r.ticketNo)}
-                              className="w-full px-2.5 py-2 rounded-lg hover:bg-amber-50 flex items-center justify-between text-left transition-colors cursor-pointer"
-                            >
-                              <div className="min-w-0 pr-2">
-                                <div className="text-xs font-extrabold text-slate-900 truncate">
-                                  {r.name}
-                                  {r.nickname ? ` (${r.nickname})` : ""}
+                          ownerCandidates.map((r) => {
+                            const candUsedFree = hasUsedFreeHold(seatingPlan, r.ticketNo);
+                            const candFine = getUnpaidFineForTicket(seatingPlan, r.ticketNo, nowMs);
+                            return (
+                              <button
+                                key={r.ticketNo}
+                                type="button"
+                                onClick={() => setHoldOwnerTicketNo(r.ticketNo)}
+                                className="w-full px-2.5 py-2 rounded-lg hover:bg-amber-50 flex items-center justify-between text-left transition-colors cursor-pointer"
+                              >
+                                <div className="min-w-0 pr-2">
+                                  <div className="text-xs font-extrabold text-slate-900 truncate">
+                                    {r.name}
+                                    {r.nickname ? ` (${r.nickname})` : ""}
+                                  </div>
+                                  <div className="flex items-center flex-wrap gap-1 text-[10px] text-slate-500 font-mono mt-0.5">
+                                    <span>{r.ticketNo} • {r.club || "สงสพัท"}</span>
+                                    {candUsedFree && (
+                                      <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-sans font-bold text-[9px]">
+                                        ใช้สิทธิ์ฟรีแล้ว
+                                      </span>
+                                    )}
+                                    {candFine && (
+                                      <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 font-sans font-black text-[9px]">
+                                        ค้างปรับ {Number(candFine.totalFineAmount).toLocaleString()}฿
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
-                                <div className="text-[10px] text-slate-500 font-mono">
-                                  {r.ticketNo} • {r.club || "สงสพัท"}
-                                </div>
-                              </div>
-                              <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold shrink-0">
-                                เลือกคนนี้
-                              </span>
-                            </button>
-                          ))
+                                <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold shrink-0">
+                                  เลือกคนนี้
+                                </span>
+                              </button>
+                            );
+                          })
                         )}
                       </div>
                     </div>
@@ -4449,76 +4672,114 @@ export default function TableSeatingHub({
                       : "border-indigo-200 bg-indigo-50/30"
                   }`}
                 >
-                  <div className="flex items-center space-x-2">
-                    <span
-                      className={`w-6 h-6 rounded-full text-xs font-black flex items-center justify-center ${
-                        !selectedBooker || !selectedOwnerGuest
-                          ? "bg-slate-300 text-slate-600"
-                          : "bg-indigo-600 text-white"
-                      }`}
-                    >
-                      3
-                    </span>
-                    <div>
-                      <div className="text-xs sm:text-sm font-black text-slate-900">
-                        ระบุเวลาที่จะมาถึง (และเงื่อนไขค่าปรับหากมาไม่ทัน)
-                      </div>
-                      <div className="text-[10px] text-slate-500">
-                        หากเลยเวลาที่จอง เก้าอี้จะหลุดเป็นว่างอัตโนมัติ และแจ้งเตือนค่าปรับตอนลงทะเบียนเข้างาน
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center space-x-2">
+                      <span
+                        className={`w-6 h-6 rounded-full text-xs font-black flex items-center justify-center ${
+                          !selectedBooker || !selectedOwnerGuest
+                            ? "bg-slate-300 text-slate-600"
+                            : "bg-indigo-600 text-white"
+                        }`}
+                      >
+                        3
+                      </span>
+                      <div>
+                        <div className="text-xs sm:text-sm font-black text-slate-900">
+                          ระบุเวลาที่จะมาถึง (และเงื่อนไขค่าปรับหากมาไม่ทัน)
+                        </div>
+                        <div className="text-[10px] text-slate-500">
+                          สิทธิ์จองฟรีใช้ได้ 1 ครั้ง/ท่าน • หากมาสายหลายครั้ง ยอดปรับจะถูกบวกสะสมตอนเข้างาน
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    {HOLD_TIER_OPTIONS.map((tier) => {
-                      const active = holdTierMinutes === tier.minutes;
-                      return (
-                        <button
-                          key={tier.minutes}
-                          type="button"
-                          onClick={() => {
-                            setHoldTierMinutes(tier.minutes);
-                            setVipPinError("");
-                          }}
-                          className={`p-3 rounded-2xl border-2 text-left transition-all cursor-pointer ${
-                            active
-                              ? tier.isVip
-                                ? "border-violet-500 bg-violet-50 ring-2 ring-violet-300/50 shadow-sm"
-                                : tier.fineAmount > 0
-                                ? "border-rose-500 bg-rose-50 ring-2 ring-rose-300/50 shadow-sm"
-                                : "border-emerald-500 bg-emerald-50 ring-2 ring-emerald-300/50 shadow-sm"
-                              : "border-slate-200 bg-white hover:border-slate-300"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="text-xs sm:text-sm font-black text-slate-900 flex items-center space-x-1">
-                              {tier.isVip && <Crown className="w-3.5 h-3.5 text-violet-600 shrink-0" />}
-                              <span>{tier.label}</span>
-                            </span>
-                            {active && <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />}
-                          </div>
-                          <div
-                            className={`text-[11px] font-extrabold mt-1 ${
-                              tier.isVip
-                                ? "text-violet-700"
-                                : tier.fineAmount > 0
-                                ? "text-rose-600"
-                                : "text-emerald-700"
+                  {/* Notice if Seat Owner already consumed their 1-time free quota */}
+                  {selectedOwnerGuest && ownerUsedFree && (
+                    <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-300 text-[11px] text-amber-900 space-y-0.5">
+                      <div className="font-black flex items-center space-x-1">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span>
+                          คุณ {selectedOwnerGuest.nickname || selectedOwnerGuest.name} ใช้สิทธิ์จองล่วงหน้าฟรีไปแล้ว 1 ครั้ง
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-amber-800">
+                        (เคยจองฟรี {ownerFreeUsage?.holdDurationMinutes || 15} นาที เมื่อ {formatThaiDateClock(ownerFreeUsage?.usedAt)}) — ตัวเลือกแบบฟรีจึงถูกซ่อนออก กรุณาเลือกช่วงเวลาที่มีค่าปรับหรือสิทธิ์แขกผู้ใหญ่ครับ
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Notice if Seat Owner already has accumulated unpaid fines */}
+                  {selectedOwnerGuest && ownerUnpaidFine && (
+                    <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-300 text-[11px] text-rose-900 space-y-0.5">
+                      <div className="font-black flex items-center space-x-1">
+                        <Banknote className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                        <span>
+                          มียอดค่าปรับค้างชำระสะสมอยู่แล้ว {Number(ownerUnpaidFine.totalFineAmount).toLocaleString()} บาท ({ownerUnpaidFine.count} ครั้ง)
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-rose-700">
+                        หากจองรอบนี้แล้วมาไม่ทันอีก ระบบจะบวกยอดปรับสะสมเพิ่มให้เห็นทุกรายการตอนลงทะเบียนเข้างาน
+                      </div>
+                    </div>
+                  )}
+
+                  {availableTiersForOwner.length === 0 ? (
+                    <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-center text-xs font-bold text-rose-700">
+                      ไม่มีตัวเลือกเวลาจองแบบมีค่าปรับให้เลือก (กรุณาเพิ่มตัวเลือกในเมนู &ldquo;ตั้งค่าเวลา/ค่าปรับ&rdquo;)
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      {availableTiersForOwner.map((tier) => {
+                        const active = selectedTier?.id === tier.id;
+                        return (
+                          <button
+                            key={tier.id}
+                            type="button"
+                            onClick={() => {
+                              setHoldTierId(tier.id);
+                              setVipPinError("");
+                            }}
+                            className={`p-3 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                              active
+                                ? tier.isVip
+                                  ? "border-violet-500 bg-violet-50 ring-2 ring-violet-300/50 shadow-sm"
+                                  : tier.fineAmount > 0
+                                  ? "border-rose-500 bg-rose-50 ring-2 ring-rose-300/50 shadow-sm"
+                                  : "border-emerald-500 bg-emerald-50 ring-2 ring-emerald-300/50 shadow-sm"
+                                : "border-slate-200 bg-white hover:border-slate-300"
                             }`}
                           >
-                            {tier.isVip
-                              ? "ฟรี • ต้องใช้รหัสเจ้าของแอป"
-                              : tier.fineAmount > 0
-                              ? `มาไม่ทัน ปรับ ${tier.fineAmount} บาท`
-                              : "ฟรี (ไม่มีค่าปรับ)"}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-xs sm:text-sm font-black text-slate-900 flex items-center space-x-1">
+                                {tier.isVip && <Crown className="w-3.5 h-3.5 text-violet-600 shrink-0" />}
+                                <span>{tier.label}</span>
+                              </span>
+                              {active && <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />}
+                            </div>
+                            <div
+                              className={`text-[11px] font-extrabold mt-1 ${
+                                tier.isVip
+                                  ? "text-violet-700"
+                                  : tier.fineAmount > 0
+                                  ? "text-rose-600"
+                                  : "text-emerald-700"
+                              }`}
+                            >
+                              {tier.isVip
+                                ? "ฟรี • ต้องใช้รหัสเจ้าของแอป"
+                                : tier.fineAmount > 0
+                                ? `มาไม่ทัน ปรับ ${Number(tier.fineAmount).toLocaleString()} บาท`
+                                : "ฟรี (สิทธิ์ฟรี 1 ครั้ง/ท่าน)"}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
 
-                  {/* Owner PIN Input for VIP 120-min tier */}
-                  {selectedTier.requiresOwnerPin && (
+                  {/* Owner PIN Input for VIP tier */}
+                  {selectedTier?.requiresOwnerPin && (
                     <div className="p-3 rounded-2xl bg-violet-50 border border-violet-200 space-y-2">
                       <label className="flex items-center space-x-1.5 text-xs font-black text-violet-900">
                         <KeyRound className="w-4 h-4 text-violet-600" />
@@ -4564,7 +4825,7 @@ export default function TableSeatingHub({
                     }`}
                   >
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>ยืนยันจองเก้าอี้ล่วงหน้า ({selectedTier.minutes} นาที)</span>
+                    <span>ยืนยันจองเก้าอี้ล่วงหน้า ({selectedTier?.minutes || 15} นาที)</span>
                   </button>
                 </div>
               </form>
@@ -4574,12 +4835,10 @@ export default function TableSeatingHub({
       })()}
 
       {/* ================================================================= */}
-      {/* FINE HISTORY & PROOF LEDGER MODAL                                 */}
+      {/* FINE HISTORY & PROOF LEDGER MODAL (CUMULATIVE + EXACT TIMESTAMPS) */}
       {/* ================================================================= */}
       {isFineLedgerOpen && (() => {
-        const fines = Object.values(seatingPlan?.expiredHoldFines || {}).sort(
-          (a, b) => new Date(b.expiredAt || 0).getTime() - new Date(a.expiredAt || 0).getTime()
-        );
+        const fines = allFineRecords;
         const paidFines = fines.filter((f) => f.status === "paid");
         const unpaidFines = fines.filter((f) => f.status !== "paid");
         const totalCollected = paidFines.reduce((sum, f) => sum + (Number(f.fineAmount) || 0), 0);
@@ -4619,17 +4878,17 @@ export default function TableSeatingHub({
                     ยังไม่มีรายการค่าปรับมาสาย
                   </div>
                 ) : (
-                  fines.map((fine) => {
+                  fines.map((fine, idx) => {
                     const guest = regMap.get(fine.ticketNo);
                     const isPaid = fine.status === "paid";
                     return (
                       <div
-                        key={fine.ticketNo}
+                        key={fine.id || `${fine.ticketNo}_${idx}`}
                         className={`p-3.5 rounded-2xl border bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
                           isPaid ? "border-emerald-200" : "border-rose-200"
                         }`}
                       >
-                        <div className="space-y-1 min-w-0">
+                        <div className="space-y-1.5 min-w-0 flex-1">
                           <div className="flex items-center flex-wrap gap-2">
                             <span className="text-sm font-black text-slate-900">
                               {guest ? `${guest.name}${guest.nickname ? ` (${guest.nickname})` : ""}` : fine.ticketNo}
@@ -4653,11 +4912,19 @@ export default function TableSeatingHub({
                             </span>
                             <span>•</span>
                             <span>
-                              จองล่วงหน้า <strong>{fine.holdDurationMinutes} นาที</strong>
+                              จองล่วงหน้า <strong>{fine.tierLabel || `${fine.holdDurationMinutes} นาที`}</strong>
                             </span>
                             <span>•</span>
                             <span className="text-rose-700 font-black">
-                              ปรับ {fine.fineAmount} บาท
+                              ปรับ {Number(fine.fineAmount || 0).toLocaleString()} บาท
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] bg-slate-50 border border-slate-100 rounded-lg px-2.5 py-1">
+                            <span className="text-slate-700">
+                              เวลาจอง: <strong className="font-mono text-slate-900">{formatThaiDateClock(fine.bookedAt)}</strong>
+                            </span>
+                            <span className="text-rose-700">
+                              หมดเวลา: <strong className="font-mono text-rose-800">{formatThaiDateClock(fine.expiredAt)}</strong>
                             </span>
                           </div>
                           {fine.bookedByName && (
@@ -4693,6 +4960,252 @@ export default function TableSeatingHub({
           </div>
         );
       })()}
+
+      {/* ================================================================= */}
+      {/* ADMIN / OWNER: HOLD TIER & FINE SETTINGS MODAL                    */}
+      {/* เพิ่ม / ลด / แก้ไข ช่วงเวลาจองล่วงหน้าและอัตราค่าปรับได้อิสระ      */}
+      {/* ================================================================= */}
+      {canManageHoldTiers && isHoldTierSettingsOpen && (
+        <div
+          className="fixed inset-0 z-[85] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5"
+          onClick={() => setIsHoldTierSettingsOpen(false)}
+        >
+          <div
+            className="bg-white rounded-3xl border border-amber-200 shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="px-5 py-4 bg-gradient-to-r from-slate-900 via-amber-950 to-slate-900 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-400/30 flex items-center justify-center text-amber-300">
+                  <Sliders className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-black">
+                    ตั้งค่าช่วงเวลาจองล่วงหน้า & อัตราค่าปรับ
+                  </h3>
+                  <p className="text-[11px] text-amber-200">
+                    เพิ่ม/ลดตัวเลือกเวลา ปรับยอดค่าปรับ หรือกำหนดสิทธิ์รหัสเจ้าของแอปได้ตามสถานการณ์งาน
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsHoldTierSettingsOpen(false)}
+                className="p-2 rounded-xl bg-white/10 hover:bg-white/20 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+              {/* Info Rule Box */}
+              <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-1">
+                <div className="font-black">กติกาสิทธิ์ฟรี & การสะสมค่าปรับ:</div>
+                <ul className="list-disc pl-4 space-y-0.5 text-[11px]">
+                  <li>ตัวเลือกที่ <strong>ค่าปรับ = 0 บาท (ไม่ใช่แขกผู้ใหญ่)</strong> เจ้าของเก้าอี้ 1 ท่านใช้สิทธิ์ฟรีได้แค่ <strong>1 ครั้งเท่านั้น</strong> (ครั้งถัดไปตัวเลือกฟรีจะไม่แสดงให้เลือก)</li>
+                  <li>ผู้จอง (เพื่อนที่จองให้) สามารถจองให้เพื่อนกี่คนหรือกี่ครั้งก็ได้ไม่จำกัด</li>
+                  <li>หากมาไม่ทันหลายครั้ง ยอดค่าปรับจะถูกบวกสะสมพร้อมแสดง <strong>เวลาจอง–หมดเวลาตามระบบ</strong> ทุกรายการตอนลงทะเบียนเข้างาน</li>
+                </ul>
+              </div>
+
+              {/* Existing Tiers Editable List */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-slate-700">
+                    ตัวเลือกที่ใช้งานอยู่ ({configuredHoldTiers.length} รายการ)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleResetDefaultHoldTiers}
+                    className="text-[11px] font-bold text-slate-500 hover:text-amber-700 flex items-center space-x-1 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>รีเซ็ตเป็นค่ามาตรฐาน (4 ตัวเลือก)</span>
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  {configuredHoldTiers.map((tier) => (
+                    <div
+                      key={tier.id}
+                      className={`p-3 rounded-2xl border flex flex-col sm:flex-row sm:items-center gap-2.5 ${
+                        tier.isVip
+                          ? "bg-violet-50/60 border-violet-200"
+                          : tier.fineAmount === 0
+                          ? "bg-emerald-50/60 border-emerald-200"
+                          : "bg-white border-slate-200"
+                      }`}
+                    >
+                      <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 mb-0.5">
+                            ชื่อตัวเลือก
+                          </label>
+                          <input
+                            type="text"
+                            value={tier.label}
+                            onChange={(e) =>
+                              handleUpdateHoldTierField(tier.id, { label: e.target.value })
+                            }
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-amber-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 mb-0.5">
+                            ระยะเวลา (นาที)
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={720}
+                            value={tier.minutes}
+                            onChange={(e) =>
+                              handleUpdateHoldTierField(tier.id, { minutes: e.target.value })
+                            }
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-amber-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 mb-0.5">
+                            ค่าปรับมาสาย (บาท)
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            step={10}
+                            disabled={tier.requiresOwnerPin}
+                            value={tier.requiresOwnerPin ? 0 : tier.fineAmount}
+                            onChange={(e) =>
+                              handleUpdateHoldTierField(tier.id, { fineAmount: e.target.value })
+                            }
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-mono font-bold text-slate-900 disabled:bg-slate-100 disabled:text-slate-400 focus:outline-none focus:border-amber-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 pt-1 sm:pt-3">
+                        <label className="inline-flex items-center space-x-1.5 text-[11px] font-bold text-violet-800 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(tier.requiresOwnerPin)}
+                            onChange={(e) =>
+                              handleUpdateHoldTierField(tier.id, {
+                                requiresOwnerPin: e.target.checked
+                              })
+                            }
+                            className="rounded border-violet-300 text-violet-600 focus:ring-violet-500"
+                          />
+                          <span>รหัส VIP</span>
+                        </label>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteHoldTier(tier.id)}
+                          title="ลบตัวเลือกนี้"
+                          className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-600 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Add New Tier Form */}
+              <form
+                onSubmit={handleAddHoldTier}
+                className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3"
+              >
+                <div className="text-xs font-black text-slate-800 flex items-center space-x-1.5">
+                  <Plus className="w-4 h-4 text-emerald-600" />
+                  <span>เพิ่มช่วงเวลาจองล่วงหน้าใหม่</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">
+                      ระยะเวลา (นาที) *
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={720}
+                      required
+                      value={newTierMinutes}
+                      onChange={(e) => setNewTierMinutes(e.target.value)}
+                      placeholder="เช่น 45"
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">
+                      ค่าปรับหากมาไม่ทัน (บาท)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={10}
+                      disabled={newTierRequiresPin}
+                      value={newTierRequiresPin ? 0 : newTierFineAmount}
+                      onChange={(e) => setNewTierFineAmount(e.target.value)}
+                      placeholder="0 = ฟรี"
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-mono font-bold text-slate-900 disabled:bg-slate-100 focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">
+                      ชื่อปุ่ม (ไม่กรอกจะตั้งให้อัตโนมัติ)
+                    </label>
+                    <input
+                      type="text"
+                      value={newTierLabel}
+                      onChange={(e) => setNewTierLabel(e.target.value)}
+                      placeholder="เช่น 45 นาที หรือ แขกพิเศษ"
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  <label className="inline-flex items-center space-x-2 text-xs font-bold text-violet-800 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={newTierRequiresPin}
+                      onChange={(e) => setNewTierRequiresPin(e.target.checked)}
+                      className="rounded border-violet-300 text-violet-600 focus:ring-violet-500"
+                    />
+                    <span>👑 เป็นสิทธิ์แขกผู้ใหญ่ / VIP (ฟรี แต่ต้องใส่รหัสเจ้าของแอป)</span>
+                  </label>
+
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold flex items-center space-x-1.5 shadow-sm cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>เพิ่มตัวเลือกนี้</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0">
+              <span className="text-[11px] text-slate-500">
+                * การเปลี่ยนแปลงจะซิงค์ไปยังทุกเครื่องทันทีโดยอัตโนมัติ (ไม่กระทบเก้าอี้ที่จองไว้ก่อนหน้า)
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsHoldTierSettingsOpen(false)}
+                className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-extrabold cursor-pointer"
+              >
+                เสร็จสิ้น
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Proof Photo Lightbox */}
       {viewingProofUrl && (
