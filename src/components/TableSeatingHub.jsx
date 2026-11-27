@@ -82,7 +82,12 @@ import {
   getTableOccupancyMap,
   getSeatingStats,
   getInitials,
-  getAvatarTextSizeClass
+  getAvatarTextSizeClass,
+  isShowcaseItem,
+  getShowcaseSlotsPerCell,
+  getShowcaseTotalSlots,
+  getShowcaseSlotCode,
+  getShowcaseOccupancyMap
 } from "../utils/seatingPlanHelper";
 
 // Helper to compute chronological sort timestamp (checked-in time first, then registration time)
@@ -168,6 +173,7 @@ export default function TableSeatingHub({
   seatingPlan,
   onUpdateSeatingPlan,
   registrations = [],
+  sponsors = [],
   currentUser,
   eventConfig = null,
   onPlayEffect,
@@ -220,9 +226,20 @@ export default function TableSeatingHub({
   const [newTypeEmoji, setNewTypeEmoji] = useState("🛍️");
   const [newTypeColor, setNewTypeColor] = useState("violet");
   const [newTypeIsBookable, setNewTypeIsBookable] = useState(false);
+  const [newTypeIsShowcase, setNewTypeIsShowcase] = useState(false);
+  const [newTypeShowcaseMode, setNewTypeShowcaseMode] = useState("member"); // "sponsor" | "member"
+  const [newTypeSlotsPerCell, setNewTypeSlotsPerCell] = useState(4);
+  const [newTypeCode, setNewTypeCode] = useState("M");
   const [newTypeW, setNewTypeW] = useState(2);
   const [newTypeH, setNewTypeH] = useState(1);
   const [newTypeCapacity, setNewTypeCapacity] = useState(8);
+
+  // Showcase Table Lock Picker Modal State
+  const [activeShowcaseItemId, setActiveShowcaseItemId] = useState(null);
+  const [pickingShowcaseSlotNo, setPickingShowcaseSlotNo] = useState(null);
+  const [showcaseSearch, setShowcaseSearch] = useState("");
+  const [showcaseBrandInput, setShowcaseBrandInput] = useState("");
+  const [selectedShowcaseCandidate, setSelectedShowcaseCandidate] = useState(null);
 
   // Booking & Attendee Queue states
   const [rightTab, setRightTab] = useState("unassigned"); // "unassigned" | "assigned"
@@ -480,6 +497,49 @@ export default function TableSeatingHub({
       .sort((a, b) => String(a.code || a.label).localeCompare(String(b.code || b.label), "th", { numeric: true }));
   }, [seatingPlan.items]);
 
+  // Product Showcase tables (VIP Sponsor & Member display tables)
+  const allShowcaseTables = useMemo(() => {
+    return (seatingPlan.items || []).filter((it) => isShowcaseItem(it));
+  }, [seatingPlan.items]);
+
+  // Consolidated Sponsors list (combines standalone appSponsors + registrants who paid extra sponsorship)
+  const consolidatedSponsorsList = useMemo(() => {
+    const list = [...(sponsors || [])];
+    const seenExcessTickets = new Set();
+    list.forEach((s) => {
+      if (s.id && typeof s.id === "string" && s.id.startsWith("reg_excess_")) {
+        seenExcessTickets.add(s.id.replace("reg_excess_", ""));
+      }
+      if (s.source === "registration_excess" || s.source === "เงินสนับสนุนพร้อมลงทะเบียน") {
+        if (s.ticketNo) seenExcessTickets.add(s.ticketNo);
+      }
+    });
+
+    (registrations || []).forEach((r) => {
+      const paid = Number(r.paidAmount || 0);
+      const fee = Number(r.amount || 500);
+      if (paid > fee && !seenExcessTickets.has(r.ticketNo)) {
+        seenExcessTickets.add(r.ticketNo);
+        list.unshift({
+          id: `reg_excess_${r.ticketNo}`,
+          ticketNo: r.ticketNo,
+          name: r.name,
+          nickname: r.nickname || "",
+          phone: r.phone || "",
+          club: r.club || "สงสพัท",
+          organization: r.regType === "member" ? `สมาชิก${r.club || "สงสพัท"}` : (r.club || "แขกผู้มีเกียรติ"),
+          sponsorType: "cash",
+          amount: paid - fee,
+          itemName: "",
+          photoUrl: r.photoUrl || null,
+          source: "เงินสนับสนุนพร้อมลงทะเบียน"
+        });
+      }
+    });
+
+    return list;
+  }, [sponsors, registrations]);
+
   const selectedEditorItem = useMemo(() => {
     if (!selectedItemId) return null;
     return (seatingPlan.items || []).find((it) => it.id === selectedItemId) || null;
@@ -489,6 +549,11 @@ export default function TableSeatingHub({
     if (!activeTableModalId) return null;
     return (seatingPlan.items || []).find((it) => it.id === activeTableModalId && it.type === "table") || null;
   }, [activeTableModalId, seatingPlan.items]);
+
+  const activeShowcaseModalItem = useMemo(() => {
+    if (!activeShowcaseItemId) return null;
+    return (seatingPlan.items || []).find((it) => it.id === activeShowcaseItemId && isShowcaseItem(it)) || null;
+  }, [activeShowcaseItemId, seatingPlan.items]);
 
   // Helper to commit plan update
   const commitPlan = (updater) => {
@@ -540,7 +605,8 @@ export default function TableSeatingHub({
     }
 
     const isBookable = Boolean(paletteDef.isBookable || paletteDef.baseType === "table");
-    const resolvedType = isBookable ? "table" : (paletteDef.baseType || "custom");
+    const isShowcase = Boolean(paletteDef.isShowcase || paletteDef.baseType === "showcase");
+    const resolvedType = isBookable ? "table" : isShowcase ? "showcase" : (paletteDef.baseType || "custom");
     const id = `${resolvedType}_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`;
 
     let newItem = {
@@ -548,8 +614,8 @@ export default function TableSeatingHub({
       type: resolvedType,
       paletteId: paletteDef.id,
       label: paletteDef.label,
-      emoji: paletteDef.emoji || "🛍️",
-      colorTheme: paletteDef.colorTheme || "violet",
+      emoji: paletteDef.emoji || (isShowcase ? (paletteDef.showcaseMode === "sponsor" ? "👑" : "🛍️") : "🛍️"),
+      colorTheme: paletteDef.colorTheme || (isShowcase && paletteDef.showcaseMode === "sponsor" ? "amber" : "violet"),
       x: cellX,
       y: cellY,
       w,
@@ -567,6 +633,17 @@ export default function TableSeatingHub({
         shape: isStandardTable ? newTableShape : (paletteDef.defaultShape || newTableShape),
         isOpen: true
       };
+    } else if (isShowcase) {
+      const mode = paletteDef.showcaseMode === "sponsor" ? "sponsor" : "member";
+      const slotsPerCell = Math.max(1, Math.min(10, Number(paletteDef.slotsPerCell) || (mode === "sponsor" ? 2 : 4)));
+      newItem = {
+        ...newItem,
+        isShowcase: true,
+        showcaseMode: mode,
+        slotsPerCell,
+        code: (paletteDef.defaultCode || (mode === "sponsor" ? "V" : "M")).trim().toUpperCase(),
+        isOpen: true
+      };
     }
 
     commitPlan((prev) => ({
@@ -578,7 +655,7 @@ export default function TableSeatingHub({
     showToast(`วาง "${newItem.label}" ลงผังเรียบร้อย`);
   };
 
-  // Add a custom palette item type (e.g. "โต๊ะโชว์สินค้า", "ซุ้มถ่ายรูป", "โต๊ะ VIP")
+  // Add a custom palette item type (e.g. "โต๊ะโชว์สินค้า VIP", "โต๊ะโชว์สินค้าสมาชิก", "ซุ้มถ่ายรูป", "โต๊ะ VIP")
   const handleAddPaletteType = (e) => {
     if (e) e.preventDefault();
     if (!isOwner) return;
@@ -590,14 +667,24 @@ export default function TableSeatingHub({
 
     const newDef = {
       id: `custom_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
-      baseType: newTypeIsBookable ? "table" : "custom",
+      baseType: newTypeIsBookable ? "table" : newTypeIsShowcase ? "showcase" : "custom",
       label: cleanLabel,
       emoji: newTypeEmoji || "🛍️",
       colorTheme: newTypeColor || "violet",
       isBookable: newTypeIsBookable,
-      defaultW: Math.max(1, Math.min(6, Number(newTypeW) || 2)),
-      defaultH: Math.max(1, Math.min(6, Number(newTypeH) || 1)),
-      ...(newTypeIsBookable ? { defaultCapacity: Math.max(2, Math.min(20, Number(newTypeCapacity) || 8)), defaultShape: "round" } : {})
+      isShowcase: newTypeIsShowcase,
+      defaultW: Math.max(1, Math.min(12, Number(newTypeW) || 2)),
+      defaultH: Math.max(1, Math.min(12, Number(newTypeH) || 1)),
+      ...(newTypeIsBookable
+        ? { defaultCapacity: Math.max(2, Math.min(20, Number(newTypeCapacity) || 8)), defaultShape: "round" }
+        : {}),
+      ...(newTypeIsShowcase
+        ? {
+            showcaseMode: newTypeShowcaseMode === "sponsor" ? "sponsor" : "member",
+            slotsPerCell: Math.max(1, Math.min(10, Number(newTypeSlotsPerCell) || (newTypeShowcaseMode === "sponsor" ? 2 : 4))),
+            defaultCode: (newTypeCode || (newTypeShowcaseMode === "sponsor" ? "V" : "M")).trim().toUpperCase().slice(0, 4)
+          }
+        : {})
     };
 
     commitPlan((prev) => ({
@@ -751,14 +838,21 @@ export default function TableSeatingHub({
   const handleDeleteItemById = (targetItem) => {
     if (!isOwner || !targetItem) return;
     const occ = targetItem.type === "table" ? getTableOccupancyMap(seatingPlan, targetItem.id, regMap) : null;
+    const showcaseOcc = isShowcaseItem(targetItem) ? getShowcaseOccupancyMap(seatingPlan, targetItem.id) : null;
     if (occ && occ.size > 0) {
       if (!window.confirm(`"${targetItem.label}" มีผู้จองที่นั่งอยู่แล้ว ${occ.size} ท่าน ยืนยันลบโต๊ะนี้และยกเลิกการจองของโต๊ะนี้ใช่หรือไม่?`)) {
+        return;
+      }
+    }
+    if (showcaseOcc && showcaseOcc.size > 0) {
+      if (!window.confirm(`"${targetItem.label}" มีการจองล็อกสินค้าอยู่แล้ว ${showcaseOcc.size} ล็อก ยืนยันลบโต๊ะนี้ใช่หรือไม่?`)) {
         return;
       }
     }
 
     commitPlan((prev) => {
       const nextAssignments = { ...(prev.assignments || {}) };
+      const nextShowcaseAssignments = { ...(prev.showcaseAssignments || {}) };
       if (targetItem.type === "table") {
         Object.keys(nextAssignments).forEach((k) => {
           if (k.startsWith(`${targetItem.id}:`)) {
@@ -766,10 +860,18 @@ export default function TableSeatingHub({
           }
         });
       }
+      if (isShowcaseItem(targetItem)) {
+        Object.keys(nextShowcaseAssignments).forEach((k) => {
+          if (k.startsWith(`${targetItem.id}:`)) {
+            delete nextShowcaseAssignments[k];
+          }
+        });
+      }
       return {
         ...prev,
         items: prev.items.filter((it) => it.id !== targetItem.id),
-        assignments: nextAssignments
+        assignments: nextAssignments,
+        showcaseAssignments: nextShowcaseAssignments
       };
     });
     if (selectedItemId === targetItem.id) setSelectedItemId(null);
@@ -1314,6 +1416,69 @@ export default function TableSeatingHub({
     }
   };
 
+  // =====================================================================
+  // PRODUCT SHOWCASE LOCK BOOKING HANDLERS (VIP Sponsor & Member Tables)
+  // =====================================================================
+  const handleAssignShowcaseSlot = (item, slotNo, candidate, brandProduct = "") => {
+    if (!item || !candidate) return;
+    if (item.isOpen === false) {
+      showToast(`${item.label} ถูกปิดรับจองล็อกสินค้าโดยเจ้าของแอป`, "rose");
+      return;
+    }
+    const mode = item.showcaseMode === "sponsor" ? "sponsor" : "member";
+    const key = `${item.id}:${slotNo}`;
+    const slotCode = getShowcaseSlotCode(item, slotNo);
+    const cleanBrand =
+      String(brandProduct || "").trim() ||
+      (mode === "sponsor" ? candidate.itemName || candidate.organization || "" : "");
+
+    commitPlan((prev) => ({
+      ...prev,
+      showcaseAssignments: {
+        ...(prev.showcaseAssignments || {}),
+        [key]: {
+          refType: mode,
+          refId: candidate.id || candidate.ticketNo || `${candidate.name}_${Date.now()}`,
+          ticketNo: candidate.ticketNo || "",
+          name: candidate.name || "",
+          nickname: candidate.nickname || "",
+          organization: candidate.organization || candidate.club || "",
+          brandProduct: cleanBrand,
+          sponsorType: candidate.sponsorType || "",
+          sponsorAmount: Number(candidate.amount || 0),
+          photoUrl: candidate.photoUrl || (candidate.ticketNo ? regMap.get(candidate.ticketNo)?.photoUrl || null : null),
+          assignedAt: new Date().toISOString(),
+          assignedBy: currentUser?.name || "Admin"
+        }
+      }
+    }));
+
+    onPlayEffect?.("fanfare");
+    setPickingShowcaseSlotNo(null);
+    setSelectedShowcaseCandidate(null);
+    setShowcaseBrandInput("");
+    setShowcaseSearch("");
+    showToast(
+      `✅ จองล็อก ${slotCode} (${item.label}) ให้คุณ ${candidate.nickname || candidate.name}${cleanBrand ? ` • ${cleanBrand}` : ""} เรียบร้อย!`
+    );
+  };
+
+  const handleUnassignShowcaseSlot = (item, slotNo, ownerLabel = "") => {
+    if (!item) return;
+    const key = `${item.id}:${slotNo}`;
+    const slotCode = getShowcaseSlotCode(item, slotNo);
+    commitPlan((prev) => {
+      const next = { ...(prev.showcaseAssignments || {}) };
+      delete next[key];
+      return {
+        ...prev,
+        showcaseAssignments: next
+      };
+    });
+    onPlayEffect?.("tick");
+    showToast(`ยกเลิกการจองล็อก ${slotCode}${ownerLabel ? ` (${ownerLabel})` : ""} เรียบร้อย`, "amber");
+  };
+
   // Click handler on placed item
   const handleItemClick = (item, e) => {
     e.stopPropagation();
@@ -1322,6 +1487,20 @@ export default function TableSeatingHub({
         setTapMoveItemId(null);
       }
       setSelectedItemId(item.id);
+      return;
+    }
+
+    // Booking Mode: clicking a Product Showcase Table opens Showcase Lock Picker Modal!
+    if (isShowcaseItem(item)) {
+      if (item.isOpen === false) {
+        showToast(`${item.label} ถูกปิดรับจองล็อกสินค้าโดยเจ้าของแอป`, "amber");
+        return;
+      }
+      setActiveShowcaseItemId(item.id);
+      setPickingShowcaseSlotNo(null);
+      setSelectedShowcaseCandidate(null);
+      setShowcaseBrandInput("");
+      setShowcaseSearch("");
       return;
     }
 
@@ -1840,7 +2019,131 @@ export default function TableSeatingHub({
                     );
                   }
 
-                  // 4.5 CUSTOM NON-BOOKABLE ITEM (e.g. โต๊ะโชว์สินค้า, บูธสปอนเซอร์, ซุ้มถ่ายรูป)
+                  // 4.2 PRODUCT SHOWCASE TABLE (VIP Sponsor / Member Display Table with per-cell lock grid!)
+                  if (isShowcaseItem(item)) {
+                    const isSponsorMode = item.showcaseMode === "sponsor";
+                    const slotsPerCell = getShowcaseSlotsPerCell(item);
+                    const totalSlots = getShowcaseTotalSlots(item);
+                    const showcaseOccMap = getShowcaseOccupancyMap(seatingPlan, item.id);
+                    const bookedSlots = showcaseOccMap.size;
+                    const isClosedShowcase = item.isOpen === false;
+                    const isFullShowcase = bookedSlots >= totalSlots;
+                    const cellCols = Math.max(1, Number(item.w) || 1);
+                    const cellRows = Math.max(1, Number(item.h) || 1);
+                    const totalCells = cellCols * cellRows;
+
+                    const showcaseBorder = isSelectedEditor
+                      ? "border-amber-500 ring-4 ring-amber-400/30"
+                      : isClosedShowcase
+                      ? "border-slate-300 bg-slate-100/90 opacity-75"
+                      : isSponsorMode
+                      ? "border-amber-400 bg-gradient-to-br from-amber-50 via-yellow-50 to-amber-100/90 hover:border-amber-500 hover:shadow-md"
+                      : "border-violet-400 bg-gradient-to-br from-violet-50 via-fuchsia-50 to-purple-100/90 hover:border-violet-500 hover:shadow-md";
+
+                    return (
+                      <div
+                        key={item.id}
+                        style={commonStyle}
+                        {...dragProps}
+                        onClick={(e) => handleItemClick(item, e)}
+                        title={`${item.label} (${bookedSlots}/${totalSlots} ล็อก • ${slotsPerCell} ล็อก/ช่อง • ${
+                          isSponsorMode ? "เฉพาะผู้สนับสนุน VIP" : "สมาชิกทุกคน"
+                        })`}
+                        className={`relative min-w-0 min-h-0 rounded-xl border-2 p-1 flex flex-col justify-between transition-all select-none ${showcaseBorder} ${
+                          isEditMode ? "cursor-grab" : isClosedShowcase ? "cursor-not-allowed" : "cursor-pointer"
+                        }`}
+                      >
+                        {renderQuickDeleteBtn(item)}
+
+                        {/* Showcase Header */}
+                        <div className="flex items-center justify-between gap-1 px-0.5 leading-none shrink-0">
+                          <div className="flex items-center space-x-1 min-w-0">
+                            <span className="text-[11px] leading-none shrink-0">
+                              {item.emoji || (isSponsorMode ? "👑" : "🛍️")}
+                            </span>
+                            <span
+                              className={`text-[9px] font-black truncate ${
+                                isSponsorMode ? "text-amber-950" : "text-violet-950"
+                              }`}
+                            >
+                              {item.label}
+                            </span>
+                          </div>
+                          <span
+                            className={`px-1 py-0.5 rounded-full text-[8px] font-mono font-black shrink-0 leading-none ${
+                              isClosedShowcase
+                                ? "bg-slate-200 text-slate-600"
+                                : isFullShowcase
+                                ? "bg-rose-500 text-white"
+                                : isSponsorMode
+                                ? "bg-amber-500 text-slate-950"
+                                : "bg-violet-600 text-white"
+                            }`}
+                          >
+                            {bookedSlots}/{totalSlots}
+                          </span>
+                        </div>
+
+                        {/* Divided Grid Cells -> Sub-Lock Slots inside each cell! */}
+                        <div
+                          className="flex-1 min-h-0 grid gap-0.5 mt-0.5"
+                          style={{
+                            gridTemplateColumns: `repeat(${cellCols}, minmax(0, 1fr))`,
+                            gridTemplateRows: `repeat(${cellRows}, minmax(0, 1fr))`
+                          }}
+                        >
+                          {Array.from({ length: totalCells }, (_, cIdx) => {
+                            const subCols = slotsPerCell <= 2 ? slotsPerCell : slotsPerCell <= 4 ? 2 : 3;
+                            return (
+                              <div
+                                key={cIdx}
+                                className={`rounded-md border p-0.5 grid gap-0.5 min-w-0 min-h-0 ${
+                                  isSponsorMode
+                                    ? "bg-white/75 border-amber-200/90"
+                                    : "bg-white/75 border-violet-200/90"
+                                }`}
+                                style={{
+                                  gridTemplateColumns: `repeat(${subCols}, minmax(0, 1fr))`
+                                }}
+                              >
+                                {Array.from({ length: slotsPerCell }, (_, sIdx) => {
+                                  const slotNo = cIdx * slotsPerCell + sIdx + 1;
+                                  const occ = showcaseOccMap.get(slotNo);
+                                  const slotCode = getShowcaseSlotCode(item, slotNo);
+                                  const shortLabel = occ
+                                    ? getInitials(occ.name, occ.nickname)
+                                    : slotCode;
+                                  return (
+                                    <div
+                                      key={slotNo}
+                                      title={
+                                        occ
+                                          ? `${slotCode}: ${occ.name}${occ.nickname ? ` (${occ.nickname})` : ""}${
+                                              occ.brandProduct ? ` • ${occ.brandProduct}` : ""
+                                            }`
+                                          : `${slotCode}: ล็อกว่าง`
+                                      }
+                                      className={`rounded text-center flex items-center justify-center overflow-hidden px-0.5 font-bold leading-none ${
+                                        occ
+                                          ? isSponsorMode
+                                            ? "bg-amber-500 text-slate-950 text-[7px] font-black shadow-2xs"
+                                            : "bg-violet-600 text-white text-[7px] font-black shadow-2xs"
+                                          : "border border-dashed border-slate-300 text-slate-400 text-[6.5px] font-mono bg-slate-50/70"
+                                      }`}
+                                    >
+                                      <span className="truncate">{shortLabel}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // 4.5 CUSTOM NON-BOOKABLE ITEM (e.g. บูธสปอนเซอร์, ซุ้มถ่ายรูป)
                   if (item.type !== "table") {
                     const theme = CUSTOM_COLOR_THEMES[item.colorTheme] || CUSTOM_COLOR_THEMES.violet;
                     const isVertical = item.h > item.w && item.w === 1;
@@ -3222,8 +3525,8 @@ export default function TableSeatingHub({
                     />
                   </div>
 
-                  {/* Custom Item Appearance (Emoji & Color) */}
-                  {selectedEditorItem.type === "custom" && (
+                  {/* Custom / Showcase Item Appearance (Emoji & Color) */}
+                  {(selectedEditorItem.type === "custom" || isShowcaseItem(selectedEditorItem)) && (
                     <div className="space-y-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
                       <div>
                         <label className="block text-[10px] font-bold text-slate-500 mb-1">สัญลักษณ์</label>
@@ -3262,6 +3565,165 @@ export default function TableSeatingHub({
                           ))}
                         </div>
                       </div>
+                    </div>
+                  )}
+
+                  {/* Product Showcase Lock Settings (Works on ANY existing non-dining table!) */}
+                  {selectedEditorItem.type !== "table" && (
+                    <div className="p-3 rounded-xl bg-gradient-to-br from-violet-50/80 via-white to-amber-50/70 border border-violet-200 space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <div className="text-xs font-black text-slate-900">
+                            🛍️ ระบบแบ่งล็อกโต๊ะโชว์สินค้า
+                          </div>
+                          <div className="text-[10px] text-slate-500">
+                            เปิดเพื่อแบ่งเป็นล็อกให้ผู้สนับสนุนหรือสมาชิกจองวางสินค้าได้
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextOn = !isShowcaseItem(selectedEditorItem);
+                            handleUpdateSelectedItem(
+                              nextOn
+                                ? {
+                                    isShowcase: true,
+                                    showcaseMode: selectedEditorItem.showcaseMode || "member",
+                                    slotsPerCell: getShowcaseSlotsPerCell(selectedEditorItem),
+                                    code: selectedEditorItem.code || (selectedEditorItem.showcaseMode === "sponsor" ? "V" : "M"),
+                                    isOpen: true
+                                  }
+                                : { isShowcase: false, type: selectedEditorItem.type === "showcase" ? "custom" : selectedEditorItem.type }
+                            );
+                          }}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold cursor-pointer shrink-0 ${
+                            isShowcaseItem(selectedEditorItem)
+                              ? "bg-emerald-600 text-white shadow-xs"
+                              : "bg-slate-200 text-slate-700 hover:bg-slate-300"
+                          }`}
+                        >
+                          {isShowcaseItem(selectedEditorItem) ? "เปิดแบ่งล็อกอยู่" : "เปิดแบ่งล็อก"}
+                        </button>
+                      </div>
+
+                      {isShowcaseItem(selectedEditorItem) && (
+                        <div className="pt-2 border-t border-violet-200/70 space-y-2.5">
+                          {/* Eligible Exhibitor Mode: VIP Sponsor vs Member */}
+                          <div>
+                            <label className="block text-[10px] font-extrabold text-slate-600 mb-1">
+                              กลุ่มผู้มีสิทธิ์จองล็อกสินค้าโต๊ะนี้:
+                            </label>
+                            <div className="grid grid-cols-2 gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleUpdateSelectedItem({
+                                    showcaseMode: "sponsor",
+                                    code: "V",
+                                    slotsPerCell: selectedEditorItem.slotsPerCell || 2,
+                                    emoji: "👑",
+                                    colorTheme: "amber"
+                                  })
+                                }
+                                className={`py-2 px-2 rounded-xl border-2 text-[11px] font-extrabold text-center cursor-pointer transition-all ${
+                                  selectedEditorItem.showcaseMode === "sponsor"
+                                    ? "border-amber-500 bg-amber-100 text-amber-950 shadow-xs"
+                                    : "border-slate-200 bg-white text-slate-600 hover:bg-amber-50"
+                                }`}
+                              >
+                                👑 VIP ผู้สนับสนุน
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleUpdateSelectedItem({
+                                    showcaseMode: "member",
+                                    code: "M",
+                                    slotsPerCell: selectedEditorItem.slotsPerCell || 4,
+                                    emoji: "🛍️",
+                                    colorTheme: "violet"
+                                  })
+                                }
+                                className={`py-2 px-2 rounded-xl border-2 text-[11px] font-extrabold text-center cursor-pointer transition-all ${
+                                  selectedEditorItem.showcaseMode !== "sponsor"
+                                    ? "border-violet-500 bg-violet-100 text-violet-950 shadow-xs"
+                                    : "border-slate-200 bg-white text-slate-600 hover:bg-violet-50"
+                                }`}
+                              >
+                                🛍️ สมาชิกทุกคน
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Slots per 1 Grid Cell (1, 2, 3, 4, 6 or custom) */}
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-[10px] font-extrabold text-slate-600">
+                                จำนวนล็อกต่อ 1 ช่องตาราง (เช่น VIP=2, สมาชิก=4):
+                              </label>
+                              <span className="text-[10px] font-mono font-black text-indigo-700">
+                                รวม {getShowcaseTotalSlots(selectedEditorItem)} ล็อก
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-1.5">
+                              <div className="flex items-center gap-1">
+                                {[1, 2, 3, 4, 6].map((cnt) => (
+                                  <button
+                                    key={cnt}
+                                    type="button"
+                                    onClick={() => handleUpdateSelectedItem({ slotsPerCell: cnt })}
+                                    className={`px-2 py-1 rounded-lg text-xs font-mono font-black border cursor-pointer ${
+                                      getShowcaseSlotsPerCell(selectedEditorItem) === cnt
+                                        ? "bg-indigo-600 border-indigo-600 text-white"
+                                        : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                                    }`}
+                                  >
+                                    {cnt}
+                                  </button>
+                                ))}
+                              </div>
+                              <div className="flex items-center space-x-1">
+                                <span className="text-[10px] font-bold text-slate-500">รหัส:</span>
+                                <input
+                                  type="text"
+                                  value={selectedEditorItem.code || (selectedEditorItem.showcaseMode === "sponsor" ? "V" : "M")}
+                                  onChange={(e) =>
+                                    handleUpdateSelectedItem({ code: e.target.value.toUpperCase().slice(0, 4) })
+                                  }
+                                  className="w-12 px-1.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-mono font-black text-center text-slate-900"
+                                />
+                              </div>
+                            </div>
+                            <div className="mt-1.5 text-[10px] text-slate-600 bg-white/80 rounded-lg px-2 py-1 border border-slate-200/80">
+                              ขนาดโต๊ะ <strong>{selectedEditorItem.w || 1} × {selectedEditorItem.h || 1} ช่อง</strong> ×{" "}
+                              <strong>{getShowcaseSlotsPerCell(selectedEditorItem)} ล็อก/ช่อง</strong> ={" "}
+                              <strong className="text-indigo-700">
+                                {getShowcaseTotalSlots(selectedEditorItem)} ล็อก (แบรนด์/ชิ้น)
+                              </strong>{" "}
+                              ({getShowcaseSlotCode(selectedEditorItem, 1)}–
+                              {getShowcaseSlotCode(selectedEditorItem, getShowcaseTotalSlots(selectedEditorItem))})
+                            </div>
+                          </div>
+
+                          {/* Open/Close Lock Booking Toggle */}
+                          <div className="flex items-center justify-between pt-1">
+                            <span className="text-[11px] font-bold text-slate-700">สถานะรับจองล็อกสินค้า:</span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleUpdateSelectedItem({ isOpen: selectedEditorItem.isOpen === false })
+                              }
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold cursor-pointer ${
+                                selectedEditorItem.isOpen !== false
+                                  ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                                  : "bg-slate-200 text-slate-600"
+                              }`}
+                            >
+                              {selectedEditorItem.isOpen !== false ? "เปิดรับจองอยู่" : "ปิดรับจอง"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -4145,6 +4607,80 @@ export default function TableSeatingHub({
                   );
                 })
               )}
+
+              {/* Product Showcase Tables Summary inside Directory Modal */}
+              {allShowcaseTables.length > 0 && (
+                <>
+                  <div className="col-span-full pt-2 border-t border-slate-200 flex items-center justify-between">
+                    <span className="text-xs sm:text-sm font-black text-slate-800">
+                      🛍️ สรุปการจองล็อกโต๊ะโชว์สินค้า ({allShowcaseTables.length} โต๊ะ)
+                    </span>
+                  </div>
+                  {allShowcaseTables.map((st) => {
+                    const totalSlots = getShowcaseTotalSlots(st);
+                    const occMap = getShowcaseOccupancyMap(seatingPlan, st.id);
+                    const isSponsorMode = st.showcaseMode === "sponsor";
+                    return (
+                      <div
+                        key={st.id}
+                        className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden"
+                      >
+                        <div
+                          className={`px-4 py-2.5 text-white flex items-center justify-between ${
+                            isSponsorMode ? "bg-amber-600" : "bg-violet-700"
+                          }`}
+                        >
+                          <span className="font-black text-sm">
+                            {st.emoji || (isSponsorMode ? "👑" : "🛍️")} {st.label}
+                          </span>
+                          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-white/20">
+                            {occMap.size}/{totalSlots} ล็อก
+                          </span>
+                        </div>
+                        <div className="divide-y divide-slate-100">
+                          {Array.from({ length: totalSlots }, (_, idx) => {
+                            const slotNo = idx + 1;
+                            const occ = occMap.get(slotNo);
+                            const slotCode = getShowcaseSlotCode(st, slotNo);
+                            return (
+                              <div
+                                key={slotNo}
+                                className="px-3.5 py-2 flex items-center justify-between text-xs"
+                              >
+                                <div className="flex items-center space-x-2.5 min-w-0">
+                                  <span className="font-mono font-black text-[11px] w-9 text-slate-500 shrink-0">
+                                    {slotCode}
+                                  </span>
+                                  {occ ? (
+                                    <div className="min-w-0">
+                                      <span className="font-bold text-slate-900 truncate block">
+                                        {occ.name}
+                                        {occ.nickname ? ` (${occ.nickname})` : ""}
+                                      </span>
+                                      {occ.brandProduct && (
+                                        <span className="text-[10px] text-indigo-600 font-bold truncate block">
+                                          สินค้า/แบรนด์: {occ.brandProduct}
+                                        </span>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="text-slate-400 italic">- ล็อกว่าง -</span>
+                                  )}
+                                </div>
+                                {occ && (
+                                  <span className="text-[10px] font-bold text-slate-400 shrink-0 ml-2">
+                                    {occ.refType === "sponsor" ? "👑 VIP" : occ.ticketNo || "สมาชิก"}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -4183,7 +4719,7 @@ export default function TableSeatingHub({
               </button>
             </div>
 
-            <form onSubmit={handleAddPaletteType} className="p-5 space-y-4">
+            <form onSubmit={handleAddPaletteType} className="p-5 space-y-4 max-h-[82vh] overflow-y-auto">
               {/* Quick Presets */}
               <div>
                 <div className="text-[11px] font-extrabold text-slate-500 mb-1.5">
@@ -4199,6 +4735,12 @@ export default function TableSeatingHub({
                         setNewTypeEmoji(preset.emoji);
                         setNewTypeColor(preset.colorTheme);
                         setNewTypeIsBookable(Boolean(preset.isBookable));
+                        setNewTypeIsShowcase(Boolean(preset.isShowcase));
+                        if (preset.isShowcase) {
+                          setNewTypeShowcaseMode(preset.showcaseMode || "member");
+                          setNewTypeSlotsPerCell(preset.slotsPerCell || (preset.showcaseMode === "sponsor" ? 2 : 4));
+                          setNewTypeCode(preset.defaultCode || (preset.showcaseMode === "sponsor" ? "V" : "M"));
+                        }
                         setNewTypeW(preset.defaultW);
                         setNewTypeH(preset.defaultH);
                         if (preset.defaultCapacity) setNewTypeCapacity(preset.defaultCapacity);
@@ -4222,39 +4764,60 @@ export default function TableSeatingHub({
                   required
                   value={newTypeLabel}
                   onChange={(e) => setNewTypeLabel(e.target.value)}
-                  placeholder="เช่น โต๊ะโชว์สินค้า, โต๊ะลงทะเบียน VIP, ซุ้มถ่ายรูป..."
+                  placeholder="เช่น โต๊ะโชว์สินค้า VIP, โต๊ะโชว์สินค้าสมาชิก, ซุ้มถ่ายรูป..."
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-violet-500"
                 />
               </div>
 
-              {/* Type Mode: Display/Zone vs Bookable Seating Table */}
+              {/* Type Mode: Showcase Lock Table vs Display/Zone vs Bookable Seating Table */}
               <div>
                 <label className="block text-xs font-extrabold text-slate-700 mb-1.5">
                   ลักษณะการใช้งาน
                 </label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => {
                       setNewTypeIsBookable(false);
+                      setNewTypeIsShowcase(true);
+                      setNewTypeW(4);
+                      setNewTypeH(1);
+                    }}
+                    className={`p-2.5 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                      newTypeIsShowcase
+                        ? "border-amber-500 bg-amber-50 text-amber-950"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className="text-xs font-black">🛍️ โต๊ะโชว์สินค้า (แบ่งล็อก)</div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">
+                      แบ่งล็อกต่อช่องให้ VIP ผู้สนับสนุน หรือสมาชิกจองวางสินค้าได้
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewTypeIsBookable(false);
+                      setNewTypeIsShowcase(false);
                       setNewTypeW(2);
                       setNewTypeH(1);
                     }}
                     className={`p-2.5 rounded-xl border-2 text-left transition-all cursor-pointer ${
-                      !newTypeIsBookable
+                      !newTypeIsBookable && !newTypeIsShowcase
                         ? "border-violet-500 bg-violet-50 text-violet-950"
                         : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                     }`}
                   >
-                    <div className="text-xs font-black">🛍️ โต๊ะวางของ / โซนตกแต่ง</div>
+                    <div className="text-xs font-black">📍 โซนตกแต่งทั่วไป</div>
                     <div className="text-[10px] text-slate-500 mt-0.5">
-                      วางบอกตำแหน่ง เช่น โต๊ะโชว์สินค้า บูธ ซุ้มถ่ายรูป
+                      วางบอกตำแหน่ง เช่น บูธ ซุ้มถ่ายรูป บาร์เครื่องดื่ม
                     </div>
                   </button>
                   <button
                     type="button"
                     onClick={() => {
                       setNewTypeIsBookable(true);
+                      setNewTypeIsShowcase(false);
                       setNewTypeW(2);
                       setNewTypeH(2);
                     }}
@@ -4264,13 +4827,88 @@ export default function TableSeatingHub({
                         : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                     }`}
                   >
-                    <div className="text-xs font-black">🪑 โต๊ะนั่งแขก (จองเก้าอี้ได้)</div>
+                    <div className="text-xs font-black">🪑 โต๊ะนั่งแขก (จองเก้าอี้)</div>
                     <div className="text-[10px] text-slate-500 mt-0.5">
                       กดเข้าไปเลือกเก้าอี้รายตัวได้ เช่น โต๊ะ VIP
                     </div>
                   </button>
                 </div>
               </div>
+
+              {/* Showcase Lock Config inside Add-Type Modal */}
+              {newTypeIsShowcase && (
+                <div className="p-3 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-2.5">
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewTypeShowcaseMode("sponsor");
+                        setNewTypeSlotsPerCell(2);
+                        setNewTypeCode("V");
+                        setNewTypeEmoji("👑");
+                        setNewTypeColor("amber");
+                      }}
+                      className={`py-2 px-2.5 rounded-xl border-2 text-xs font-black cursor-pointer ${
+                        newTypeShowcaseMode === "sponsor"
+                          ? "border-amber-500 bg-amber-100 text-amber-950"
+                          : "border-slate-200 bg-white text-slate-600"
+                      }`}
+                    >
+                      👑 VIP ผู้สนับสนุน (แนะนำ 2 ล็อก/ช่อง)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewTypeShowcaseMode("member");
+                        setNewTypeSlotsPerCell(4);
+                        setNewTypeCode("M");
+                        setNewTypeEmoji("🛍️");
+                        setNewTypeColor("violet");
+                      }}
+                      className={`py-2 px-2.5 rounded-xl border-2 text-xs font-black cursor-pointer ${
+                        newTypeShowcaseMode === "member"
+                          ? "border-violet-500 bg-violet-100 text-violet-950"
+                          : "border-slate-200 bg-white text-slate-600"
+                      }`}
+                    >
+                      🛍️ สมาชิกทุกคน (แนะนำ 4 ล็อก/ช่อง)
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center space-x-1.5">
+                      <span className="font-bold text-slate-700">จำนวนล็อกต่อ 1 ช่อง:</span>
+                      {[1, 2, 3, 4, 6].map((cnt) => (
+                        <button
+                          key={cnt}
+                          type="button"
+                          onClick={() => setNewTypeSlotsPerCell(cnt)}
+                          className={`px-2 py-1 rounded-lg font-mono font-black border cursor-pointer ${
+                            newTypeSlotsPerCell === cnt
+                              ? "bg-indigo-600 border-indigo-600 text-white"
+                              : "bg-white border-slate-200 text-slate-700"
+                          }`}
+                        >
+                          {cnt}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <span className="font-bold text-slate-600">รหัส:</span>
+                      <input
+                        type="text"
+                        value={newTypeCode}
+                        onChange={(e) => setNewTypeCode(e.target.value.toUpperCase().slice(0, 4))}
+                        className="w-12 px-1.5 py-1 rounded-lg bg-white border border-slate-200 font-mono font-black text-center text-xs"
+                      />
+                    </div>
+                  </div>
+                  <div className="text-[11px] font-bold text-indigo-800">
+                    ขนาด {newTypeW} × {newTypeH} ช่อง × {newTypeSlotsPerCell} ล็อก/ช่อง = รวม{" "}
+                    <span className="font-mono font-black">{newTypeW * newTypeH * newTypeSlotsPerCell}</span> ล็อกสินค้า
+                  </div>
+                </div>
+              )}
 
               {/* Emoji & Color Pickers */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -4323,7 +4961,7 @@ export default function TableSeatingHub({
                         onChange={(e) => setNewTypeW(Number(e.target.value))}
                         className="px-1.5 py-1 rounded-lg bg-white border border-slate-200 font-mono font-bold text-xs"
                       >
-                        {[1, 2, 3, 4, 5, 6].map((n) => (
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
                           <option key={n} value={n}>กว้าง {n}</option>
                         ))}
                       </select>
@@ -4333,7 +4971,7 @@ export default function TableSeatingHub({
                         onChange={(e) => setNewTypeH(Number(e.target.value))}
                         className="px-1.5 py-1 rounded-lg bg-white border border-slate-200 font-mono font-bold text-xs"
                       >
-                        {[1, 2, 3, 4, 5, 6].map((n) => (
+                        {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
                           <option key={n} value={n}>ลึก {n}</option>
                         ))}
                       </select>
@@ -5363,6 +6001,469 @@ export default function TableSeatingHub({
           </div>
         </div>
       )}
+
+      {/* ================================================================= */}
+      {/* PRODUCT SHOWCASE LOCK PICKER MODAL (VIP SPONSOR / MEMBER LOCKS)   */}
+      {/* ================================================================= */}
+      {activeShowcaseModalItem && (() => {
+        const item = activeShowcaseModalItem;
+        const isSponsorMode = item.showcaseMode === "sponsor";
+        const slotsPerCell = getShowcaseSlotsPerCell(item);
+        const totalSlots = getShowcaseTotalSlots(item);
+        const cellCols = Math.max(1, Number(item.w) || 1);
+        const cellRows = Math.max(1, Number(item.h) || 1);
+        const totalCells = cellCols * cellRows;
+        const occMap = getShowcaseOccupancyMap(seatingPlan, item.id);
+
+        // Build map of who already booked a lock on this showcase table (for helpful badge)
+        const bookedSlotByRef = new Map();
+        occMap.forEach((entry, sNo) => {
+          const refKey = entry.refId || entry.ticketNo || entry.name;
+          if (refKey) {
+            const existing = bookedSlotByRef.get(refKey) || [];
+            existing.push(getShowcaseSlotCode(item, sNo));
+            bookedSlotByRef.set(refKey, existing);
+          }
+        });
+
+        const q = showcaseSearch.trim().toLowerCase();
+        const rawPool = isSponsorMode ? consolidatedSponsorsList : sortedRegistrations;
+        const filteredPool = rawPool
+          .filter((p) => {
+            if (!q) return true;
+            return (
+              p.name?.toLowerCase().includes(q) ||
+              p.nickname?.toLowerCase().includes(q) ||
+              p.organization?.toLowerCase().includes(q) ||
+              p.itemName?.toLowerCase().includes(q) ||
+              p.ticketNo?.toLowerCase().includes(q) ||
+              p.club?.toLowerCase().includes(q) ||
+              p.phone?.includes(q)
+            );
+          })
+          .slice(0, 40);
+
+        return (
+          <div
+            className="fixed inset-0 z-[80] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-2.5 sm:p-5"
+            onClick={() => setActiveShowcaseItemId(null)}
+          >
+            <div
+              className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div
+                className={`px-5 py-4 text-white flex items-center justify-between gap-3 shrink-0 ${
+                  isSponsorMode
+                    ? "bg-gradient-to-r from-amber-600 via-amber-500 to-orange-500"
+                    : "bg-gradient-to-r from-violet-700 via-purple-700 to-indigo-700"
+                }`}
+              >
+                <div className="flex items-center space-x-3 min-w-0">
+                  <div className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center text-xl shrink-0">
+                    {item.emoji || (isSponsorMode ? "👑" : "🛍️")}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center flex-wrap gap-2">
+                      <h3 className="text-base sm:text-lg font-black leading-tight truncate">
+                        {item.label}
+                      </h3>
+                      <span className="px-2.5 py-0.5 rounded-full bg-white/20 text-xs font-mono font-black shrink-0">
+                        จองแล้ว {occMap.size}/{totalSlots} ล็อก
+                      </span>
+                    </div>
+                    <p className="text-[11px] sm:text-xs text-white/90 mt-0.5">
+                      {isSponsorMode
+                        ? `เฉพาะผู้สนับสนุน VIP (${consolidatedSponsorsList.length} ราย)`
+                        : `เปิดให้สมาชิก/ผู้ลงทะเบียนทุกคนจองได้ (${sortedRegistrations.length} ท่าน)`}{" "}
+                      • ขนาด {cellCols}×{cellRows} ช่อง ({slotsPerCell} ล็อก/ช่อง)
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveShowcaseItemId(null)}
+                  className="p-2 rounded-xl bg-white/15 hover:bg-white/25 text-white cursor-pointer shrink-0"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-5 bg-slate-50">
+                {/* Visual Table Lock Diagram (Divided by Grid Cell -> Sub-Locks!) */}
+                <div className="bg-white rounded-2xl border border-slate-200 p-3.5 space-y-2.5 shadow-2xs">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-black text-slate-800">
+                      แผนผังแบ่งล็อกบนโต๊ะ ({totalCells} ช่อง × {slotsPerCell} ล็อก/ช่อง = {totalSlots} ล็อก)
+                    </span>
+                    <span className="text-[11px] text-slate-500">แตะที่ล็อกว่างเพื่อจองทันที</span>
+                  </div>
+
+                  <div
+                    className="grid gap-2"
+                    style={{
+                      gridTemplateColumns: `repeat(${Math.min(cellCols, 4)}, minmax(0, 1fr))`
+                    }}
+                  >
+                    {Array.from({ length: totalCells }, (_, cIdx) => {
+                      const subCols = slotsPerCell <= 2 ? slotsPerCell : slotsPerCell <= 4 ? 2 : 3;
+                      return (
+                        <div
+                          key={cIdx}
+                          className={`rounded-xl border-2 p-2 space-y-1.5 ${
+                            isSponsorMode
+                              ? "border-amber-200 bg-amber-50/40"
+                              : "border-violet-200 bg-violet-50/40"
+                          }`}
+                        >
+                          <div className="text-[10px] font-extrabold text-slate-500 text-center">
+                            ช่องที่ {cIdx + 1}
+                          </div>
+                          <div
+                            className="grid gap-1.5"
+                            style={{ gridTemplateColumns: `repeat(${subCols}, minmax(0, 1fr))` }}
+                          >
+                            {Array.from({ length: slotsPerCell }, (_, sIdx) => {
+                              const slotNo = cIdx * slotsPerCell + sIdx + 1;
+                              const occ = occMap.get(slotNo);
+                              const slotCode = getShowcaseSlotCode(item, slotNo);
+                              const isPicking = pickingShowcaseSlotNo === slotNo;
+
+                              return (
+                                <button
+                                  key={slotNo}
+                                  type="button"
+                                  onClick={() => {
+                                    if (!occ) {
+                                      setPickingShowcaseSlotNo(isPicking ? null : slotNo);
+                                      setSelectedShowcaseCandidate(null);
+                                      setShowcaseBrandInput("");
+                                      setShowcaseSearch("");
+                                    }
+                                  }}
+                                  className={`p-1.5 rounded-lg border text-center transition-all flex flex-col items-center justify-center min-h-[44px] ${
+                                    occ
+                                      ? isSponsorMode
+                                        ? "bg-amber-500 border-amber-600 text-slate-950 shadow-xs"
+                                        : "bg-violet-600 border-violet-700 text-white shadow-xs"
+                                      : isPicking
+                                      ? "bg-emerald-50 border-emerald-500 ring-2 ring-emerald-300 text-emerald-900 cursor-pointer"
+                                      : "bg-white border-dashed border-slate-300 hover:border-emerald-500 hover:bg-emerald-50/60 text-slate-600 cursor-pointer"
+                                  }`}
+                                >
+                                  <span className="text-[10px] font-mono font-black leading-none">
+                                    {slotCode}
+                                  </span>
+                                  <span className="text-[9px] font-bold truncate max-w-full mt-0.5 leading-tight">
+                                    {occ ? getInitials(occ.name, occ.nickname) : "ว่าง"}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Active Lock Assignment Panel (Opens when clicking any empty lock) */}
+                {pickingShowcaseSlotNo !== null && (
+                  <div
+                    className={`rounded-2xl border-2 p-4 space-y-3 bg-white shadow-md ${
+                      isSponsorMode ? "border-amber-400" : "border-violet-400"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <div className="text-xs sm:text-sm font-black text-slate-900">
+                          จองล็อก {getShowcaseSlotCode(item, pickingShowcaseSlotNo)} —{" "}
+                          {isSponsorMode ? "เลือกจากรายชื่อผู้สนับสนุน (VIP)" : "เลือกจากรายชื่อสมาชิกผู้ลงทะเบียน"}
+                        </div>
+                        <div className="text-[11px] text-slate-500">
+                          เลือกรายชื่อเจ้าของล็อกและระบุชื่อสินค้า/แบรนด์ที่จะนำมาวางโชว์ (ถ้ามี)
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPickingShowcaseSlotNo(null);
+                          setSelectedShowcaseCandidate(null);
+                        }}
+                        className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 cursor-pointer"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Step A: Pick Candidate */}
+                    {selectedShowcaseCandidate ? (
+                      <div className="space-y-3">
+                        <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="text-xs sm:text-sm font-black text-slate-900 truncate">
+                              {selectedShowcaseCandidate.name}
+                              {selectedShowcaseCandidate.nickname
+                                ? ` (${selectedShowcaseCandidate.nickname})`
+                                : ""}
+                            </div>
+                            <div className="text-[11px] text-slate-600">
+                              {isSponsorMode
+                                ? `${selectedShowcaseCandidate.organization || "ผู้สนับสนุน"}${
+                                    selectedShowcaseCandidate.amount > 0
+                                      ? ` • สนับสนุน ${Number(selectedShowcaseCandidate.amount).toLocaleString()}฿`
+                                      : selectedShowcaseCandidate.itemName
+                                      ? ` • สนับสนุน: ${selectedShowcaseCandidate.itemName}`
+                                      : ""
+                                  }`
+                                : `${selectedShowcaseCandidate.ticketNo} • ${selectedShowcaseCandidate.club || "สงสพัท"}`}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedShowcaseCandidate(null)}
+                            className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-[11px] font-bold text-slate-600 cursor-pointer shrink-0"
+                          >
+                            เปลี่ยนชื่อ
+                          </button>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-extrabold text-slate-700 mb-1">
+                            ชื่อสินค้า / แบรนด์ที่จะนำมาวางโชว์ (ไม่บังคับ)
+                          </label>
+                          <input
+                            type="text"
+                            value={showcaseBrandInput}
+                            onChange={(e) => setShowcaseBrandInput(e.target.value)}
+                            placeholder="เช่น กาแฟคั่วบด, ขนมเปี๊ยะ, เครื่องสำอาง, โลโก้บริษัท..."
+                            className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPickingShowcaseSlotNo(null);
+                              setSelectedShowcaseCandidate(null);
+                            }}
+                            className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
+                          >
+                            ยกเลิก
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleAssignShowcaseSlot(
+                                item,
+                                pickingShowcaseSlotNo,
+                                selectedShowcaseCandidate,
+                                showcaseBrandInput
+                              )
+                            }
+                            className={`px-5 py-2 rounded-xl text-xs font-black shadow-sm flex items-center space-x-1.5 cursor-pointer ${
+                              isSponsorMode
+                                ? "bg-amber-500 hover:bg-amber-400 text-slate-950"
+                                : "bg-violet-600 hover:bg-violet-500 text-white"
+                            }`}
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>ยืนยันจองล็อก {getShowcaseSlotCode(item, pickingShowcaseSlotNo)}</span>
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="relative">
+                          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="text"
+                            value={showcaseSearch}
+                            onChange={(e) => setShowcaseSearch(e.target.value)}
+                            placeholder={
+                              isSponsorMode
+                                ? "ค้นหาชื่อผู้สนับสนุน, องค์กร, สินค้าที่สนับสนุน..."
+                                : "ค้นหาชื่อสมาชิก, ชื่อเล่น, เลขที่บัตร, เบอร์โทร..."
+                            }
+                            className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+
+                        <div className="max-h-52 overflow-y-auto space-y-1.5 pr-0.5">
+                          {filteredPool.length === 0 ? (
+                            <div className="text-center py-6 text-xs text-slate-400">
+                              {isSponsorMode
+                                ? "ยังไม่มีรายชื่อผู้สนับสนุนที่ตรงกับคำค้นหา"
+                                : "ไม่พบรายชื่อสมาชิกที่ค้นหา"}
+                            </div>
+                          ) : (
+                            filteredPool.map((p, pIdx) => {
+                              const refKey = p.id || p.ticketNo || p.name;
+                              const alreadySlots = bookedSlotByRef.get(refKey);
+                              return (
+                                <button
+                                  key={p.id || p.ticketNo || pIdx}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedShowcaseCandidate(p);
+                                    setShowcaseBrandInput(
+                                      isSponsorMode ? p.itemName || p.organization || "" : ""
+                                    );
+                                  }}
+                                  className="w-full px-3 py-2 rounded-xl bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 flex items-center justify-between text-left transition-colors cursor-pointer"
+                                >
+                                  <div className="min-w-0 pr-2">
+                                    <div className="text-xs font-extrabold text-slate-900 truncate flex items-center gap-1.5">
+                                      <span>
+                                        {p.name}
+                                        {p.nickname ? ` (${p.nickname})` : ""}
+                                      </span>
+                                      {alreadySlots && (
+                                        <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[9px] font-black shrink-0">
+                                          มีล็อกแล้ว: {alreadySlots.join(", ")}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-[10px] text-slate-500 truncate mt-0.5">
+                                      {isSponsorMode
+                                        ? `${p.organization || "ผู้สนับสนุน"}${
+                                            Number(p.amount) > 0
+                                              ? ` • เงินสด ${Number(p.amount).toLocaleString()}฿`
+                                              : p.itemName
+                                              ? ` • สิ่งของ: ${p.itemName}`
+                                              : ""
+                                          }`
+                                        : `${p.ticketNo} • ${p.club || "สงสพัท"}`}
+                                    </div>
+                                  </div>
+                                  <span className="px-2.5 py-1 rounded-lg bg-white border border-emerald-300 text-emerald-700 text-[10px] font-black shrink-0">
+                                    เลือก →
+                                  </span>
+                                </button>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Detailed List of All Locks on This Showcase Table */}
+                <div className="space-y-2">
+                  <div className="text-xs font-black text-slate-700">
+                    รายการล็อกสินค้าทั้งหมด ({occMap.size}/{totalSlots} ล็อก)
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {Array.from({ length: totalSlots }, (_, idx) => {
+                      const slotNo = idx + 1;
+                      const occ = occMap.get(slotNo);
+                      const slotCode = getShowcaseSlotCode(item, slotNo);
+                      const cellIndex = Math.floor(idx / slotsPerCell) + 1;
+                      const isPicking = pickingShowcaseSlotNo === slotNo;
+
+                      return (
+                        <div
+                          key={slotNo}
+                          className={`p-3 rounded-2xl border flex items-center justify-between gap-2 transition-all ${
+                            occ
+                              ? isSponsorMode
+                                ? "bg-amber-50/70 border-amber-300"
+                                : "bg-violet-50/70 border-violet-300"
+                              : isPicking
+                              ? "bg-emerald-50 border-emerald-400 ring-2 ring-emerald-300/40"
+                              : "bg-white border-slate-200"
+                          }`}
+                        >
+                          <div className="flex items-center space-x-2.5 min-w-0">
+                            <span
+                              className={`px-2 py-1 rounded-xl font-mono font-black text-xs shrink-0 ${
+                                occ
+                                  ? isSponsorMode
+                                    ? "bg-amber-500 text-slate-950"
+                                    : "bg-violet-600 text-white"
+                                  : "bg-slate-100 text-slate-500 border border-slate-200"
+                              }`}
+                            >
+                              {slotCode}
+                            </span>
+
+                            {occ ? (
+                              <div className="min-w-0">
+                                <div className="text-xs font-black text-slate-900 truncate">
+                                  {occ.name}
+                                  {occ.nickname ? ` (${occ.nickname})` : ""}
+                                </div>
+                                <div className="text-[10px] text-slate-600 truncate">
+                                  {occ.brandProduct ? (
+                                    <span className="font-bold text-indigo-700">
+                                      🛍️ {occ.brandProduct}
+                                    </span>
+                                  ) : (
+                                    <span>
+                                      {occ.refType === "sponsor"
+                                        ? `👑 ${occ.organization || "ผู้สนับสนุน VIP"}`
+                                        : `${occ.ticketNo} • ${occ.organization || "สมาชิก"}`}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="min-w-0">
+                                <div className="text-xs font-bold text-slate-400">ล็อกว่าง (ช่องที่ {cellIndex})</div>
+                                <div className="text-[10px] text-slate-400">
+                                  พร้อมสำหรับ{isSponsorMode ? "ผู้สนับสนุน VIP" : "สมาชิก"}วางสินค้า
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {occ ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (window.confirm(`ต้องการยกเลิกล็อก ${slotCode} ของ "${occ.name}" ใช่หรือไม่?`)) {
+                                  handleUnassignShowcaseSlot(item, slotNo, occ.nickname || occ.name);
+                                }
+                              }}
+                              title="ยกเลิกล็อกนี้"
+                              className="p-1.5 rounded-lg bg-white hover:bg-rose-50 border border-rose-200 text-rose-600 cursor-pointer shrink-0"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPickingShowcaseSlotNo(isPicking ? null : slotNo);
+                                setSelectedShowcaseCandidate(null);
+                                setShowcaseBrandInput("");
+                                setShowcaseSearch("");
+                              }}
+                              className={`px-3 py-1.5 rounded-xl text-[11px] font-extrabold shrink-0 cursor-pointer transition-all ${
+                                isPicking
+                                  ? "bg-slate-200 text-slate-700"
+                                  : isSponsorMode
+                                  ? "bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-xs"
+                                  : "bg-violet-600 hover:bg-violet-500 text-white shadow-xs"
+                              }`}
+                            >
+                              {isPicking ? "ปิด" : "+ จองล็อก"}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Proof Photo Lightbox */}
       {viewingProofUrl && (

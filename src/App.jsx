@@ -1119,6 +1119,7 @@ export default function App() {
             setEventConfig={setEventConfig}
             currentUser={currentUser}
             registrations={registrations}
+            sponsors={appSponsors}
             onCheckIn={handleCheckIn}
             onRegisterGift={handleRegisterGift}
             onRemoveGift={handleRemoveGift}

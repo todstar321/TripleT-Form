@@ -301,7 +301,30 @@ export const CUSTOM_EMOJIS = [
 ];
 
 export const CUSTOM_ITEM_PRESETS = [
-  { label: "โต๊ะโชว์สินค้า", emoji: "🛍️", colorTheme: "violet", isBookable: false, defaultW: 2, defaultH: 1 },
+  {
+    label: "โต๊ะโชว์สินค้า VIP (ผู้สนับสนุน)",
+    emoji: "👑",
+    colorTheme: "amber",
+    isBookable: false,
+    isShowcase: true,
+    showcaseMode: "sponsor",
+    slotsPerCell: 2,
+    defaultCode: "V",
+    defaultW: 4,
+    defaultH: 1
+  },
+  {
+    label: "โต๊ะโชว์สินค้า (สมาชิก)",
+    emoji: "🛍️",
+    colorTheme: "violet",
+    isBookable: false,
+    isShowcase: true,
+    showcaseMode: "member",
+    slotsPerCell: 4,
+    defaultCode: "M",
+    defaultW: 4,
+    defaultH: 1
+  },
   { label: "บูธสปอนเซอร์", emoji: "⭐", colorTheme: "amber", isBookable: false, defaultW: 2, defaultH: 1 },
   { label: "ซุ้มถ่ายรูป", emoji: "📸", colorTheme: "sky", isBookable: false, defaultW: 2, defaultH: 1 },
   { label: "บาร์เครื่องดื่ม", emoji: "🍹", colorTheme: "teal", isBookable: false, defaultW: 2, defaultH: 1 },
@@ -566,6 +589,7 @@ export function createDefaultSeatingPlan() {
     fineQrDeleteToken: null,
     paletteTypes: DEFAULT_PALETTE_TYPES,
     assignments: {},
+    showcaseAssignments: {},
     seatChangeRequests: {},
     expiredHoldFines: {},
     freeHoldUsedByTicket: {}
@@ -594,6 +618,7 @@ export function createEmptySeatingPlan(
     paletteTypes: Array.isArray(paletteTypes) && paletteTypes.length > 0 ? paletteTypes : DEFAULT_PALETTE_TYPES,
     items: [],
     assignments: {},
+    showcaseAssignments: {},
     seatChangeRequests: {},
     expiredHoldFines: {},
     freeHoldUsedByTicket: {}
@@ -889,6 +914,45 @@ export function getNextTableCode(items = []) {
 export function getSeatCode(table, seatNo) {
   const code = (table?.code || table?.label?.replace(/^โต๊ะ\s*/i, "") || "T").trim();
   return `${code}${seatNo}`;
+}
+
+/**
+ * Showcase Table Helpers (Product Display Tables with per-cell lock division!)
+ */
+export function isShowcaseItem(item) {
+  return Boolean(item && (item.type === "showcase" || item.isShowcase));
+}
+
+export function getShowcaseSlotsPerCell(item) {
+  const n = Number(item?.slotsPerCell);
+  if (!isNaN(n) && n >= 1) return Math.min(10, Math.round(n));
+  return item?.showcaseMode === "sponsor" ? 2 : 4;
+}
+
+export function getShowcaseTotalSlots(item) {
+  if (!item) return 0;
+  const cells = Math.max(1, Number(item.w) || 1) * Math.max(1, Number(item.h) || 1);
+  return cells * getShowcaseSlotsPerCell(item);
+}
+
+export function getShowcaseSlotCode(item, slotNo) {
+  const prefix =
+    (item?.code || "").trim() ||
+    (item?.showcaseMode === "sponsor" ? "V" : "M");
+  return `${prefix}${slotNo}`;
+}
+
+export function getShowcaseOccupancyMap(seatingPlan, itemId) {
+  const slotMap = new Map();
+  if (!seatingPlan?.showcaseAssignments || !itemId) return slotMap;
+  const prefix = `${itemId}:`;
+  Object.entries(seatingPlan.showcaseAssignments).forEach(([key, val]) => {
+    if (!key.startsWith(prefix) || !val) return;
+    const slotNo = parseInt(key.slice(prefix.length), 10);
+    if (isNaN(slotNo) || slotNo < 1) return;
+    slotMap.set(slotNo, { slotNo, ...val });
+  });
+  return slotMap;
 }
 
 /**

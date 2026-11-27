@@ -117,6 +117,7 @@ export default function EventCheckInHub({
   setEventConfig,
   currentUser,
   registrations = [],
+  sponsors = [],
   onCheckIn,
   onRegisterGift,
   onRemoveGift,
@@ -723,10 +724,11 @@ export default function EventCheckInHub({
       setLastCheckInAttendee(null);
       setPhotoModalTarget(null);
       setPhotoViewerTarget(null);
-      // Clear seat assignments, fine ledger & free-hold quota while preserving room layout, hold tiers and Owner fine QR code
+      // Clear seat assignments, showcase assignments, fine ledger & free-hold quota while preserving room layout, hold tiers and Owner fine QR code
       handleUpdateSeatingPlan((prev) => ({
         ...prev,
         assignments: {},
+        showcaseAssignments: {},
         seatChangeRequests: {},
         expiredHoldFines: {},
         freeHoldUsedByTicket: {},
@@ -2229,6 +2231,7 @@ export default function EventCheckInHub({
           seatingPlan={seatingPlan}
           onUpdateSeatingPlan={handleUpdateSeatingPlan}
           registrations={registrations}
+          sponsors={sponsors}
           currentUser={currentUser}
           eventConfig={eventConfig}
           onPlayEffect={playAudioEffect}
