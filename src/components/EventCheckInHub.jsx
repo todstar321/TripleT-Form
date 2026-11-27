@@ -4551,46 +4551,53 @@ export default function EventCheckInHub({
         return (
           <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6 animate-fadeIn">
             
-            {/* Header Card for Satisfaction Survey */}
-            <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-                  <Star className="w-5 h-5 text-amber-500 fill-amber-400" />
-                  <h2 className="text-lg sm:text-xl font-black text-slate-900">
-                    แบบประเมินความพึงพอใจงาน SME FAN 2026
-                  </h2>
-                  <span className="font-mono text-xs px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 font-bold border border-amber-200">
-                    ตอบแล้ว {surveyStats.total} ท่าน
-                  </span>
+            {/* Header Card for Satisfaction Survey (Clean 2-Tier Layout for Phone, iPad & Desktop) */}
+            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-sm space-y-4">
+              {/* Top Tier: Icon + Full-Width Title + Status Pills + Subtitle */}
+              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+                <div className="flex items-start gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0 mt-0.5">
+                    <Star className="w-5 h-5 text-amber-500 fill-amber-400" />
+                  </div>
+                  <div className="min-w-0 space-y-1.5">
+                    <h2 className="text-base sm:text-xl font-black text-slate-900 leading-snug">
+                      แบบประเมินความพึงพอใจงาน SME FAN 2026
+                    </h2>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center font-mono text-xs px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 font-bold border border-amber-200 whitespace-nowrap">
+                        ตอบแล้ว {surveyStats.total} ท่าน
+                      </span>
 
-                  {/* Status Badge */}
-                  {eventConfig?.isSurveyOpen ? (
-                    <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center space-x-1 animate-pulse">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                      <span>🟢 กำลังเปิดรับแบบประเมิน (LIVE)</span>
-                    </span>
-                  ) : (
-                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 flex items-center space-x-1">
-                      <Lock className="w-3 h-3 text-slate-500" />
-                      <span>🔒 ปิดรับแบบประเมินอยู่ (รอเปิดระบบ)</span>
-                    </span>
-                  )}
+                      {/* Status Badge (Single crisp icon, never wraps vertically) */}
+                      {eventConfig?.isSurveyOpen ? (
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+                          <span>กำลังเปิดรับแบบประเมิน (LIVE)</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 whitespace-nowrap">
+                          <Lock className="w-3 h-3 text-slate-500 shrink-0" />
+                          <span>ปิดรับแบบประเมินอยู่ (รอเปิดระบบ)</span>
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      มาตรวัด 5 ระดับครอบคลุม {categories.length} ด้าน ({categories.reduce((s, c) => s + (c.questions?.length || 0), 0)} ข้อย่อย) พร้อมรวบรวมข้อเสนอแนะแยกตามหัวข้อ
+                    </p>
+                  </div>
                 </div>
-                <p className="text-xs text-slate-600">
-                  มาตรวัด 5 ระดับครอบคลุม {categories.length} ด้าน ({categories.reduce((s, c) => s + (c.questions?.length || 0), 0)} ข้อย่อย) พร้อมรวบรวมข้อเสนอแนะแยกตามหัวข้อ
-                </p>
               </div>
 
-              {/* Quick Actions (Organized Balanced Grid: 2 Columns on Mobile, Single Row on Desktop) */}
-              <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto pt-1">
+              {/* Bottom Tier: Clean Action Bar (2-Col Grid on Phone, Clean Wrap Row on iPad/Desktop) */}
+              <div className="pt-3 border-t border-slate-100 grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center gap-2">
                 {/* 1. Survey Test Preview Button */}
                 <button
                   type="button"
                   onClick={() => setIsSurveyPreviewOpen(true)}
-                  className="flex items-center justify-center space-x-1.5 px-3 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs shadow-xs hover:scale-105 active:scale-95 transition-all cursor-pointer whitespace-nowrap"
+                  className="flex items-center justify-center space-x-1.5 px-3.5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs shadow-xs active:scale-95 transition-all cursor-pointer whitespace-nowrap"
                   title="ทดสอบทำแบบสอบถามในมุมมองผู้เข้าร่วมงาน (โหมดทดสอบ ไม่บันทึกคะแนน)"
                 >
-                  <Eye className="w-3.5 h-3.5" />
+                  <Eye className="w-3.5 h-3.5 shrink-0" />
                   <span>ทดสอบทำแบบประเมิน</span>
                 </button>
 
@@ -4598,10 +4605,10 @@ export default function EventCheckInHub({
                 <button
                   type="button"
                   onClick={() => setIsSurveyBuilderOpen(true)}
-                  className="flex items-center justify-center space-x-1.5 px-3 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-xs hover:scale-105 active:scale-95 transition-all cursor-pointer whitespace-nowrap"
+                  className="flex items-center justify-center space-x-1.5 px-3.5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-xs active:scale-95 transition-all cursor-pointer whitespace-nowrap"
                   title="เปิดหน้าต่างแก้ไขและจัดการข้อคำถามแบบสอบถาม"
                 >
-                  <Sliders className="w-3.5 h-3.5" />
+                  <Sliders className="w-3.5 h-3.5 shrink-0" />
                   <span>จัดการคำถาม</span>
                 </button>
 
@@ -4622,7 +4629,7 @@ export default function EventCheckInHub({
                         playAudioEffect(isCurrentlyOpen ? "beep" : "fanfare");
                       }
                     }}
-                    className={`flex items-center justify-center space-x-1.5 px-3 py-2.5 rounded-xl font-bold text-xs shadow-xs transition-all hover:scale-105 active:scale-95 cursor-pointer whitespace-nowrap ${
+                    className={`flex items-center justify-center space-x-1.5 px-3.5 py-2.5 rounded-xl font-bold text-xs shadow-xs transition-all active:scale-95 cursor-pointer whitespace-nowrap ${
                       eventConfig?.isSurveyOpen
                         ? "bg-rose-600 hover:bg-rose-500 text-white"
                         : "bg-emerald-600 hover:bg-emerald-500 text-white"
@@ -4643,21 +4650,21 @@ export default function EventCheckInHub({
                       playAudioEffect("beep");
                     } catch (e) {}
                   }}
-                  className="flex items-center justify-center space-x-1.5 px-3 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 text-xs font-semibold border border-slate-200 cursor-pointer whitespace-nowrap"
+                  className="flex items-center justify-center space-x-1.5 px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 text-xs font-semibold border border-slate-200 cursor-pointer whitespace-nowrap"
                   title="รีเฟรชผลคะแนนล่าสุด"
                 >
-                  <RefreshCw className="w-3.5 h-3.5" />
+                  <RefreshCw className="w-3.5 h-3.5 shrink-0" />
                   <span>รีเฟรช</span>
                 </button>
 
-                {/* 5. Export CSV Button (Full width on mobile col-span-2) */}
+                {/* 5. Export CSV Button (Full width on mobile col-span-2, right-aligned on desktop) */}
                 <button
                   type="button"
                   onClick={handleExportSurveyCSV}
-                  className="col-span-2 sm:col-span-1 flex items-center justify-center space-x-1.5 px-3.5 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold border border-amber-300 transition-all cursor-pointer whitespace-nowrap"
+                  className="col-span-2 sm:col-span-1 sm:ml-auto flex items-center justify-center space-x-1.5 px-4 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold border border-amber-300 transition-all cursor-pointer whitespace-nowrap"
                   title="ดาวน์โหลดผลประเมินทุกข้อย่อยและข้อเสนอแนะเป็นไฟล์ CSV"
                 >
-                  <Download className="w-3.5 h-3.5 text-amber-700" />
+                  <Download className="w-3.5 h-3.5 text-amber-700 shrink-0" />
                   <span>ส่งออก CSV ละเอียด</span>
                 </button>
               </div>
@@ -4734,13 +4741,13 @@ export default function EventCheckInHub({
             </div>
 
             {/* Categories & Sub-Questions Detailed Breakdown */}
-            <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm space-y-5">
-              <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-sm space-y-5">
+              <div className="flex items-start sm:items-center justify-between flex-wrap gap-2">
                 <h3 className="text-sm sm:text-base font-extrabold text-slate-900 flex items-center space-x-2">
-                  <Award className="w-5 h-5 text-amber-500" />
+                  <Award className="w-5 h-5 text-amber-500 shrink-0" />
                   <span>ผลคะแนนเฉลี่ยแยกตามหมวดหมู่และข้อคำถามย่อย (เต็ม 5.0 คะแนน)</span>
                 </h3>
-                <span className="text-xs text-slate-500 font-mono">
+                <span className="text-xs text-slate-500 font-mono whitespace-nowrap">
                   {categories.length} ด้าน • {categories.reduce((s, c) => s + (c.questions?.length || 0), 0)} ข้อย่อย
                 </span>
               </div>
@@ -4799,19 +4806,19 @@ export default function EventCheckInHub({
                             >
                               <div className="flex justify-between items-start gap-2">
                                 <div className="space-y-0.5 min-w-0 flex-1">
-                                  <div className="text-xs font-bold text-slate-800 truncate flex items-center space-x-1.5">
+                                  <div className="text-xs font-bold text-slate-800 flex items-start space-x-1.5 leading-snug">
                                     <span className="font-mono text-amber-600 text-[11px] shrink-0 font-extrabold">
                                       {cIdx + 1}.{qIdx + 1}
                                     </span>
-                                    <span className="truncate">{qStat.label}</span>
+                                    <span>{qStat.label}</span>
                                   </div>
                                   {qStat.desc && (
-                                    <p className="text-[10px] text-slate-500 truncate">
+                                    <p className="text-[11px] text-slate-500 leading-relaxed">
                                       {qStat.desc}
                                     </p>
                                   )}
                                 </div>
-                                <div className="shrink-0 text-right">
+                                <div className="shrink-0 text-right whitespace-nowrap">
                                   <span className="font-mono font-black text-amber-600 text-xs">
                                     {qStat.avg}
                                   </span>
