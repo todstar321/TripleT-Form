@@ -214,6 +214,55 @@ export default function TableSeatingHub({
   const [normalWrapWidth, setNormalWrapWidth] = useState(0);
   const [kioskWrapSize, setKioskWrapSize] = useState({ width: 0, height: 0 });
 
+  // Custom Palette Type Creator Modal State (Owner)
+  const [isAddTypeModalOpen, setIsAddTypeModalOpen] = useState(false);
+  const [newTypeLabel, setNewTypeLabel] = useState("");
+  const [newTypeEmoji, setNewTypeEmoji] = useState("🛍️");
+  const [newTypeColor, setNewTypeColor] = useState("violet");
+  const [newTypeIsBookable, setNewTypeIsBookable] = useState(false);
+  const [newTypeW, setNewTypeW] = useState(2);
+  const [newTypeH, setNewTypeH] = useState(1);
+  const [newTypeCapacity, setNewTypeCapacity] = useState(8);
+
+  // Booking & Attendee Queue states
+  const [rightTab, setRightTab] = useState("unassigned"); // "unassigned" | "assigned"
+  const [queueFilterMode, setQueueFilterMode] = useState("checked_in"); // "checked_in" (default focus) | "not_checked_in" (special case)
+  const [queueSearch, setQueueSearch] = useState("");
+  const [selectedAttendeeTicketNo, setSelectedAttendeeTicketNo] = useState(null);
+  const [highlightedTableId, setHighlightedTableId] = useState(null);
+
+  // Modals & Overlays
+  const [activeTableModalId, setActiveTableModalId] = useState(null);
+  const [pickingSeatNoForInlineAssign, setPickingSeatNoForInlineAssign] = useState(null);
+  const [inlineAssignSearch, setInlineAssignSearch] = useState("");
+  const [isKioskMode, setIsKioskMode] = useState(false);
+  const [kioskSuccessBanner, setKioskSuccessBanner] = useState(null); // { attendee, tableLabel, seatCode }
+  const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
+  const [toastMsg, setToastMsg] = useState(null);
+
+  // Advance Hold Booking Modal (Step 1: Booker -> Step 2: Seat Owner -> Step 3: Tier)
+  const [advanceHoldTarget, setAdvanceHoldTarget] = useState(null); // { table, seatNo }
+  const [holdBookerTicketNo, setHoldBookerTicketNo] = useState("");
+  const [holdBookerSearch, setHoldBookerSearch] = useState("");
+  const [holdOwnerTicketNo, setHoldOwnerTicketNo] = useState("");
+  const [holdOwnerSearch, setHoldOwnerSearch] = useState("");
+  const [holdTierId, setHoldTierId] = useState("");
+  const [vipPinInput, setVipPinInput] = useState("");
+  const [vipPinError, setVipPinError] = useState("");
+
+  // Admin / Owner Hold Tier & Fine Settings Modal
+  const [isHoldTierSettingsOpen, setIsHoldTierSettingsOpen] = useState(false);
+  const [newTierMinutes, setNewTierMinutes] = useState(45);
+  const [newTierLabel, setNewTierLabel] = useState("");
+  const [newTierFineAmount, setNewTierFineAmount] = useState(80);
+  const [newTierRequiresPin, setNewTierRequiresPin] = useState(false);
+
+  // Owner Fine QR Code Upload & Fine History Ledger
+  const [isUploadingFineQr, setIsUploadingFineQr] = useState(false);
+  const [isFineLedgerOpen, setIsFineLedgerOpen] = useState(false);
+  const [viewingProofUrl, setViewingProofUrl] = useState(null);
+
+  // Measure normal & kiosk floor plan containers for auto-fit scaling (after all useState declarations!)
   useEffect(() => {
     const measureNormal = () => {
       if (normalCanvasWrapRef.current) {
@@ -266,54 +315,6 @@ export default function TableSeatingHub({
       window.removeEventListener("resize", measureKiosk);
     };
   }, [isKioskMode]);
-
-  // Custom Palette Type Creator Modal State (Owner)
-  const [isAddTypeModalOpen, setIsAddTypeModalOpen] = useState(false);
-  const [newTypeLabel, setNewTypeLabel] = useState("");
-  const [newTypeEmoji, setNewTypeEmoji] = useState("🛍️");
-  const [newTypeColor, setNewTypeColor] = useState("violet");
-  const [newTypeIsBookable, setNewTypeIsBookable] = useState(false);
-  const [newTypeW, setNewTypeW] = useState(2);
-  const [newTypeH, setNewTypeH] = useState(1);
-  const [newTypeCapacity, setNewTypeCapacity] = useState(8);
-
-  // Booking & Attendee Queue states
-  const [rightTab, setRightTab] = useState("unassigned"); // "unassigned" | "assigned"
-  const [queueFilterMode, setQueueFilterMode] = useState("checked_in"); // "checked_in" (default focus) | "not_checked_in" (special case)
-  const [queueSearch, setQueueSearch] = useState("");
-  const [selectedAttendeeTicketNo, setSelectedAttendeeTicketNo] = useState(null);
-  const [highlightedTableId, setHighlightedTableId] = useState(null);
-
-  // Modals & Overlays
-  const [activeTableModalId, setActiveTableModalId] = useState(null);
-  const [pickingSeatNoForInlineAssign, setPickingSeatNoForInlineAssign] = useState(null);
-  const [inlineAssignSearch, setInlineAssignSearch] = useState("");
-  const [isKioskMode, setIsKioskMode] = useState(false);
-  const [kioskSuccessBanner, setKioskSuccessBanner] = useState(null); // { attendee, tableLabel, seatCode }
-  const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
-  const [toastMsg, setToastMsg] = useState(null);
-
-  // Advance Hold Booking Modal (Step 1: Booker -> Step 2: Seat Owner -> Step 3: Tier)
-  const [advanceHoldTarget, setAdvanceHoldTarget] = useState(null); // { table, seatNo }
-  const [holdBookerTicketNo, setHoldBookerTicketNo] = useState("");
-  const [holdBookerSearch, setHoldBookerSearch] = useState("");
-  const [holdOwnerTicketNo, setHoldOwnerTicketNo] = useState("");
-  const [holdOwnerSearch, setHoldOwnerSearch] = useState("");
-  const [holdTierId, setHoldTierId] = useState("");
-  const [vipPinInput, setVipPinInput] = useState("");
-  const [vipPinError, setVipPinError] = useState("");
-
-  // Admin / Owner Hold Tier & Fine Settings Modal
-  const [isHoldTierSettingsOpen, setIsHoldTierSettingsOpen] = useState(false);
-  const [newTierMinutes, setNewTierMinutes] = useState(45);
-  const [newTierLabel, setNewTierLabel] = useState("");
-  const [newTierFineAmount, setNewTierFineAmount] = useState(80);
-  const [newTierRequiresPin, setNewTierRequiresPin] = useState(false);
-
-  // Owner Fine QR Code Upload & Fine History Ledger
-  const [isUploadingFineQr, setIsUploadingFineQr] = useState(false);
-  const [isFineLedgerOpen, setIsFineLedgerOpen] = useState(false);
-  const [viewingProofUrl, setViewingProofUrl] = useState(null);
 
   // Force exit edit mode if Owner PIN is not unlocked
   useEffect(() => {
