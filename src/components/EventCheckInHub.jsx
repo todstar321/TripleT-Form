@@ -1104,6 +1104,11 @@ export default function EventCheckInHub({
   // Handle Scan QR Code success
   const handleScanSuccess = (scannedAttendee) => {
     if (!scannedAttendee) return;
+    if (scannedAttendee.checkedIn) {
+      // Already checked in -> TicketScannerModal displays "คุณลงทะเบียนเข้างานแล้ว"
+      playAudioEffect("beep");
+      return;
+    }
     playAudioEffect("beep");
     if (navigator.vibrate) {
       navigator.vibrate([100, 50, 100]);
@@ -1561,7 +1566,7 @@ export default function EventCheckInHub({
         <div className="bg-slate-900/95 px-3 sm:px-6">
           <div className="max-w-7xl mx-auto flex items-center space-x-1.5 sm:space-x-2.5 overflow-x-auto py-2 scrollbar-none">
             
-            {/* Tab 1: ลงทะเบียนเข้า */}
+            {/* Tab 1: ลงทะเบียนเข้างาน */}
             <button
               type="button"
               onClick={() => setActiveMainTab("checkin")}
@@ -1572,7 +1577,7 @@ export default function EventCheckInHub({
               }`}
             >
               <Camera className="w-4 h-4" />
-              <span>ลงทะเบียนเข้า ({checkedInCount}/{totalCount})</span>
+              <span>ลงทะเบียนเข้างาน ({checkedInCount}/{totalCount})</span>
             </button>
 
             {/* Tab 2: เลือกโต๊ะ/ที่นั่ง */}
@@ -1693,14 +1698,14 @@ export default function EventCheckInHub({
             
             {/* Row 1: Camera Scanner CTA + Search Bar */}
             <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-              {/* Primary Action Button: Open Camera Scanner */}
+              {/* Primary Action Button: Large 2-Line Camera Scanner CTA */}
               <button
                 type="button"
                 onClick={() => setIsScannerOpen(true)}
-                className="flex items-center justify-center space-x-2 px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-sm shadow-md shadow-emerald-600/20 hover:scale-[1.02] active:scale-95 transition-all cursor-pointer shrink-0"
+                className="flex flex-col items-center justify-center gap-2 px-10 py-6 rounded-2xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black shadow-lg shadow-emerald-600/25 active:scale-95 transition-all cursor-pointer shrink-0 min-w-[260px]"
               >
-                <Camera className="w-5 h-5" />
-                <span>📷 เปิดกล้องสแกน QR Code บัตรเข้างาน</span>
+                <Camera className="w-10 h-10 sm:w-11 sm:h-11 text-white stroke-[2.2]" />
+                <span className="text-lg sm:text-xl tracking-wide leading-tight">สแกนบัตรเข้างาน</span>
               </button>
 
               {/* Search Box */}

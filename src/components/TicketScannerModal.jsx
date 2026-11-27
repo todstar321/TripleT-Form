@@ -95,6 +95,7 @@ export default function TicketScannerModal({
               shirtGender: data.shirt_gender || 'ชาย',
               shirtReceived: Boolean(data.shirt_received),
               checkedIn: Boolean(data.checked_in),
+              checkedInAt: data.checked_in_at || null,
               giftNumber: data.gift_number || null,
               photoUrl: data.photo_url || null,
               costumePhoto: data.costume_photo || null
@@ -204,11 +205,13 @@ export default function TicketScannerModal({
           playBeep();
           stopCamera();
           matchAttendee(code.data).then(matched => {
+            const alreadyCheckedIn = Boolean(matched?.checkedIn);
             setScanResult({
               raw: code.data,
-              attendee: matched
+              attendee: matched,
+              alreadyCheckedIn
             });
-            if (onCheckIn && matched) {
+            if (onCheckIn && matched && !alreadyCheckedIn) {
               onCheckIn(matched);
             }
           });
@@ -235,11 +238,13 @@ export default function TicketScannerModal({
     playBeep();
     const raw = sampleText || simulatedInput;
     const matched = await matchAttendee(raw);
+    const alreadyCheckedIn = Boolean(matched?.checkedIn);
     setScanResult({
       raw: raw,
-      attendee: matched
+      attendee: matched,
+      alreadyCheckedIn
     });
-    if (onCheckIn && matched) {
+    if (onCheckIn && matched && !alreadyCheckedIn) {
       onCheckIn(matched);
     }
   };
@@ -308,13 +313,29 @@ export default function TicketScannerModal({
         {/* Scan Result Card (Verified Attendee Pop-up) */}
         {scanResult && (
           <div className="space-y-4 animate-fade-in">
-            <div className="p-4 rounded-2xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 flex items-center space-x-3">
-              <CheckCircle2 className="w-8 h-8 text-emerald-400 shrink-0" />
-              <div>
-                <h4 className="font-extrabold text-white text-base">สแกนบัตรสำเร็จ! ข้อมูลถูกต้อง</h4>
-                <p className="text-xs text-emerald-200">ตรวจสอบผู้เข้าร่วมงานเรียบร้อยแล้ว</p>
+            {scanResult.alreadyCheckedIn ? (
+              <div className="p-4 rounded-2xl bg-amber-500/20 border-2 border-amber-400 text-amber-200 flex items-center space-x-3 shadow-lg shadow-amber-500/15">
+                <AlertCircle className="w-9 h-9 text-amber-400 shrink-0" />
+                <div>
+                  <h4 className="font-black text-amber-300 text-lg leading-tight">
+                    คุณลงทะเบียนเข้างานแล้ว
+                  </h4>
+                  <p className="text-xs text-amber-100 mt-0.5">
+                    {scanResult.attendee?.checkedInAt
+                      ? `บันทึกเข้างานไว้แล้วเมื่อเวลา ${scanResult.attendee.checkedInAt}`
+                      : 'บัตรนี้ได้ทำการลงทะเบียนเข้างานเรียบร้อยแล้ว'}
+                  </p>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="p-4 rounded-2xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 flex items-center space-x-3">
+                <CheckCircle2 className="w-8 h-8 text-emerald-400 shrink-0" />
+                <div>
+                  <h4 className="font-extrabold text-white text-base">สแกนบัตรสำเร็จ! ข้อมูลถูกต้อง</h4>
+                  <p className="text-xs text-emerald-200">ตรวจสอบผู้เข้าร่วมงานเรียบร้อยแล้ว</p>
+                </div>
+              </div>
+            )}
 
             {/* Attendee Details */}
             <div className="p-4 rounded-2xl bg-slate-950 border border-white/10 space-y-2.5 text-xs sm:text-sm">
@@ -426,27 +447,41 @@ export default function TicketScannerModal({
                   setScanResult(null);
                   startCamera();
                 }}
-                className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/15 text-white transition-all flex items-center justify-center space-x-1.5"
+                className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${
+                  scanResult.alreadyCheckedIn
+                    ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-black shadow-lg shadow-amber-500/25'
+                    : 'bg-white/10 hover:bg-white/15 text-white'
+                }`}
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 <span>สแกนบัตรใบต่อไป</span>
               </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  if (onCapturePhoto && scanResult?.attendee) {
-                    onClose();
-                    onCapturePhoto(scanResult.attendee, 'checkin');
-                  } else {
-                    onClose();
-                  }
-                }}
-                className="flex-1 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center space-x-1.5 cursor-pointer"
-              >
-                <Camera className="w-4 h-4" />
-                <span>เช็คอินเข้างานสำเร็จ (ถ่ายรูปเข้างาน)</span>
-              </button>
+              {scanResult.alreadyCheckedIn ? (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/15 text-white transition-all cursor-pointer"
+                >
+                  ปิดหน้าต่าง
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onCapturePhoto && scanResult?.attendee) {
+                      onClose();
+                      onCapturePhoto(scanResult.attendee, 'checkin');
+                    } else {
+                      onClose();
+                    }
+                  }}
+                  className="flex-1 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center space-x-1.5 cursor-pointer"
+                >
+                  <Camera className="w-4 h-4" />
+                  <span>เช็คอินเข้างานสำเร็จ (ถ่ายรูปเข้างาน)</span>
+                </button>
+              )}
             </div>
           </div>
         )}
